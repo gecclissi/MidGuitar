@@ -14,32 +14,41 @@ FRET_COLORS = {
 }
 
 class FretboardView(ctk.CTkFrame):
-    def __init__(self, master, on_fret_click=None, on_open_mapping=None, **kwargs):
+    def __init__(self, master, on_fret_click=None, on_open_mapping=None, on_open_sound_manager=None, **kwargs):
         super().__init__(master, **kwargs)
-        self.on_fret_click = on_fret_click      # func(fret_name)
-        self.on_open_mapping = on_open_mapping  # func()
+        self.on_fret_click = on_fret_click              # func(fret_name)
+        self.on_open_mapping = on_open_mapping          # func()
+        self.on_open_sound_manager = on_open_sound_manager # func()
         self.fret_buttons = {}
         self.fret_labels = {}
         self._init_ui()
 
     def _init_ui(self):
-        # Header da seção com botão de mapeamento
+        # Header da seção com botões de ação
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", padx=12, pady=(6, 2))
 
         title = ctk.CTkLabel(
-            header, text="Braço da Guitarra (Clique para Ouvir / Testar)",
+            header, text="🎸 Guitarra 5 Botões (Clique nos botões para Ouvir)",
             font=ctk.CTkFont(size=13, weight="bold")
         )
         title.pack(side="left")
 
+        if self.on_open_sound_manager:
+            btn_sound = ctk.CTkButton(
+                header, text="🎵 Importar Sons (.WAV/.MP3)", width=170, height=24,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#8B5CF6", hover_color="#7C3AED", command=self.on_open_sound_manager
+            )
+            btn_sound.pack(side="right", padx=(4, 0))
+
         if self.on_open_mapping:
             btn_edit = ctk.CTkButton(
-                header, text="⚙️ Mapear Casas & Acordes", width=145, height=24,
+                header, text="⚙️ Mapear Casas & Acordes", width=150, height=24,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#3B82F6", hover_color="#2563EB", command=self.on_open_mapping
             )
-            btn_edit.pack(side="right")
+            btn_edit.pack(side="right", padx=(4, 0))
 
         # Container dos 5 trastes
         frets_container = ctk.CTkFrame(self, fg_color="transparent")

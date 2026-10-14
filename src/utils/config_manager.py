@@ -59,7 +59,8 @@ DEFAULT_CONFIG = {
     "octave_shift": 0,
     "current_preset": "rock_power_chords",
     "theme": "dark",
-    "auto_connect": True
+    "auto_connect": True,
+    "custom_samples": {}
 }
 
 def load_config() -> dict:

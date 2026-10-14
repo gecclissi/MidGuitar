@@ -18,6 +18,7 @@ from src.ui.keyboard_view import KeyboardView
 from src.ui.drum_view import DrumView
 from src.ui.monitor_view import MonitorView
 from src.ui.mapping_dialog import MappingDialog
+from src.ui.sound_manager_dialog import SoundManagerDialog
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
@@ -65,11 +66,12 @@ class MidGuitarApp(ctk.CTk):
             octave_shift=self.config.get("octave_shift", 0)
         )
 
-        # Inicializa o motor de áudio
+        # Inicializa o motor de áudio com as amostras salvas
         self.audio = AudioEngine(
             midi_out_port_name=self.config.get("midi_out_port"),
             instrument_id=self.config.get("instrument_id", 29),
-            volume=self.config.get("volume", 85)
+            volume=self.config.get("volume", 85),
+            initial_samples=self.config.get("custom_samples", {})
         )
 
         # Inicializa o leitor MIDI universal
@@ -122,52 +124,64 @@ class MidGuitarApp(ctk.CTk):
 
         # Badge de Status de Conexão
         self.status_badge = ctk.CTkLabel(
-            header, text="○ Desconectado", font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#EF4444", fg_color="#1E293B", corner_radius=12, padx=12, pady=4
+            header, text="🟡 Modo Virtual (Clique para Testar)", font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#F59E0B", fg_color="#1E293B", corner_radius=12, padx=14, pady=5
         )
         self.status_badge.pack(side="right", padx=18, pady=12)
 
         # -------------------------------------------------------------
-        # 2. BARRA DE CONEXÃO E DISPOSITIVOS
+        # 2. PASSO 1: CONEXÃO E DISPOSITIVOS
         # -------------------------------------------------------------
         conn_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
         conn_bar.pack(fill="x", padx=16, pady=(8, 4))
 
+        # Tag do Passo 1
+        step1_tag = ctk.CTkLabel(
+            conn_bar, text="1️⃣ CONEXÃO:", font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#38BDF8", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
+        )
+        step1_tag.pack(side="left", padx=(10, 6), pady=8)
+
         # Entrada (MIDI In / Gamepad)
-        ctk.CTkLabel(conn_bar, text="Entrada MIDI/USB:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(12, 4), pady=8)
-        self.input_combo = ctk.CTkComboBox(conn_bar, width=250, values=["Nenhum dispositivo"])
+        ctk.CTkLabel(conn_bar, text="Entrada MIDI/USB:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(6, 4), pady=8)
+        self.input_combo = ctk.CTkComboBox(conn_bar, width=230, values=["Nenhum dispositivo"])
         self.input_combo.pack(side="left", padx=4, pady=8)
 
         # Botão Atualizar
         btn_refresh = ctk.CTkButton(
-            conn_bar, text="🔄 Atualizar", width=85, height=28,
-            fg_color="#334155", hover_color="#475569", command=self.refresh_devices
+            conn_bar, text="🔄 Detectar", width=85, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(weight="bold"),
+            command=self.refresh_devices
         )
         btn_refresh.pack(side="left", padx=4, pady=8)
 
         # Botão Conectar / Desconectar
         self.btn_connect = ctk.CTkButton(
-            conn_bar, text="Conectar", width=100, height=28,
+            conn_bar, text="🔌 Conectar", width=105, height=28,
             fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(weight="bold"),
             command=self.toggle_connection
         )
-        self.btn_connect.pack(side="left", padx=8, pady=8)
+        self.btn_connect.pack(side="left", padx=6, pady=8)
 
         # Saída (Sintetizador ou DAW)
-        ctk.CTkLabel(conn_bar, text="Saída de Áudio:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(18, 4), pady=8)
+        ctk.CTkLabel(conn_bar, text="Saída de Áudio:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(14, 4), pady=8)
         self.output_combo = ctk.CTkComboBox(
-            conn_bar, width=240, values=["Synth Nativo Windows (GS Wavetable)"],
+            conn_bar, width=230, values=["Synth Nativo Windows (GS Wavetable)"],
             command=self._on_output_selected
         )
         self.output_combo.pack(side="left", padx=4, pady=8)
 
         # -------------------------------------------------------------
-        # 3. SELETOR DE INSTRUMENTO / MODO UNIVERSAL
+        # 3. PASSO 2: ESCOLHA DO INSTRUMENTO
         # -------------------------------------------------------------
-        mode_bar = ctk.CTkFrame(self, fg_color="transparent")
+        mode_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
         mode_bar.pack(fill="x", padx=16, pady=(4, 6))
 
-        ctk.CTkLabel(mode_bar, text="Instrumento Ativo:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(4, 8))
+        step2_tag = ctk.CTkLabel(
+            mode_bar, text="2️⃣ INSTRUMENTO:", font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#F59E0B", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
+        )
+        step2_tag.pack(side="left", padx=(10, 8), pady=6)
 
         self.mode_selector = ctk.CTkSegmentedButton(
             mode_bar,
@@ -180,7 +194,7 @@ class MidGuitarApp(ctk.CTk):
             ],
             command=self._on_mode_button_clicked
         )
-        self.mode_selector.pack(side="left", fill="x", expand=True)
+        self.mode_selector.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=6)
         self.mode_selector.set("⚡ Auto (Detectar)")
 
         # -------------------------------------------------------------
@@ -193,7 +207,16 @@ class MidGuitarApp(ctk.CTk):
         self.instrument_container = ctk.CTkFrame(main_split, fg_color="#1E293B", corner_radius=10)
         self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        # Cria as 4 visões de instrumentos com suporte completo a clique para ouvir
+        # Faixa de Dica Interativa para o usuário saber imediatamente o que fazer
+        hint_banner = ctk.CTkFrame(self.instrument_container, fg_color="#0F172A", corner_radius=6, height=26)
+        hint_banner.pack(fill="x", padx=8, pady=(8, 2))
+        ctk.CTkLabel(
+            hint_banner,
+            text="💡 COMO TOCAR: Plugue seu instrumento ou CLIQUE COM O MOUSE nos botões/pads/teclas abaixo para testar o som na hora!",
+            font=ctk.CTkFont(size=11, weight="bold"), text_color="#38BDF8"
+        ).pack(pady=4)
+
+        # Cria as 4 visões de instrumentos com suporte completo a clique para ouvir e gerenciar sons
         self.pro_fretboard = ProFretboardView(
             self.instrument_container, fg_color="transparent",
             on_fret_click=self._on_pro_fretboard_clicked
@@ -201,7 +224,8 @@ class MidGuitarApp(ctk.CTk):
         self.classic_fretboard = FretboardView(
             self.instrument_container, fg_color="transparent",
             on_fret_click=self._on_classic_fret_clicked,
-            on_open_mapping=self.open_mapping_editor
+            on_open_mapping=self.open_mapping_editor,
+            on_open_sound_manager=self.open_sound_manager
         )
         self.keyboard_view = KeyboardView(
             self.instrument_container, fg_color="transparent",
@@ -210,7 +234,8 @@ class MidGuitarApp(ctk.CTk):
         self.drum_view = DrumView(
             self.instrument_container, fg_color="transparent",
             on_pad_click=self._on_drum_pad_clicked,
-            on_open_mapping=self.open_mapping_editor
+            on_open_mapping=self.open_mapping_editor,
+            on_open_sound_manager=self.open_sound_manager
         )
 
         # Exibe inicialmente a Guitarra Pro
@@ -222,19 +247,41 @@ class MidGuitarApp(ctk.CTk):
         self.monitor.pack(side="right", fill="both", padx=(8, 0))
 
         # -------------------------------------------------------------
-        # 5. PAINEL DE CONTROLE DE ÁUDIO & PRESETS
+        # 5. PASSO 3: SONS, AMOSTRAS (.WAV/.MP3) & CONTROLE DE ÁUDIO
         # -------------------------------------------------------------
         bottom_panel = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=10)
         bottom_panel.pack(fill="x", padx=16, pady=(6, 12))
 
-        # Linha 1: Preset, Botão de Mapeamento e Instrumento GM
+        # Linha 1: Botão Importar Sons, Botão Mapeamento, Preset e Timbre
         row1 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
         row1.pack(fill="x", padx=12, pady=(8, 4))
 
-        ctk.CTkLabel(row1, text="Preset:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(4, 6))
+        step3_tag = ctk.CTkLabel(
+            row1, text="3️⃣ SONS:", font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#A855F7", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
+        )
+        step3_tag.pack(side="left", padx=(0, 8))
+
+        # BOTÃO EM DESTAQUE: IMPORTAR SONS (.WAV / .MP3)
+        btn_sound_mgr = ctk.CTkButton(
+            row1, text="🎵 Importar Sons (.WAV / .MP3)", width=190, height=28,
+            fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(weight="bold"),
+            command=self.open_sound_manager
+        )
+        btn_sound_mgr.pack(side="left", padx=(0, 6))
+
+        # Botão dedicado para abrir o Editor de Mapeamentos
+        btn_open_map = ctk.CTkButton(
+            row1, text="🎛️ Mapear Notas & Casas", width=160, height=28,
+            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(weight="bold"),
+            command=self.open_mapping_editor
+        )
+        btn_open_map.pack(side="left", padx=4)
+
+        ctk.CTkLabel(row1, text="Preset:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(8, 4))
         preset_names = [name for _, name in self.preset_list] or ["Padrão"]
         self.preset_combo = ctk.CTkComboBox(
-            row1, width=190, values=preset_names, command=self._on_preset_selected
+            row1, width=150, values=preset_names, command=self._on_preset_selected
         )
         self.preset_combo.pack(side="left", padx=4)
 
@@ -243,18 +290,10 @@ class MidGuitarApp(ctk.CTk):
                 self.preset_combo.set(pname)
                 break
 
-        # Botão dedicado para abrir o Editor de Mapeamentos
-        btn_open_map = ctk.CTkButton(
-            row1, text="🎛️ Editar Mapeamentos", width=160, height=28,
-            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(weight="bold"),
-            command=self.open_mapping_editor
-        )
-        btn_open_map.pack(side="left", padx=8)
-
-        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(12, 6))
+        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(8, 4))
         instrument_options = [f"{num:03d} - {name} ({cat})" for num, name, cat in GM_INSTRUMENTS]
         self.instrument_combo = ctk.CTkComboBox(
-            row1, width=240, values=instrument_options, command=self._on_instrument_selected
+            row1, width=200, values=instrument_options, command=self._on_instrument_selected
         )
         self.instrument_combo.pack(side="left", padx=4)
         
@@ -299,6 +338,13 @@ class MidGuitarApp(ctk.CTk):
     # -------------------------------------------------------------
     def _on_classic_fret_clicked(self, fret_name: str):
         """Disparado quando o usuário clica em uma das 5 casas da guitarra."""
+        # Se houver arquivo customizado (.wav/.mp3) importado para este botão
+        sample_key = f"fret_{fret_name}"
+        if self.audio.get_sample_path(sample_key):
+            self.monitor.log(time.strftime("%H:%M:%S"), "SAMPLE", f"Clique Botão {fret_name.upper()} ➔ Áudio Customizado (.wav/.mp3)")
+            self.audio.play_sample(sample_key, velocity=120)
+            return
+
         frets = self.preset_data.get("frets", {})
         fret_cfg = frets.get(fret_name, {})
         base_notes = fret_cfg.get("notes", [52])
@@ -312,6 +358,17 @@ class MidGuitarApp(ctk.CTk):
 
     def _on_drum_pad_clicked(self, pad_id: str, note: int):
         """Disparado quando o usuário clica em um dos pads de bateria."""
+        if self.audio.get_sample_path(pad_id):
+            self.monitor.log(time.strftime("%H:%M:%S"), "SAMPLE", f"Clique Pad {pad_id.upper()} ➔ Áudio Customizado (.wav/.mp3)")
+            self.audio.play_sample(pad_id, velocity=120)
+            # Envia também MIDI para portas externas se houver DAW conectada
+            if self.audio.rtmidi_out and self.audio.rtmidi_out.is_port_open():
+                try:
+                    self.audio.rtmidi_out.send_message([0x99, note, 120])
+                except Exception:
+                    pass
+            return
+
         self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Pad {pad_id.upper()} ➔ Nota {note} (Canal 10)")
         self.audio.play_note(note, velocity=120, channel=9)
         self.after(200, lambda: self.audio.stop_note(note, channel=9))
@@ -329,6 +386,24 @@ class MidGuitarApp(ctk.CTk):
         self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Corda {string_num} Casa {fret} ➔ {note_name} (Nota {note})")
         self.audio.play_note(note, velocity=110, channel=0)
         self.after(400, lambda: self.audio.stop_note(note, channel=0))
+
+    # -------------------------------------------------------------
+    # GERENCIAMENTO DE SONS CUSTOMIZADOS (.WAV / .MP3)
+    # -------------------------------------------------------------
+    def open_sound_manager(self):
+        """Abre a janela de importação e gerenciamento de arquivos de áudio customizados."""
+        SoundManagerDialog(
+            self,
+            audio_engine=self.audio,
+            current_samples=self.config.get("custom_samples", {}),
+            on_save_callback=self._on_samples_updated
+        )
+
+    def _on_samples_updated(self, updated_samples: dict):
+        """Salva as amostras customizadas e aplica ao motor de áudio."""
+        self.config["custom_samples"] = updated_samples
+        save_config(self.config)
+        self.monitor.log(time.strftime("%H:%M:%S"), "SISTEMA", f"Amostras salvas: {len(updated_samples)} arquivos de áudio vinculados")
 
     # -------------------------------------------------------------
     # EDITOR DE MAPEAMENTOS INTERATIVO
@@ -491,11 +566,11 @@ class MidGuitarApp(ctk.CTk):
 
     def _update_connection_status(self, is_connected: bool, device_name: str = ""):
         if is_connected:
-            self.status_badge.configure(text=f"● Conectado: {device_name[:20]}", text_color="#22C55E")
+            self.status_badge.configure(text=f"🟢 Conectado: {device_name[:22]}", text_color="#22C55E")
             self.btn_connect.configure(text="Desconectar", fg_color="#DC2626", hover_color="#B91C1C")
         else:
-            self.status_badge.configure(text="○ Desconectado", text_color="#EF4444")
-            self.btn_connect.configure(text="Conectar", fg_color="#10B981", hover_color="#059669")
+            self.status_badge.configure(text="🟡 Modo Virtual (Clique para Testar)", text_color="#F59E0B")
+            self.btn_connect.configure(text="🔌 Conectar", fg_color="#10B981", hover_color="#059669")
 
     # -------------------------------------------------------------
     # CALLBACKS DE EVENTOS MIDI E ÁUDIO

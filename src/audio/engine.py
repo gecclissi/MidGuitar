@@ -5,16 +5,47 @@ Motor de áudio universal para o MidGuitar:
 3. Suporte opcional a SoundFonts (.sf2) via pyfluidsynth se disponível no sistema.
 """
 
+import os
 import pygame.midi
+import pygame.mixer
 import rtmidi
 from src.utils.instruments import INSTRUMENT_NAMES
 
+# Mapeamento de notas de bateria General MIDI para identificadores de pads
+DRUM_NOTE_TO_PAD = {
+    35: "kick",
+    36: "kick",
+    38: "snare",
+    40: "snare",
+    42: "hihat",
+    44: "hihat",
+    46: "hihat",
+    48: "tom1",
+    50: "tom1",
+    41: "tom2",
+    43: "tom2",
+    45: "tom2",
+    47: "tom2",
+    49: "crash",
+    51: "crash",
+    52: "crash",
+    55: "crash",
+    57: "crash",
+}
+
 class AudioEngine:
-    def __init__(self, midi_out_port_name: str | None = None, instrument_id: int = 29, volume: int = 85):
+    def __init__(self, midi_out_port_name: str | None = None, instrument_id: int = 29, volume: int = 85, initial_samples: dict | None = None):
         self.instrument_id = instrument_id
         self.volume = max(0, min(100, volume))
         self.midi_out_port_name = midi_out_port_name
         self.active_sounding_notes = set()
+
+        # Dicionário de samples customizados (.wav, .mp3, .ogg)
+        self.custom_samples = {}
+        self._init_pygame_mixer()
+        if initial_samples:
+            for k, p in initial_samples.items():
+                self.load_sample(k, p)
 
         # Instância pygame.midi (Sintetizador Nativo do Windows)
         self.pygame_output = None
@@ -27,6 +58,53 @@ class AudioEngine:
         # Configura instrumento e volume inicial
         self.set_instrument(self.instrument_id)
         self.set_volume(self.volume)
+
+    def _init_pygame_mixer(self):
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+                pygame.mixer.set_num_channels(32)
+        except Exception as e:
+            print(f"[AudioEngine] Aviso ao iniciar mixer: {e}")
+
+    def load_sample(self, sample_id: str, file_path: str) -> bool:
+        """Carrega um arquivo de áudio (.wav, .mp3, .ogg) para uma chave de instrumento."""
+        if not file_path or not os.path.exists(file_path):
+            return False
+        try:
+            sound = pygame.mixer.Sound(file_path)
+            self.custom_samples[sample_id] = {
+                "path": file_path,
+                "sound": sound
+            }
+            print(f"[AudioEngine] Sample carregado com sucesso: {sample_id} -> {file_path}")
+            return True
+        except Exception as e:
+            print(f"[AudioEngine] Erro ao carregar sample {file_path}: {e}")
+            return False
+
+    def remove_sample(self, sample_id: str):
+        """Remove um sample customizado, voltando para o som MIDI padrão."""
+        if sample_id in self.custom_samples:
+            del self.custom_samples[sample_id]
+
+    def get_sample_path(self, sample_id: str) -> str | None:
+        if sample_id in self.custom_samples:
+            return self.custom_samples[sample_id]["path"]
+        return None
+
+    def play_sample(self, sample_id: str, velocity: int = 100) -> bool:
+        """Toca um sample customizado se existir."""
+        if sample_id in self.custom_samples:
+            try:
+                sound = self.custom_samples[sample_id]["sound"]
+                vol = (self.volume / 100.0) * (velocity / 127.0)
+                sound.set_volume(max(0.0, min(1.0, vol)))
+                sound.play()
+                return True
+            except Exception as e:
+                print(f"[AudioEngine] Erro ao tocar sample {sample_id}: {e}")
+        return False
 
     def _init_pygame_synth(self):
         try:
@@ -119,19 +197,31 @@ class AudioEngine:
                 pass
 
     def play_note(self, note: int, velocity: int = 100, channel: int = 0):
-        """Dispara uma nota individual."""
+        """Dispara uma nota individual (ou sample customizado se configurado)."""
         note = max(0, min(127, note))
         velocity = max(1, min(127, velocity))
         self.active_sounding_notes.add(note)
 
-        # Synth nativo
-        if self.pygame_output:
+        # 1. Verifica se há sample customizado (.wav / .mp3)
+        sample_played = False
+        if channel == 9:  # Bateria (Canal 10)
+            pad_key = DRUM_NOTE_TO_PAD.get(note)
+            if pad_key and self.play_sample(pad_key, velocity):
+                sample_played = True
+            elif self.play_sample(f"drum_{note}", velocity):
+                sample_played = True
+        else:
+            if self.play_sample(f"note_{note}", velocity):
+                sample_played = True
+
+        # 2. Se não tocou sample customizado, usa o sintetizador nativo
+        if not sample_played and self.pygame_output:
             try:
                 self.pygame_output.note_on(note, velocity, channel)
             except Exception:
                 pass
 
-        # Saída MIDI externa (DAW)
+        # 3. Sempre envia MIDI para a porta de saída externa (DAWs / loopMIDI)
         if self.rtmidi_out and self.rtmidi_out.is_port_open():
             try:
                 self.rtmidi_out.send_message([0x90 | channel, note, velocity])
@@ -209,6 +299,13 @@ class AudioEngine:
     def close(self):
         """Fecha com segurança todos os recursos de áudio."""
         self.stop_all_notes()
+        if pygame.mixer.get_init():
+            try:
+                pygame.mixer.stop()
+                pygame.mixer.quit()
+            except Exception:
+                pass
+
         if self.pygame_output:
             try:
                 del self.pygame_output

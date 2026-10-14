@@ -27,10 +27,11 @@ DRUM_PADS_CONFIG = [
 ]
 
 class DrumView(ctk.CTkFrame):
-    def __init__(self, master, on_pad_click=None, on_open_mapping=None, **kwargs):
+    def __init__(self, master, on_pad_click=None, on_open_mapping=None, on_open_sound_manager=None, **kwargs):
         super().__init__(master, **kwargs)
-        self.on_pad_click = on_pad_click        # func(pad_id, note)
-        self.on_open_mapping = on_open_mapping  # func()
+        self.on_pad_click = on_pad_click                # func(pad_id, note)
+        self.on_open_mapping = on_open_mapping          # func()
+        self.on_open_sound_manager = on_open_sound_manager # func()
         self.pad_buttons = {}
         self.pad_labels = {}
         self.pad_notes = DEFAULT_PAD_NOTES.copy()
@@ -47,6 +48,15 @@ class DrumView(ctk.CTkFrame):
         )
         title.pack(side="left")
 
+        if self.on_open_sound_manager:
+            btn_sound = ctk.CTkButton(
+                header, text="🎵 Importar Sons (.WAV/.MP3)", width=170, height=24,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#8B5CF6", hover_color="#7C3AED",
+                command=self.on_open_sound_manager
+            )
+            btn_sound.pack(side="right", padx=(4, 0))
+
         if self.on_open_mapping:
             btn_edit = ctk.CTkButton(
                 header, text="⚙️ Mapear Sons de Bateria", width=155, height=24,
@@ -54,7 +64,7 @@ class DrumView(ctk.CTkFrame):
                 fg_color="#F59E0B", hover_color="#D97706", text_color="#0F172A",
                 command=self.on_open_mapping
             )
-            btn_edit.pack(side="right")
+            btn_edit.pack(side="right", padx=(4, 0))
 
         self.last_hit_lbl = ctk.CTkLabel(self, text="Último toque: Nenhum", font=ctk.CTkFont(size=11), text_color="#94A3B8")
         self.last_hit_lbl.pack(pady=(0, 2))
