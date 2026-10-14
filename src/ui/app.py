@@ -1,21 +1,31 @@
 """
 Janela Principal da aplicação MidGuitar em CustomTkinter.
-Unifica detecção de hardware, mapeamento, motor de áudio e interface visual.
+Estúdio Universal para:
+- Guitarra Pro Rock Band 3 (Mustang Pro / Squier Stratocaster - 6 cordas)
+- Guitarra Rock Band / Guitar Hero (5 botões + palheta + alavanca)
+- Teclado Rock Band 3 Wireless Keyboard (25 teclas + touch ribbon)
+- Baterias Band Hero / Guitar Hero / Rock Band Drums (Canal 10)
 """
 
 import customtkinter as ctk
 import tkinter as tk
 import time
 from src.ui.fretboard_view import FretboardView
+from src.ui.pro_fretboard_view import ProFretboardView
+from src.ui.keyboard_view import KeyboardView
+from src.ui.drum_view import DrumView
 from src.ui.monitor_view import MonitorView
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
 )
+from src.midi.instrument_types import InstrumentMode
 from src.midi.mapper import GuitarMapper
 from src.midi.reader import MIDIReader
 from src.audio.engine import AudioEngine
-from src.utils.config_manager import load_config, save_config, list_presets, load_preset, get_asset_path
+from src.utils.config_manager import (
+    load_config, save_config, list_presets, load_preset, get_asset_path
+)
 from src.utils.instruments import GM_INSTRUMENTS, INSTRUMENT_NAMES
 
 ctk.set_appearance_mode("Dark")
@@ -25,9 +35,9 @@ class MidGuitarApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("MidGuitar - Rock Band MIDI Controller & Studio")
-        self.geometry("980x680")
-        self.minsize(860, 580)
+        self.title("MidGuitar - Universal Rock Band & MIDI Studio")
+        self.geometry("1060x720")
+        self.minsize(920, 620)
 
         # Configura ícone da janela
         try:
@@ -43,6 +53,9 @@ class MidGuitarApp(ctk.CTk):
         self.current_preset_id = self.config.get("current_preset", "rock_power_chords")
         self.preset_data = load_preset(self.current_preset_id)
 
+        # Modo de instrumento inicial
+        self.current_instrument_mode = InstrumentMode.AUTO
+
         # Inicializa o mapeador
         self.mapper = GuitarMapper(
             preset=self.preset_data,
@@ -56,13 +69,17 @@ class MidGuitarApp(ctk.CTk):
             volume=self.config.get("volume", 85)
         )
 
-        # Inicializa o leitor MIDI
+        # Inicializa o leitor MIDI universal
         self.reader = MIDIReader(
             mapper=self.mapper,
             on_event_callback=self._on_midi_event,
             on_audio_play=self._on_audio_play,
             on_audio_stop=self._on_audio_stop,
-            on_whammy=self._on_whammy
+            on_whammy=self._on_whammy,
+            on_pro_guitar_event=self._on_pro_guitar_event,
+            on_keyboard_event=self._on_keyboard_event,
+            on_drum_event=self._on_drum_event,
+            on_mode_detected=self._on_mode_detected
         )
 
         # Constrói a interface
@@ -90,12 +107,12 @@ class MidGuitarApp(ctk.CTk):
         title_box.pack(side="left", padx=18, pady=10)
 
         title_label = ctk.CTkLabel(
-            title_box, text="🎸 MidGuitar", font=ctk.CTkFont(size=20, weight="bold"), text_color="#38BDF8"
+            title_box, text="🎸 MidGuitar Studio", font=ctk.CTkFont(size=20, weight="bold"), text_color="#38BDF8"
         )
         title_label.pack(side="left")
 
         subtitle = ctk.CTkLabel(
-            title_box, text="Rock Band 3 & MIDI Controller Studio",
+            title_box, text="Universal MIDI Studio (Guitarras Pro/6 Cordas • Teclados • Baterias • 5 Botões)",
             font=ctk.CTkFont(size=12), text_color="#94A3B8"
         )
         subtitle.pack(side="left", padx=(10, 0), pady=(3, 0))
@@ -111,19 +128,19 @@ class MidGuitarApp(ctk.CTk):
         # 2. BARRA DE CONEXÃO E DISPOSITIVOS
         # -------------------------------------------------------------
         conn_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
-        conn_bar.pack(fill="x", padx=16, pady=10)
+        conn_bar.pack(fill="x", padx=16, pady=(8, 4))
 
         # Entrada (MIDI In / Gamepad)
-        ctk.CTkLabel(conn_bar, text="Entrada:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(12, 4), pady=10)
-        self.input_combo = ctk.CTkComboBox(conn_bar, width=240, values=["Nenhum dispositivo"])
-        self.input_combo.pack(side="left", padx=4, pady=10)
+        ctk.CTkLabel(conn_bar, text="Entrada MIDI/USB:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(12, 4), pady=8)
+        self.input_combo = ctk.CTkComboBox(conn_bar, width=250, values=["Nenhum dispositivo"])
+        self.input_combo.pack(side="left", padx=4, pady=8)
 
         # Botão Atualizar
         btn_refresh = ctk.CTkButton(
             conn_bar, text="🔄 Atualizar", width=85, height=28,
             fg_color="#334155", hover_color="#475569", command=self.refresh_devices
         )
-        btn_refresh.pack(side="left", padx=4, pady=10)
+        btn_refresh.pack(side="left", padx=4, pady=8)
 
         # Botão Conectar / Desconectar
         self.btn_connect = ctk.CTkButton(
@@ -131,42 +148,72 @@ class MidGuitarApp(ctk.CTk):
             fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(weight="bold"),
             command=self.toggle_connection
         )
-        self.btn_connect.pack(side="left", padx=8, pady=10)
+        self.btn_connect.pack(side="left", padx=8, pady=8)
 
         # Saída (Sintetizador ou DAW)
-        ctk.CTkLabel(conn_bar, text="Saída de Áudio:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(18, 4), pady=10)
+        ctk.CTkLabel(conn_bar, text="Saída de Áudio:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(18, 4), pady=8)
         self.output_combo = ctk.CTkComboBox(
-            conn_bar, width=230, values=["Synth Nativo Windows (GS Wavetable)"],
+            conn_bar, width=240, values=["Synth Nativo Windows (GS Wavetable)"],
             command=self._on_output_selected
         )
-        self.output_combo.pack(side="left", padx=4, pady=10)
+        self.output_combo.pack(side="left", padx=4, pady=8)
 
         # -------------------------------------------------------------
-        # 3. ÁREA PRINCIPAL (FRETBOARD + MONITOR)
+        # 3. SELETOR DE INSTRUMENTO / MODO UNIVERSAL
+        # -------------------------------------------------------------
+        mode_bar = ctk.CTkFrame(self, fg_color="transparent")
+        mode_bar.pack(fill="x", padx=16, pady=(4, 6))
+
+        ctk.CTkLabel(mode_bar, text="Instrumento Ativo:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(4, 8))
+
+        self.mode_selector = ctk.CTkSegmentedButton(
+            mode_bar,
+            values=[
+                "⚡ Auto (Detectar)",
+                "🎸 Guitarra Pro (6 Cordas)",
+                "🎮 Guitarra 5 Botões",
+                "🎹 Teclado (25 Teclas)",
+                "🥁 Bateria (Canal 10)"
+            ],
+            command=self._on_mode_button_clicked
+        )
+        self.mode_selector.pack(side="left", fill="x", expand=True)
+        self.mode_selector.set("⚡ Auto (Detectar)")
+
+        # -------------------------------------------------------------
+        # 4. ÁREA PRINCIPAL (INSTRUMENTO VISUAL + MONITOR)
         # -------------------------------------------------------------
         main_split = ctk.CTkFrame(self, fg_color="transparent")
         main_split.pack(fill="both", expand=True, padx=16, pady=4)
 
-        # Esquerda: Braço da Guitarra (Fretboard)
-        self.fretboard = FretboardView(main_split, fg_color="#1E293B", corner_radius=10)
-        self.fretboard.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        self.fretboard.update_fret_labels_from_preset(self.preset_data)
+        # Container esquerdo: onde os instrumentos visuais alternam
+        self.instrument_container = ctk.CTkFrame(main_split, fg_color="#1E293B", corner_radius=10)
+        self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+        # Cria as 4 visões de instrumentos
+        self.pro_fretboard = ProFretboardView(self.instrument_container, fg_color="transparent")
+        self.classic_fretboard = FretboardView(self.instrument_container, fg_color="transparent")
+        self.keyboard_view = KeyboardView(self.instrument_container, fg_color="transparent")
+        self.drum_view = DrumView(self.instrument_container, fg_color="transparent")
+
+        # Exibe inicialmente a Guitarra Pro
+        self.active_visual_view = self.pro_fretboard
+        self.pro_fretboard.pack(fill="both", expand=True, padx=6, pady=6)
 
         # Direita: Monitor MIDI
-        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10)
-        self.monitor.pack(side="right", fill="both", expand=True, padx=(8, 0))
+        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10, width=320)
+        self.monitor.pack(side="right", fill="both", padx=(8, 0))
 
         # -------------------------------------------------------------
-        # 4. PAINEL DE CONTROLE DE ÁUDIO & PRESETS
+        # 5. PAINEL DE CONTROLE DE ÁUDIO & PRESETS
         # -------------------------------------------------------------
         bottom_panel = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=10)
-        bottom_panel.pack(fill="x", padx=16, pady=(8, 14))
+        bottom_panel.pack(fill="x", padx=16, pady=(6, 12))
 
-        # Linha 1: Preset e Instrumento
+        # Linha 1: Preset e Instrumento GM
         row1 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
-        row1.pack(fill="x", padx=12, pady=(10, 6))
+        row1.pack(fill="x", padx=12, pady=(8, 4))
 
-        # Preset
         ctk.CTkLabel(row1, text="Preset:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(4, 6))
         preset_names = [name for _, name in self.preset_list] or ["Padrão"]
         self.preset_combo = ctk.CTkComboBox(
@@ -174,28 +221,25 @@ class MidGuitarApp(ctk.CTk):
         )
         self.preset_combo.pack(side="left", padx=4)
 
-        # Seleciona o nome do preset atual no combo
         for pid, pname in self.preset_list:
             if pid == self.current_preset_id:
                 self.preset_combo.set(pname)
                 break
 
-        # Instrumento GM
-        ctk.CTkLabel(row1, text="Instrumento:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(16, 6))
+        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(16, 6))
         instrument_options = [f"{num:03d} - {name} ({cat})" for num, name, cat in GM_INSTRUMENTS]
         self.instrument_combo = ctk.CTkComboBox(
             row1, width=260, values=instrument_options, command=self._on_instrument_selected
         )
         self.instrument_combo.pack(side="left", padx=4)
         
-        # Seleciona instrumento padrão
         curr_inst = self.config.get("instrument_id", 29)
         for opt in instrument_options:
             if opt.startswith(f"{curr_inst:03d}"):
                 self.instrument_combo.set(opt)
                 break
 
-        # Botão Pânico (Parar Todas as Notas)
+        # Botão Pânico
         btn_panic = ctk.CTkButton(
             row1, text="⏹️ Parar Notas (Panic)", width=140, height=28,
             fg_color="#DC2626", hover_color="#B91C1C", font=ctk.CTkFont(weight="bold"),
@@ -205,9 +249,8 @@ class MidGuitarApp(ctk.CTk):
 
         # Linha 2: Oitava e Volume
         row2 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
-        row2.pack(fill="x", padx=12, pady=(4, 10))
+        row2.pack(fill="x", padx=12, pady=(4, 8))
 
-        # Deslocamento de Oitava
         ctk.CTkLabel(row2, text="Oitava:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(4, 6))
         self.octave_seg = ctk.CTkSegmentedButton(
             row2, values=["-2", "-1", "0", "+1", "+2"], command=self._on_octave_changed
@@ -215,7 +258,6 @@ class MidGuitarApp(ctk.CTk):
         self.octave_seg.pack(side="left", padx=4)
         self.octave_seg.set(str(self.config.get("octave_shift", 0)))
 
-        # Volume
         ctk.CTkLabel(row2, text="Volume:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(24, 6))
         self.volume_slider = ctk.CTkSlider(
             row2, from_=0, to=100, number_of_steps=100, width=180,
@@ -228,10 +270,57 @@ class MidGuitarApp(ctk.CTk):
         self.volume_label.pack(side="left", padx=2)
 
     # -------------------------------------------------------------
+    # GERENCIAMENTO DE MODO DO INSTRUMENTO
+    # -------------------------------------------------------------
+    def _switch_visual_view(self, new_view):
+        if self.active_visual_view != new_view:
+            if self.active_visual_view:
+                self.active_visual_view.pack_forget()
+            self.active_visual_view = new_view
+            self.active_visual_view.pack(fill="both", expand=True, padx=6, pady=6)
+
+    def _on_mode_button_clicked(self, selected_mode_str: str):
+        if "Auto" in selected_mode_str:
+            self.current_instrument_mode = InstrumentMode.AUTO
+            self.reader.set_mode(InstrumentMode.AUTO)
+        elif "Guitarra Pro" in selected_mode_str:
+            self.current_instrument_mode = InstrumentMode.PRO_GUITAR
+            self.reader.set_mode(InstrumentMode.PRO_GUITAR)
+            self._switch_visual_view(self.pro_fretboard)
+        elif "5 Botões" in selected_mode_str:
+            self.current_instrument_mode = InstrumentMode.CLASSIC_GUITAR
+            self.reader.set_mode(InstrumentMode.CLASSIC_GUITAR)
+            self._switch_visual_view(self.classic_fretboard)
+        elif "Teclado" in selected_mode_str:
+            self.current_instrument_mode = InstrumentMode.KEYBOARD
+            self.reader.set_mode(InstrumentMode.KEYBOARD)
+            self._switch_visual_view(self.keyboard_view)
+        elif "Bateria" in selected_mode_str:
+            self.current_instrument_mode = InstrumentMode.DRUMS
+            self.reader.set_mode(InstrumentMode.DRUMS)
+            self._switch_visual_view(self.drum_view)
+
+    def _on_mode_detected(self, detected_mode: InstrumentMode):
+        """Disparado quando mensagens MIDI chegam e identificam o instrumento ativo."""
+        self.after(0, self._apply_detected_mode, detected_mode)
+
+    def _apply_detected_mode(self, detected_mode: InstrumentMode):
+        if self.current_instrument_mode != InstrumentMode.AUTO:
+            return # Se o usuário fixou um instrumento manualmente, respeita a escolha
+
+        if detected_mode == InstrumentMode.DRUMS:
+            self._switch_visual_view(self.drum_view)
+        elif detected_mode == InstrumentMode.KEYBOARD:
+            self._switch_visual_view(self.keyboard_view)
+        elif detected_mode == InstrumentMode.PRO_GUITAR:
+            self._switch_visual_view(self.pro_fretboard)
+        elif detected_mode == InstrumentMode.CLASSIC_GUITAR:
+            self._switch_visual_view(self.classic_fretboard)
+
+    # -------------------------------------------------------------
     # GERENCIAMENTO DE CONEXÃO & DISPOSITIVOS
     # -------------------------------------------------------------
     def refresh_devices(self):
-        """Varre portas MIDI e Gamepads e atualiza as caixas de seleção."""
         midi_in_ports = get_midi_input_ports()
         gamepads = get_gamepad_devices()
 
@@ -246,7 +335,6 @@ class MidGuitarApp(ctk.CTk):
 
         self.input_combo.configure(values=input_options)
         
-        # Sugere dispositivo Rock Band detectado se nada estiver selecionado
         auto_rb = find_rockband_midi_input()
         if auto_rb:
             target_str = f"[MIDI] {auto_rb[1]}"
@@ -255,7 +343,6 @@ class MidGuitarApp(ctk.CTk):
         elif input_options:
             self.input_combo.set(input_options[0])
 
-        # Portas de saída
         midi_out_ports = get_midi_output_ports()
         output_options = ["Synth Nativo Windows (GS Wavetable)"]
         for p in midi_out_ports:
@@ -263,14 +350,12 @@ class MidGuitarApp(ctk.CTk):
         self.output_combo.configure(values=output_options)
 
     def auto_connect(self):
-        """Conecta automaticamente ao melhor dispositivo encontrado."""
         auto_rb = find_rockband_midi_input()
         if auto_rb:
             port_idx, port_name = auto_rb
             self._connect_midi(port_idx, port_name)
 
     def toggle_connection(self):
-        """Alterna o estado de conexão do botão."""
         if self.reader.is_running:
             self.disconnect()
         else:
@@ -290,7 +375,6 @@ class MidGuitarApp(ctk.CTk):
                     self._connect_midi(idx, port_name)
                     return
         elif selected.startswith("[USB]"):
-            # Controle USB direto
             try:
                 idx_str = selected.split("(#")[-1].replace(")", "")
                 idx = int(idx_str)
@@ -324,34 +408,32 @@ class MidGuitarApp(ctk.CTk):
     # CALLBACKS DE EVENTOS MIDI E ÁUDIO
     # -------------------------------------------------------------
     def _on_midi_event(self, timestamp: str, event_type: str, details: str):
-        """Recebe log de evento e atualiza o monitor e a guitarra visual na thread principal."""
-        self.after(0, self._process_ui_event, timestamp, event_type, details)
+        self.after(0, self.monitor.log, timestamp, event_type, details)
 
-    def _process_ui_event(self, timestamp: str, event_type: str, details: str):
-        self.monitor.log(timestamp, event_type, details)
+    def _on_pro_guitar_event(self, string_num: int, fret: int, is_active: bool, velocity: int):
+        self.after(0, self.pro_fretboard.set_string_fret, string_num, fret, is_active, velocity)
 
-        # Atualiza botões do fretboard
-        state = self.mapper.state
-        self.fretboard.set_fret_state("green", state.green)
-        self.fretboard.set_fret_state("red", state.red)
-        self.fretboard.set_fret_state("yellow", state.yellow)
-        self.fretboard.set_fret_state("blue", state.blue)
-        self.fretboard.set_fret_state("orange", state.orange)
-        self.fretboard.set_strum_state(is_down=True, is_active=state.strum_down)
-        self.fretboard.set_strum_state(is_down=False, is_active=state.strum_up)
+    def _on_keyboard_event(self, note: int, is_active: bool, velocity: int):
+        self.after(0, self.keyboard_view.set_key_state, note, is_active)
 
-    def _on_audio_play(self, notes: list[int], velocity: int):
-        self.audio.play_chord(notes, velocity)
+    def _on_drum_event(self, note: int, velocity: int):
+        self.after(0, self.drum_view.trigger_pad_by_note, note, velocity)
 
-    def _on_audio_stop(self, notes: list[int]):
-        self.audio.stop_chord(notes)
+    def _on_audio_play(self, notes: list[int], velocity: int, channel: int = 0):
+        for n in notes:
+            self.audio.play_note(n, velocity, channel)
+
+    def _on_audio_stop(self, notes: list[int], channel: int = 0):
+        for n in notes:
+            self.audio.stop_note(n, channel)
 
     def _on_whammy(self, value: float):
         self.audio.pitch_bend(value)
-        self.after(0, self.fretboard.set_whammy_value, value)
+        self.after(0, self.classic_fretboard.set_whammy_value, value)
+        self.after(0, self.keyboard_view.set_touch_strip, (value + 1.0) / 2.0)
 
     # -------------------------------------------------------------
-    # CONTROLES DO USUÁRIO (PRESETS, INSTRUMENTOS, VOLUME)
+    # CONTROLES DO USUÁRIO
     # -------------------------------------------------------------
     def _on_preset_selected(self, preset_name: str):
         for pid, pname in self.preset_list:
@@ -359,9 +441,8 @@ class MidGuitarApp(ctk.CTk):
                 self.current_preset_id = pid
                 self.preset_data = load_preset(pid)
                 self.mapper.set_preset(self.preset_data)
-                self.fretboard.update_fret_labels_from_preset(self.preset_data)
+                self.classic_fretboard.update_fret_labels_from_preset(self.preset_data)
                 
-                # Se o preset definir um instrumento recomendado, aplica
                 if "instrument_id" in self.preset_data:
                     inst_id = self.preset_data["instrument_id"]
                     self.audio.set_instrument(inst_id)
@@ -401,17 +482,11 @@ class MidGuitarApp(ctk.CTk):
         self.config["volume"] = vol
 
     def panic_stop(self):
-        """Para imediatamente todas as notas e limpa a guitarra."""
         self.audio.stop_all_notes()
         self.mapper.stop_all_active_notes()
-        for fret in ("green", "red", "yellow", "blue", "orange"):
-            self.fretboard.set_fret_state(fret, False)
-        self.fretboard.set_strum_state(is_down=True, is_active=False)
-        self.fretboard.set_strum_state(is_down=False, is_active=False)
         self.monitor.log(time.strftime("%H:%M:%S"), "PANIC", "Todas as notas foram interrompidas.")
 
     def _on_close(self):
-        """Salva configurações e fecha recursos."""
         self.disconnect()
         self.audio.close()
         self.config["current_preset"] = self.current_preset_id

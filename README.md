@@ -1,10 +1,10 @@
-# 🎸 MidGuitar - Rock Band MIDI Controller & Studio
+# 🎸 MidGuitar - Universal Rock Band & MIDI Studio
 
 <div align="center">
 
 ![MidGuitar Icon](assets/icon.ico)
 
-**Transforme qualquer guitarra de Rock Band (via MIDI Pro Adapter ou USB) em um poderoso controlador MIDI e estúdio de instrumentos para PC.**
+**O estúdio MIDI definitivo para transformar qualquer instrumento musical de Rock Band e Guitar Hero em controladores MIDI profissionais para PC.**
 
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com)
@@ -18,42 +18,40 @@
 
 ## 🎯 Sobre o Projeto
 
-O **MidGuitar** foi desenvolvido para solucionar a limitação de compatibilidade entre guitarras de jogos musicais (Rock Band 3, Guitar Hero) e o ecossistema de produção musical no computador. 
+O **MidGuitar Studio** é uma central universal de instrumentos MIDI desenvolvida para conectar, mapear e executar em tempo real qualquer instrumento musical do ecossistema de jogos (com saídas MIDI físicas DIN de 5 pinos ou via USB/MIDI Pro Adapter):
 
-Ele detecta automaticamente adaptadores MIDI (como o **Mad Catz Rock Band 3 MIDI Pro-Adapter**) ou conexões USB diretas, mapeia os sinais das casas (fretboard), palheta (strum bar) e alavanca (whammy bar), e gera som em tempo real tanto via **sintetizador integrado de baixa latência** quanto roteando eventos MIDI para softwares profissionais (DAWs como Reaper, FL Studio, Ableton, Amplitube e Guitar Rig).
+1. 🎸 **Fender Squier Stratocaster (Rock Band 3 Pro Guitar)**: Guitarra real com cordas de verdade, captação e saída MIDI física de 5 pinos.
+2. 🎸 **Fender Mustang PRO-Guitar (Rock Band 3)**: Guitarra com 102 botões clicáveis no braço (6 cordas x 17 trastes), 6 sensores de corda palhetáveis e saída MIDI de 5 pinos.
+3. 🎹 **Rock Band 3 Wireless Keyboard**: Teclado/Keytar com 25 teclas sensíveis à velocidade (C3 a C5), fita touch ribbon (pitch bend/modulação) e saída MIDI física.
+4. 🥁 **Baterias Eletrônicas Band Hero / Guitar Hero World Tour / 5 / Rock Band**: Baterias com saída MIDI física de 5 pinos transmitindo percussão com sensibilidade a força (Velocity) no **Canal MIDI 10**.
+5. 🎮 **Guitarras Clássicas Rock Band / Guitar Hero (5 Botões)**: Conectadas via MIDI Pro Adapter (Mad Catz) ou receptores USB diretos.
 
 ---
 
 ## ✨ Principais Funcionalidades
 
-- 🔌 **Detecção Automática Plug & Play**:
-  - Varredura instantânea de portas de entrada MIDI (`MIDI Pro Adapter`, interfaces USB-MIDI).
-  - Suporte adicional a guitarras USB diretas / receptores wireless reconhecidos como Gamepad pelo Windows.
-  - Botão de atualização sem precisar reiniciar o aplicativo.
+- ⚡ **Detecção Automática de Instrumento (Auto Mode)**:
+  - O aplicativo escuta as mensagens e comuta automaticamente o visualizador e a resposta sonora para o instrumento que estiver tocando:
+    - Bateria no Canal 10 ➔ Ativa visualizador de Bateria e sintetizador de percussão GM.
+    - Notas nos Canais 1 a 6 ➔ Ativa visualizador de Guitarra Pro (6 cordas polifônicas).
+    - Teclas de C3 a C5 no Canal 1 ➔ Ativa visualizador de Teclado.
+    - 5 Casas clássicas / Strum ➔ Ativa visualizador de 5 botões com sistema de acordes.
 
-- 🔊 **Motor de Som Nativo Sem Instalação de DLLs**:
-  - Usa o **Microsoft GS Wavetable Synthesizer** nativo do Windows com suporte a todos os **128 instrumentos General MIDI** (Guitarras Distorcidas, Overdrive, Limpa, Baixo, Pianos, Sintetizadores, etc.).
-  - Funciona imediatamente após o download, sem necessidade de baixar pacotes SoundFont pesados ou compilar bibliotecas C.
+- 🎛️ **4 Visualizadores Gráficos Especializados em Tempo Real**:
+  - **Guitarra Pro**: Desenho em alta precisão do braço com 6 cordas (E, A, D, G, B, E) e 17 trastes, indicando exatamente a corda tocada, a casa apertada e a nota resultante.
+  - **Teclado (25 Teclas)**: Teclas brancas e pretas que acendem dinamicamente e medidor vertical da fita de toque (Touch Strip / Modulação).
+  - **Bateria Eletrônica**: 6 pads (Bumbo Kick 36, Caixa Snare 38, Chimbal Hi-Hat 42/46, Tom 1 48, Surdo 41, Pratos Crash/Ride 49/55) com medidor de força (Velocity) e contador de toques.
+  - **Guitarra 5 Botões**: Cores clássicas (Verde, Vermelho, Amarelo, Azul, Laranja), feedback de palhetada (Strum Up/Down) e alavanca (Whammy Bar).
 
-- 🎛️ **Roteamento MIDI para DAWs e Plugins VST**:
-  - Encaminha mensagens em tempo real para portas virtuais (como [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)), permitindo tocar guitarras virtuais realistas no **Amplitube, Neural DSP, Kontakt, Guitar Pro ou Reaper**.
+- 🔊 **Motor de Áudio Híbrido e Flexível**:
+  - **Síntese Nativa do Windows**: Toca imediatamente usando o Microsoft GS Wavetable Synth com 128 instrumentos General MIDI e o Kit de Bateria no Canal 10, sem necessidade de baixar pacotes externos.
+  - **Roteamento para DAWs (Reaper, FL Studio, Amplitube, EZDrummer)**: Encaminha eventos em tempo real para portas virtuais (via [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)).
 
-- 🎨 **Interface Gráfica Moderna e Interativa**:
-  - **Fretboard Visual**: os 5 botões de casas (Verde, Vermelho, Amarelo, Azul, Laranja) acendem em tempo real quando pressionados.
-  - **Indicador de Palheta**: visualização de palhetada para cima e para baixo.
-  - **Medidor de Alavanca (Whammy Bar)**: barra de progresso em tempo real que reflete o Pitch Bend físico.
-  - **Monitor de Eventos MIDI**: log em tempo real com timestamp, tipo de mensagem, canal, nota e visualização hexadecimal.
-
-- 📂 **Sistema de Presets Customizáveis (JSON)**:
-  - `Rock Power Chords`: acordes de quinta em cada casa (E5, A5, D5, G5, C5) disparados pela palheta.
-  - `Pentatonic Solo`: escala pentatônica em Mi menor para solos rápidos.
-  - `Bass Groove`: mapeamento otimizado para linhas de contrabaixo elétrico.
-  - `Pro Guitar (Direct)`: modo direto para instrumentos Pro Guitar (Mustang / Squier Stratocaster) e DAWs.
-
-- ⚡ **Controles de Performance**:
-  - Mudança de oitava em tempo real (-2 a +2 oitavas).
-  - Slider de volume master (0% a 100%).
-  - **Botão de Pânico (Panic)**: interrompe imediatamente todas as notas soando caso haja notas presas.
+- 📂 **Presets de Afinação e Acordes Customizáveis**:
+  - `Rock Power Chords`: Acordes de quinta prontos para tocar rock com a palheta.
+  - `Pentatonic Solo`: Solos rápidos na escala pentatônica menor de Mi.
+  - `Bass Groove`: Linhas de baixo elétrico com pegada encorpada.
+  - `Pro Guitar Chromatic`: Transmissão direta sem quantização para DAWs e VSTs.
 
 ---
 
@@ -63,7 +61,7 @@ Ele detecta automaticamente adaptadores MIDI (como o **Mad Catz Rock Band 3 MIDI
 |---|---|---|
 | **Linguagem** | Python 3.9+ | Núcleo do sistema |
 | **Comunicação MIDI** | `python-rtmidi` + `mido` | Leitura e envio de mensagens MIDI de altíssima velocidade e baixa latência |
-| **Áudio Integrado** | `pygame.midi` (MMSystem) | Síntese de áudio nativa no Windows |
+| **Áudio Integrado** | `pygame.midi` (MMSystem) | Síntese de áudio nativa no Windows (Instrumentos + Percussão Canal 10) |
 | **Interface de Usuário** | `customtkinter` | Interface escura, responsiva e moderna |
 | **Empacotamento** | `pyinstaller` | Geração do executável `.exe` independente |
 
@@ -71,35 +69,29 @@ Ele detecta automaticamente adaptadores MIDI (como o **Mad Catz Rock Band 3 MIDI
 
 ## 🚀 Como Usar o Executável (.exe)
 
-1. Baixe ou gere a pasta do executável em `dist/MidGuitar/`.
-2. Conecte o seu **MIDI Pro Adapter** ou guitarra na porta USB do computador.
+1. Baixe ou acerte a pasta do executável em `dist/MidGuitar/`.
+2. Conecte o cabo MIDI da sua guitarra, teclado ou bateria ao computador (usando interface USB-MIDI ou MIDI Pro Adapter).
 3. Execute `MidGuitar.exe`.
-4. O aplicativo detectará sua porta de entrada automaticamente. Clique em **Conectar**.
-5. Toque a guitarra e ouça o som instantaneamente!
+4. Selecione a sua porta de entrada e clique em **Conectar**.
+5. Toque qualquer instrumento! O aplicativo responderá visualmente e sonoramente na mesma hora.
 
 ---
 
 ## 💻 Como Rodar via Código Fonte (Desenvolvimento)
 
-### 1. Clonar o repositório
-```bash
+```powershell
+# 1. Clonar o repositório
 git clone https://github.com/gecclissi/MidGuitar.git
 cd MidGuitar
-```
 
-### 2. Criar e ativar o ambiente virtual (recomendado)
-```powershell
+# 2. Criar e ativar o ambiente virtual
 python -m venv venv
 .\venv\Scripts\activate
-```
 
-### 3. Instalar as dependências
-```powershell
+# 3. Instalar as dependências
 pip install -r requirements.txt
-```
 
-### 4. Executar o aplicativo
-```powershell
+# 4. Executar o estúdio
 python src/main.py
 ```
 
@@ -107,79 +99,49 @@ python src/main.py
 
 ## 📦 Como Compilar o Executável (.exe)
 
-O projeto inclui um script automatizado de compilação:
-
 ```powershell
 python build_exe.py
 ```
 
-O executável completo e todos os recursos serão gerados na pasta:
-```
+O executável completo será gerado em:
+```text
 dist/MidGuitar/MidGuitar.exe
 ```
 
 ---
 
-## 🎹 Mapeamento Padrão de Sinais MIDI
+## 🎹 Especificações de Mapeamento MIDI dos Instrumentos
 
-Ao utilizar o **Rock Band 3 MIDI Pro Adapter** em modo guitarra (chave na posição **G**):
+### 1. Guitarra Pro (Rock Band 3 Squier & Mustang)
+A guitarra transmite em **um canal MIDI dedicado para cada corda**:
+* **6ª Corda (Mi Grave / Low E):** Canal MIDI 6 (Nota base 40 / E2 + número do traste 0–17)
+* **5ª Corda (Lá / A):** Canal MIDI 5 (Nota base 45 / A2 + número do traste 0–17)
+* **4ª Corda (Ré / D):** Canal MIDI 4 (Nota base 50 / D3 + número do traste 0–17)
+* **3ª Corda (Sol / G):** Canal MIDI 3 (Nota base 55 / G3 + número do traste 0–17)
+* **2ª Corda (Si / B):** Canal MIDI 2 (Nota base 59 / B3 + número do traste 0–17)
+* **1ª Corda (Mi Agudo / High E):** Canal MIDI 1 (Nota base 64 / E4 + número do traste 0–17)
 
-| Controle da Guitarra | Sinal MIDI Enviado | Ação no MidGuitar |
-|---|---|---|
-| **Casa Verde** | Note On/Off (Nota 60 / C4) | Seleciona Nota/Acorde Verde |
-| **Casa Vermelha** | Note On/Off (Nota 62 / D4) | Seleciona Nota/Acorde Vermelho |
-| **Casa Amarela** | Note On/Off (Nota 64 / E4) | Seleciona Nota/Acorde Amarelo |
-| **Casa Azul** | Note On/Off (Nota 65 / F4) | Seleciona Nota/Acorde Azul |
-| **Casa Laranja** | Note On/Off (Nota 67 / G4) | Seleciona Nota/Acorde Laranja |
-| **Palheta (Strum Down/Up)** | Note On (69 ou 71) / D-pad | Dispara o ataque do acorde/nota atual |
-| **Alavanca (Whammy)** | Pitch Bend (0xE0) ou CC #1 | Modulação de afinação (-1.0 a +1.0) |
-| **Botão Overdrive** | Note On (72) / Botão Select | Acentuação ou boost de oitava |
+### 2. Teclado Rock Band 3 (Keytar)
+* **Teclas:** 25 teclas polifônicas sensíveis à velocidade transmitindo no **Canal MIDI 1** (C3 = Nota 48 até C5 = Nota 72).
+* **Fita Touch Ribbon:** Control Change CC #1 (Modulação) e Pitch Bend.
 
----
-
-## 🎛️ Integração com DAWs (Reaper, FL Studio, Amplitube)
-
-Para tocar usando instrumentos virtuais profissionais (VSTs):
-
-1. Instale o driver gratuito **[loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)**.
-2. No loopMIDI, crie uma porta virtual chamada `MidGuitar Port`.
-3. Abra o **MidGuitar**, clique em **🔄 Atualizar** e selecione na **Saída de Áudio**: `[MIDI OUT] MidGuitar Port`.
-4. Abra sua DAW favorita (ex: Reaper), ative `MidGuitar Port` nas opções de entrada MIDI e arme a faixa com seu plugin de guitarra preferido!
+### 3. Baterias (Band Hero / Guitar Hero / Rock Band Drums)
+Transmitem exclusivamente no **Canal MIDI 10** (Percussão General MIDI):
+* **Pedal de Bumbo (Kick):** Nota 36 (C1)
+* **Pad Vermelho (Caixa / Snare):** Nota 38 (D1)
+* **Pad Amarelo (Chimbal / Hi-Hat):** Nota 42 / 46 (F#1 / A#1)
+* **Pad Azul (Tom 1 / Ride):** Nota 48 / 51
+* **Pad Verde (Surdo / Crash 1):** Nota 41 / 49
+* **Pad Laranja (Prato Splash / Crash 2):** Nota 55
 
 ---
 
-## 📁 Estrutura do Projeto
+## 🎛️ Integração com DAWs e VSTs Profissionais
 
-```
-MidGuitar/
-├── README.md                      # Documentação completa
-├── requirements.txt               # Dependências do projeto
-├── config.json                    # Configurações do usuário salvas
-├── build_exe.py                   # Script de compilação PyInstaller
-├── assets/
-│   ├── icon.ico                   # Ícone do aplicativo
-│   └── generate_icon.py           # Gerador do ícone
-├── presets/                       # Presets de afinação e instrumentos
-│   ├── rock_power_chords.json     # Acordes de força Rock
-│   ├── pentatonic_solo.json       # Escala pentatônica para solos
-│   ├── bass_groove.json           # Mapeamento para contrabaixo
-│   └── pro_guitar_chromatic.json  # Modo direto para Pro Guitar
-└── src/
-    ├── main.py                    # Ponto de entrada
-    ├── midi/
-    │   ├── detector.py            # Varredura de hardware e portas
-    │   ├── mapper.py              # Motor de acordes e casas
-    │   └── reader.py              # Leitor assíncrono de eventos MIDI/USB
-    ├── audio/
-    │   └── engine.py              # Sintetizador nativo e saída MIDI
-    ├── ui/
-    │   ├── app.py                 # Janela principal (CustomTkinter)
-    │   ├── fretboard_view.py      # Braço interativo da guitarra
-    │   └── monitor_view.py        # Console de eventos em tempo real
-    └── utils/
-        ├── config_manager.py      # Gerenciador de configurações e presets
-        └── instruments.py         # Mapeamento de 128 instrumentos General MIDI
-```
+1. Instale o driver virtual gratuito **[loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)**.
+2. Crie uma porta virtual chamada `MidGuitar Port`.
+3. No **MidGuitar Studio**, selecione na **Saída de Áudio**: `[MIDI OUT] MidGuitar Port`.
+4. Abra seu DAW preferido (Reaper, Ableton, FL Studio, Amplitube, EZDrummer, Superior Drummer, Kontakt) e selecione `MidGuitar Port` como entrada MIDI!
 
 ---
 
