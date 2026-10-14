@@ -1,7 +1,6 @@
 """
 Widget visual de Guitarra e Braço (Fretboard) para o MidGuitar.
-Renderiza os 5 botões de casas (Verde, Vermelho, Amarelo, Azul, Laranja),
-a palheta (Strum Bar) e a alavanca (Whammy Bar) em tempo real.
+Permite clicar diretamente nos botões para ouvir/testar as notas e acordes!
 """
 
 import customtkinter as ctk
@@ -15,16 +14,32 @@ FRET_COLORS = {
 }
 
 class FretboardView(ctk.CTkFrame):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, on_fret_click=None, on_open_mapping=None, **kwargs):
         super().__init__(master, **kwargs)
+        self.on_fret_click = on_fret_click      # func(fret_name)
+        self.on_open_mapping = on_open_mapping  # func()
         self.fret_buttons = {}
         self.fret_labels = {}
         self._init_ui()
 
     def _init_ui(self):
-        # Título da seção
-        title = ctk.CTkLabel(self, text="Braço da Guitarra (Fretboard)", font=ctk.CTkFont(size=14, weight="bold"))
-        title.pack(pady=(8, 4))
+        # Header da seção com botão de mapeamento
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=12, pady=(6, 2))
+
+        title = ctk.CTkLabel(
+            header, text="Braço da Guitarra (Clique para Ouvir / Testar)",
+            font=ctk.CTkFont(size=13, weight="bold")
+        )
+        title.pack(side="left")
+
+        if self.on_open_mapping:
+            btn_edit = ctk.CTkButton(
+                header, text="⚙️ Mapear Casas & Acordes", width=145, height=24,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#3B82F6", hover_color="#2563EB", command=self.on_open_mapping
+            )
+            btn_edit.pack(side="right")
 
         # Container dos 5 trastes
         frets_container = ctk.CTkFrame(self, fg_color="transparent")
@@ -34,7 +49,7 @@ class FretboardView(ctk.CTkFrame):
             fret_frame = ctk.CTkFrame(frets_container, fg_color="transparent")
             fret_frame.pack(side="left", expand=True, fill="both", padx=4)
 
-            # Botão visual
+            # Botão clicável para ouvir a nota
             btn = ctk.CTkButton(
                 fret_frame,
                 text=color_info["text"],
@@ -44,7 +59,8 @@ class FretboardView(ctk.CTkFrame):
                 height=52,
                 corner_radius=10,
                 border_width=2,
-                border_color="#374151"
+                border_color="#374151",
+                command=lambda fk=fret_key: self._on_btn_clicked(fk)
             )
             btn.pack(fill="x")
             self.fret_buttons[fret_key] = btn
@@ -56,11 +72,11 @@ class FretboardView(ctk.CTkFrame):
 
         # Separador visual
         sep = ctk.CTkFrame(self, height=2, fg_color="#374151")
-        sep.pack(fill="x", padx=12, pady=10)
+        sep.pack(fill="x", padx=12, pady=8)
 
         # Seção de Palheta (Strum) e Alavanca (Whammy)
         controls_container = ctk.CTkFrame(self, fg_color="transparent")
-        controls_container.pack(fill="x", padx=12, pady=(0, 10))
+        controls_container.pack(fill="x", padx=12, pady=(0, 8))
 
         # Strum Bar
         strum_frame = ctk.CTkFrame(controls_container, fg_color="#1E293B", corner_radius=8, width=160)
@@ -87,8 +103,17 @@ class FretboardView(ctk.CTkFrame):
 
         ctk.CTkLabel(whammy_frame, text="Alavanca (Whammy Bar)", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(4, 2))
         self.whammy_progress = ctk.CTkProgressBar(whammy_frame, height=14, corner_radius=6, progress_color="#6366F1")
-        self.whammy_progress.set(0.5) # Centro = 0
+        self.whammy_progress.set(0.5)
         self.whammy_progress.pack(fill="x", padx=14, pady=(6, 8))
+
+    def _on_btn_clicked(self, fret_key: str):
+        # Acende o botão momentaneamente
+        self.set_fret_state(fret_key, True)
+        self.after(150, lambda: self.set_fret_state(fret_key, False))
+
+        # Dispara o som
+        if self.on_fret_click:
+            self.on_fret_click(fret_key)
 
     def set_fret_state(self, fret: str, is_active: bool):
         """Acende ou apaga visualmente o botão da casa."""

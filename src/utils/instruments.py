@@ -1,5 +1,6 @@
 """
-Lista de instrumentos padrão General MIDI (GM1) divididos por categoria.
+Lista de instrumentos padrão General MIDI (GM1) divididos por categoria,
+sons de bateria GM (Canal 10) e utilitários de notas e acordes.
 """
 
 GM_INSTRUMENTS = [
@@ -125,8 +126,52 @@ GM_INSTRUMENTS = [
 # Mapa rápido id -> nome
 INSTRUMENT_NAMES = {num: name for num, name, _ in GM_INSTRUMENTS}
 
+# Sons de Percussão Padrão General MIDI (Canal 10)
+GM_DRUM_SOUNDS = [
+    (35, "Acoustic Bass Drum (Bumbo Acústico)"),
+    (36, "Bass Drum 1 (Bumbo Pedal)"),
+    (37, "Side Stick (Aro da Caixa)"),
+    (38, "Acoustic Snare (Caixa Acústica)"),
+    (39, "Hand Clap (Palmas)"),
+    (40, "Electric Snare (Caixa Elétrica)"),
+    (41, "Low Floor Tom (Surdo Baixo)"),
+    (42, "Closed Hi-Hat (Chimbal Fechado)"),
+    (43, "High Floor Tom (Surdo Alto)"),
+    (44, "Pedal Hi-Hat (Chimbal Pedal)"),
+    (45, "Low Tom (Tom Baixo)"),
+    (46, "Open Hi-Hat (Chimbal Aberto)"),
+    (47, "Low-Mid Tom (Tom Médio-Grave)"),
+    (48, "Hi-Mid Tom (Tom Médio-Agudo)"),
+    (49, "Crash Cymbal 1 (Prato de Ataque 1)"),
+    (50, "High Tom (Tom Agudo)"),
+    (51, "Ride Cymbal 1 (Prato de Condução 1)"),
+    (52, "Chinese Cymbal (Prato Chinês)"),
+    (53, "Ride Bell (Cúpula do Ride)"),
+    (54, "Tambourine (Pandeiro)"),
+    (55, "Splash Cymbal (Prato Splash)"),
+    (56, "Cowbell (Caneca/Sino)"),
+    (57, "Crash Cymbal 2 (Prato de Ataque 2)"),
+    (58, "Vibraslap"),
+    (59, "Ride Cymbal 2 (Prato de Condução 2)"),
+]
+
+GM_DRUM_NAMES = {note: name for note, name in GM_DRUM_SOUNDS}
+
 # Nota musical (0-127) para nome (ex: 60 -> C4)
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+# Intervalos de acordes em semitons a partir da tônica
+CHORD_INTERVALS = {
+    "Nota Única (Solo)": [0],
+    "Power Chord (5ª)": [0, 7, 12],
+    "Acorde Maior": [0, 4, 7],
+    "Acorde Menor": [0, 3, 7],
+    "Sétima Dominante (7)": [0, 4, 7, 10],
+    "Menor com 7ª (m7)": [0, 3, 7, 10],
+    "Maior com 7ª Maior (maj7)": [0, 4, 7, 11],
+    "Sus4": [0, 5, 7],
+    "Oitava Dupla": [0, 12],
+}
 
 def midi_note_to_name(note_number: int) -> str:
     """Converte número de nota MIDI (0-127) em formato legível (ex: 60 -> C4)."""
@@ -135,3 +180,15 @@ def midi_note_to_name(note_number: int) -> str:
     octave = (note_number // 12) - 1
     name = NOTE_NAMES[note_number % 12]
     return f"{name}{octave}"
+
+def name_to_midi_note(name: str, octave: int) -> int:
+    """Calcula o número MIDI a partir do nome da nota e oitava (ex: 'E', 3 -> 52)."""
+    if name in NOTE_NAMES:
+        idx = NOTE_NAMES.index(name)
+        return (octave + 1) * 12 + idx
+    return 60
+
+def build_chord_notes(root_note: int, chord_type: str) -> list[int]:
+    """Gera lista de notas MIDI para o acorde especificado."""
+    intervals = CHORD_INTERVALS.get(chord_type, [0])
+    return [max(0, min(127, root_note + i)) for i in intervals]

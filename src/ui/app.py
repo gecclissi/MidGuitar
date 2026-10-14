@@ -10,11 +10,14 @@ Estúdio Universal para:
 import customtkinter as ctk
 import tkinter as tk
 import time
+import os
+import json
 from src.ui.fretboard_view import FretboardView
 from src.ui.pro_fretboard_view import ProFretboardView
 from src.ui.keyboard_view import KeyboardView
 from src.ui.drum_view import DrumView
 from src.ui.monitor_view import MonitorView
+from src.ui.mapping_dialog import MappingDialog
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
@@ -24,9 +27,9 @@ from src.midi.mapper import GuitarMapper
 from src.midi.reader import MIDIReader
 from src.audio.engine import AudioEngine
 from src.utils.config_manager import (
-    load_config, save_config, list_presets, load_preset, get_asset_path
+    load_config, save_config, list_presets, load_preset, get_asset_path, get_presets_dirs
 )
-from src.utils.instruments import GM_INSTRUMENTS, INSTRUMENT_NAMES
+from src.utils.instruments import GM_INSTRUMENTS, INSTRUMENT_NAMES, midi_note_to_name
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -190,11 +193,25 @@ class MidGuitarApp(ctk.CTk):
         self.instrument_container = ctk.CTkFrame(main_split, fg_color="#1E293B", corner_radius=10)
         self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        # Cria as 4 visões de instrumentos
-        self.pro_fretboard = ProFretboardView(self.instrument_container, fg_color="transparent")
-        self.classic_fretboard = FretboardView(self.instrument_container, fg_color="transparent")
-        self.keyboard_view = KeyboardView(self.instrument_container, fg_color="transparent")
-        self.drum_view = DrumView(self.instrument_container, fg_color="transparent")
+        # Cria as 4 visões de instrumentos com suporte completo a clique para ouvir
+        self.pro_fretboard = ProFretboardView(
+            self.instrument_container, fg_color="transparent",
+            on_fret_click=self._on_pro_fretboard_clicked
+        )
+        self.classic_fretboard = FretboardView(
+            self.instrument_container, fg_color="transparent",
+            on_fret_click=self._on_classic_fret_clicked,
+            on_open_mapping=self.open_mapping_editor
+        )
+        self.keyboard_view = KeyboardView(
+            self.instrument_container, fg_color="transparent",
+            on_key_click=self._on_keyboard_key_clicked
+        )
+        self.drum_view = DrumView(
+            self.instrument_container, fg_color="transparent",
+            on_pad_click=self._on_drum_pad_clicked,
+            on_open_mapping=self.open_mapping_editor
+        )
 
         # Exibe inicialmente a Guitarra Pro
         self.active_visual_view = self.pro_fretboard
@@ -210,14 +227,14 @@ class MidGuitarApp(ctk.CTk):
         bottom_panel = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=10)
         bottom_panel.pack(fill="x", padx=16, pady=(6, 12))
 
-        # Linha 1: Preset e Instrumento GM
+        # Linha 1: Preset, Botão de Mapeamento e Instrumento GM
         row1 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
         row1.pack(fill="x", padx=12, pady=(8, 4))
 
         ctk.CTkLabel(row1, text="Preset:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(4, 6))
         preset_names = [name for _, name in self.preset_list] or ["Padrão"]
         self.preset_combo = ctk.CTkComboBox(
-            row1, width=200, values=preset_names, command=self._on_preset_selected
+            row1, width=190, values=preset_names, command=self._on_preset_selected
         )
         self.preset_combo.pack(side="left", padx=4)
 
@@ -226,10 +243,18 @@ class MidGuitarApp(ctk.CTk):
                 self.preset_combo.set(pname)
                 break
 
-        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(16, 6))
+        # Botão dedicado para abrir o Editor de Mapeamentos
+        btn_open_map = ctk.CTkButton(
+            row1, text="🎛️ Editar Mapeamentos", width=160, height=28,
+            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(weight="bold"),
+            command=self.open_mapping_editor
+        )
+        btn_open_map.pack(side="left", padx=8)
+
+        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(12, 6))
         instrument_options = [f"{num:03d} - {name} ({cat})" for num, name, cat in GM_INSTRUMENTS]
         self.instrument_combo = ctk.CTkComboBox(
-            row1, width=260, values=instrument_options, command=self._on_instrument_selected
+            row1, width=240, values=instrument_options, command=self._on_instrument_selected
         )
         self.instrument_combo.pack(side="left", padx=4)
         
@@ -270,6 +295,75 @@ class MidGuitarApp(ctk.CTk):
         self.volume_label.pack(side="left", padx=2)
 
     # -------------------------------------------------------------
+    # CLIQUE DIRETO NAS NOTAS (PREVIEW & TESTE DE ÁUDIO)
+    # -------------------------------------------------------------
+    def _on_classic_fret_clicked(self, fret_name: str):
+        """Disparado quando o usuário clica em uma das 5 casas da guitarra."""
+        frets = self.preset_data.get("frets", {})
+        fret_cfg = frets.get(fret_name, {})
+        base_notes = fret_cfg.get("notes", [52])
+        shift = self.mapper.octave_shift * 12
+        notes = [max(0, min(127, n + shift)) for n in base_notes]
+        note_names = [midi_note_to_name(n) for n in notes]
+
+        self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Casa {fret_name.upper()} ➔ {' + '.join(note_names)} ({notes})")
+        self.audio.play_chord(notes, velocity=115)
+        self.after(450, lambda: self.audio.stop_chord(notes))
+
+    def _on_drum_pad_clicked(self, pad_id: str, note: int):
+        """Disparado quando o usuário clica em um dos pads de bateria."""
+        self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Pad {pad_id.upper()} ➔ Nota {note} (Canal 10)")
+        self.audio.play_note(note, velocity=120, channel=9)
+        self.after(200, lambda: self.audio.stop_note(note, channel=9))
+
+    def _on_keyboard_key_clicked(self, note: int):
+        """Disparado quando o usuário clica em uma tecla do teclado."""
+        note_name = midi_note_to_name(note)
+        self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Tecla {note_name} (Nota {note})")
+        self.audio.play_note(note, velocity=110, channel=0)
+        self.after(400, lambda: self.audio.stop_note(note, channel=0))
+
+    def _on_pro_fretboard_clicked(self, string_num: int, fret: int, note: int):
+        """Disparado quando o usuário clica em uma corda/traste da Guitarra Pro."""
+        note_name = midi_note_to_name(note)
+        self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Corda {string_num} Casa {fret} ➔ {note_name} (Nota {note})")
+        self.audio.play_note(note, velocity=110, channel=0)
+        self.after(400, lambda: self.audio.stop_note(note, channel=0))
+
+    # -------------------------------------------------------------
+    # EDITOR DE MAPEAMENTOS INTERATIVO
+    # -------------------------------------------------------------
+    def open_mapping_editor(self):
+        """Abre a janela de edição de mapeamentos."""
+        MappingDialog(
+            self,
+            current_preset=self.preset_data,
+            audio_engine=self.audio,
+            on_save_callback=self._on_preset_updated
+        )
+
+    def _on_preset_updated(self, updated_preset: dict):
+        """Aplica e salva as novas notas e configurações definidas no editor."""
+        self.preset_data = updated_preset
+        self.mapper.set_preset(updated_preset)
+        self.classic_fretboard.update_fret_labels_from_preset(updated_preset)
+
+        # Atualiza notas de bateria no drum_view
+        drum_mapping = updated_preset.get("drum_mapping", {})
+        for pad_id, note in drum_mapping.items():
+            self.drum_view.set_pad_mapping(pad_id, note)
+
+        # Salva o arquivo de preset no disco
+        preset_dir = get_presets_dirs()[0]
+        filepath = os.path.join(preset_dir, f"{self.current_preset_id}.json")
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(updated_preset, f, indent=2, ensure_ascii=False)
+            self.monitor.log(time.strftime("%H:%M:%S"), "SALVO", f"Preset '{self.current_preset_id}' atualizado com sucesso no disco!")
+        except Exception as e:
+            self.monitor.log(time.strftime("%H:%M:%S"), "ERRO", f"Erro ao salvar preset: {e}")
+
+    # -------------------------------------------------------------
     # GERENCIAMENTO DE MODO DO INSTRUMENTO
     # -------------------------------------------------------------
     def _switch_visual_view(self, new_view):
@@ -301,12 +395,11 @@ class MidGuitarApp(ctk.CTk):
             self._switch_visual_view(self.drum_view)
 
     def _on_mode_detected(self, detected_mode: InstrumentMode):
-        """Disparado quando mensagens MIDI chegam e identificam o instrumento ativo."""
         self.after(0, self._apply_detected_mode, detected_mode)
 
     def _apply_detected_mode(self, detected_mode: InstrumentMode):
         if self.current_instrument_mode != InstrumentMode.AUTO:
-            return # Se o usuário fixou um instrumento manualmente, respeita a escolha
+            return
 
         if detected_mode == InstrumentMode.DRUMS:
             self._switch_visual_view(self.drum_view)
@@ -443,6 +536,11 @@ class MidGuitarApp(ctk.CTk):
                 self.mapper.set_preset(self.preset_data)
                 self.classic_fretboard.update_fret_labels_from_preset(self.preset_data)
                 
+                # Atualiza notas de bateria
+                drum_mapping = self.preset_data.get("drum_mapping", {})
+                for pad_id, note in drum_mapping.items():
+                    self.drum_view.set_pad_mapping(pad_id, note)
+
                 if "instrument_id" in self.preset_data:
                     inst_id = self.preset_data["instrument_id"]
                     self.audio.set_instrument(inst_id)
