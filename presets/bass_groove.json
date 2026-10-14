@@ -1,0 +1,39 @@
+{
+  "name": "Bass Groove",
+  "description": "Linhas de baixo elétrico com notas graves e pegada firme",
+  "instrument_id": 34,
+  "octave_shift": -1,
+  "velocity": 120,
+  "trigger_mode": "strum_required",
+  "frets": {
+    "green": {
+      "name": "E1 (Grave)",
+      "notes": [28]
+    },
+    "red": {
+      "name": "G1",
+      "notes": [31]
+    },
+    "yellow": {
+      "name": "A1",
+      "notes": [33]
+    },
+    "blue": {
+      "name": "C2",
+      "notes": [36]
+    },
+    "orange": {
+      "name": "D2",
+      "notes": [38]
+    },
+    "open_strum": {
+      "name": "E1",
+      "notes": [28]
+    }
+  },
+  "controls": {
+    "whammy": "pitch_bend",
+    "whammy_range_semitones": 1,
+    "overdrive": "slap_accent"
+  }
+}

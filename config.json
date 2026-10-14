@@ -1,0 +1,11 @@
+{
+  "midi_in_port": null,
+  "midi_out_port": null,
+  "use_internal_synth": true,
+  "instrument_id": 29,
+  "volume": 85,
+  "octave_shift": 0,
+  "current_preset": "rock_power_chords",
+  "theme": "dark",
+  "auto_connect": true
+}

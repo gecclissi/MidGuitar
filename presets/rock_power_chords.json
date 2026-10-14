@@ -1,0 +1,39 @@
+{
+  "name": "Rock Power Chords",
+  "description": "Acordes de força clássicos do rock ao segurar as casas e palhetar",
+  "instrument_id": 30,
+  "octave_shift": 0,
+  "velocity": 110,
+  "trigger_mode": "strum_required",
+  "frets": {
+    "green": {
+      "name": "E5 (Power Chord Mi)",
+      "notes": [52, 59, 64]
+    },
+    "red": {
+      "name": "A5 (Power Chord Lá)",
+      "notes": [57, 64, 69]
+    },
+    "yellow": {
+      "name": "D5 (Power Chord Ré)",
+      "notes": [50, 57, 62]
+    },
+    "blue": {
+      "name": "G5 (Power Chord Sol)",
+      "notes": [55, 62, 67]
+    },
+    "orange": {
+      "name": "C5 (Power Chord Dó)",
+      "notes": [48, 55, 60]
+    },
+    "open_strum": {
+      "name": "Open E (Mi Aberto)",
+      "notes": [40, 47, 52]
+    }
+  },
+  "controls": {
+    "whammy": "pitch_bend",
+    "whammy_range_semitones": 2,
+    "overdrive": "octave_up"
+  }
+}

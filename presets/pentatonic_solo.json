@@ -1,0 +1,39 @@
+{
+  "name": "Pentatonic Solo (E Minor)",
+  "description": "Escala pentatônica menor em Mi para solos rápidos de guitarra",
+  "instrument_id": 29,
+  "octave_shift": 0,
+  "velocity": 105,
+  "trigger_mode": "instant_or_strum",
+  "frets": {
+    "green": {
+      "name": "E4",
+      "notes": [64]
+    },
+    "red": {
+      "name": "G4",
+      "notes": [67]
+    },
+    "yellow": {
+      "name": "A4",
+      "notes": [69]
+    },
+    "blue": {
+      "name": "B4",
+      "notes": [71]
+    },
+    "orange": {
+      "name": "D5",
+      "notes": [74]
+    },
+    "open_strum": {
+      "name": "E3",
+      "notes": [52]
+    }
+  },
+  "controls": {
+    "whammy": "pitch_bend",
+    "whammy_range_semitones": 2,
+    "overdrive": "vibrato"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Pro Guitar (Direct Pass-Through)",
+  "description": "Modo direto para Rock Band 3 Pro Guitar (Mustang/Squier) e controle em DAW",
+  "instrument_id": 27,
+  "octave_shift": 0,
+  "velocity": 100,
+  "trigger_mode": "passthrough",
+  "frets": {
+    "green": { "name": "Direct Note 60", "notes": [60] },
+    "red": { "name": "Direct Note 62", "notes": [62] },
+    "yellow": { "name": "Direct Note 64", "notes": [64] },
+    "blue": { "name": "Direct Note 65", "notes": [65] },
+    "orange": { "name": "Direct Note 67", "notes": [67] },
+    "open_strum": { "name": "Direct Note 55", "notes": [55] }
+  },
+  "controls": {
+    "whammy": "pitch_bend",
+    "whammy_range_semitones": 2,
+    "overdrive": "sustain"
+  }
+}
