@@ -15,7 +15,7 @@ from src.midi.detector import (
 from src.midi.mapper import GuitarMapper
 from src.midi.reader import MIDIReader
 from src.audio.engine import AudioEngine
-from src.utils.config_manager import load_config, save_config, list_presets, load_preset
+from src.utils.config_manager import load_config, save_config, list_presets, load_preset, get_asset_path
 from src.utils.instruments import GM_INSTRUMENTS, INSTRUMENT_NAMES
 
 ctk.set_appearance_mode("Dark")
@@ -28,6 +28,14 @@ class MidGuitarApp(ctk.CTk):
         self.title("MidGuitar - Rock Band MIDI Controller & Studio")
         self.geometry("980x680")
         self.minsize(860, 580)
+
+        # Configura ícone da janela
+        try:
+            icon_file = get_asset_path("assets/icon.ico")
+            if icon_file:
+                self.iconbitmap(icon_file)
+        except Exception:
+            pass
 
         # Carrega configurações e presets
         self.config = load_config()
