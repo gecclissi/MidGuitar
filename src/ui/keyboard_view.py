@@ -7,9 +7,10 @@ import customtkinter as ctk
 from src.utils.instruments import midi_note_to_name
 
 class KeyboardView(ctk.CTkFrame):
-    def __init__(self, master, on_key_click=None, start_note: int = 48, num_keys: int = 25, **kwargs):
+    def __init__(self, master, on_key_click=None, on_open_key_mapper=None, start_note: int = 48, num_keys: int = 25, **kwargs):
         super().__init__(master, **kwargs)
         self.on_key_click = on_key_click
+        self.on_open_key_mapper = on_open_key_mapper
         self.start_note = start_note # C3 = 48 padrão RB3
         self.num_keys = num_keys
         self.active_keys = set()
@@ -29,6 +30,15 @@ class KeyboardView(ctk.CTkFrame):
 
         self.chord_lbl = ctk.CTkLabel(header, text="Teclas ativas: Nenhuma", font=ctk.CTkFont(size=12), text_color="#94A3B8")
         self.chord_lbl.pack(side="right")
+
+        if self.on_open_key_mapper:
+            btn_mapper = ctk.CTkButton(
+                header, text="⚡ Configurar Sons por Tecla (Lote)", width=225, height=24,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#8B5CF6", hover_color="#7C3AED",
+                command=self.on_open_key_mapper
+            )
+            btn_mapper.pack(side="right", padx=(4, 10))
 
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True, padx=10, pady=(4, 10))

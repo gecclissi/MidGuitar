@@ -60,7 +60,8 @@ DEFAULT_CONFIG = {
     "current_preset": "rock_power_chords",
     "theme": "dark",
     "auto_connect": True,
-    "custom_samples": {}
+    "custom_samples": {},
+    "key_sound_map": {}
 }
 
 def load_config() -> dict:

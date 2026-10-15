@@ -34,7 +34,7 @@ DRUM_NOTE_TO_PAD = {
 }
 
 class AudioEngine:
-    def __init__(self, midi_out_port_name: str | None = None, instrument_id: int = 29, volume: int = 85, initial_samples: dict | None = None):
+    def __init__(self, midi_out_port_name: str | None = None, instrument_id: int = 29, volume: int = 85, initial_samples: dict | None = None, key_sound_map: dict | None = None):
         self.instrument_id = instrument_id
         self.volume = max(0, min(100, volume))
         self.midi_out_port_name = midi_out_port_name
@@ -46,6 +46,11 @@ class AudioEngine:
         if initial_samples:
             for k, p in initial_samples.items():
                 self.load_sample(k, p)
+
+        # Mapa de regras de som específicas por tecla/nota (individual ou em lote)
+        self.key_sound_map = {}
+        if key_sound_map:
+            self.set_key_sound_map(key_sound_map)
 
         # Instância pygame.midi (Sintetizador Nativo do Windows)
         self.pygame_output = None
@@ -105,6 +110,35 @@ class AudioEngine:
             except Exception as e:
                 print(f"[AudioEngine] Erro ao tocar sample {sample_id}: {e}")
         return False
+
+    def set_key_sound_map(self, sound_map: dict):
+        """Define o mapa de sons por tecla/nota e pré-carrega amostras de áudio."""
+        self.key_sound_map = sound_map or {}
+        for key_str, rule in self.key_sound_map.items():
+            if isinstance(rule, dict) and rule.get("type") == "sample":
+                path = rule.get("path")
+                if path and os.path.exists(path):
+                    self.load_sample(f"key_{key_str}", path)
+
+    def get_key_rule(self, key_id: str | int) -> dict | None:
+        """Obtém a regra de som para uma tecla/nota específica."""
+        return self.key_sound_map.get(str(key_id))
+
+    def set_key_rule(self, key_id: str | int, rule: dict):
+        """Define a regra de som para uma tecla e carrega sample se aplicável."""
+        key_str = str(key_id)
+        self.key_sound_map[key_str] = rule
+        if isinstance(rule, dict) and rule.get("type") == "sample":
+            path = rule.get("path")
+            if path and os.path.exists(path):
+                self.load_sample(f"key_{key_str}", path)
+
+    def remove_key_rule(self, key_id: str | int):
+        """Remove a regra customizada de uma tecla, voltando ao comportamento padrão."""
+        key_str = str(key_id)
+        if key_str in self.key_sound_map:
+            del self.key_sound_map[key_str]
+        self.remove_sample(f"key_{key_str}")
 
     def _init_pygame_synth(self):
         try:
@@ -197,12 +231,58 @@ class AudioEngine:
                 pass
 
     def play_note(self, note: int, velocity: int = 100, channel: int = 0):
-        """Dispara uma nota individual (ou sample customizado se configurado)."""
+        """Dispara uma nota individual (ou regra de som por tecla, ou sample customizado)."""
         note = max(0, min(127, note))
         velocity = max(1, min(127, velocity))
         self.active_sounding_notes.add(note)
 
-        # 1. Verifica se há sample customizado (.wav / .mp3)
+        # 1. Verifica se há regra específica para esta nota em key_sound_map
+        key_str = str(note)
+        rule = self.key_sound_map.get(key_str)
+        if rule and isinstance(rule, dict):
+            rule_type = rule.get("type")
+            if rule_type == "sample":
+                sample_id = f"key_{key_str}"
+                path = rule.get("path")
+                if sample_id not in self.custom_samples and path and os.path.exists(path):
+                    self.load_sample(sample_id, path)
+                if self.play_sample(sample_id, velocity):
+                    if self.rtmidi_out and self.rtmidi_out.is_port_open():
+                        try:
+                            self.rtmidi_out.send_message([0x90 | channel, note, velocity])
+                        except Exception:
+                            pass
+                    return
+            elif rule_type == "drum":
+                drum_note = rule.get("drum_note", 36)
+                if self.pygame_output:
+                    try:
+                        self.pygame_output.note_on(drum_note, velocity, 9)
+                    except Exception:
+                        pass
+                if self.rtmidi_out and self.rtmidi_out.is_port_open():
+                    try:
+                        self.rtmidi_out.send_message([0x99, drum_note, velocity])
+                    except Exception:
+                        pass
+                return
+            elif rule_type == "instrument":
+                inst_id = rule.get("id", self.instrument_id)
+                if self.pygame_output:
+                    try:
+                        self.pygame_output.set_instrument(inst_id, channel)
+                        self.pygame_output.note_on(note, velocity, channel)
+                    except Exception:
+                        pass
+                if self.rtmidi_out and self.rtmidi_out.is_port_open():
+                    try:
+                        self.rtmidi_out.send_message([0xC0 | channel, inst_id])
+                        self.rtmidi_out.send_message([0x90 | channel, note, velocity])
+                    except Exception:
+                        pass
+                return
+
+        # 2. Verifica se há sample customizado (.wav / .mp3) nas amostras gerais
         sample_played = False
         if channel == 9:  # Bateria (Canal 10)
             pad_key = DRUM_NOTE_TO_PAD.get(note)
@@ -214,14 +294,14 @@ class AudioEngine:
             if self.play_sample(f"note_{note}", velocity):
                 sample_played = True
 
-        # 2. Se não tocou sample customizado, usa o sintetizador nativo
+        # 3. Se não tocou sample customizado, usa o sintetizador nativo
         if not sample_played and self.pygame_output:
             try:
                 self.pygame_output.note_on(note, velocity, channel)
             except Exception:
                 pass
 
-        # 3. Sempre envia MIDI para a porta de saída externa (DAWs / loopMIDI)
+        # 4. Sempre envia MIDI para a porta de saída externa (DAWs / loopMIDI)
         if self.rtmidi_out and self.rtmidi_out.is_port_open():
             try:
                 self.rtmidi_out.send_message([0x90 | channel, note, velocity])
@@ -232,6 +312,22 @@ class AudioEngine:
         """Interrompe uma nota individual."""
         note = max(0, min(127, note))
         self.active_sounding_notes.discard(note)
+
+        # Se era uma regra de percussão/bateria (Canal 9)
+        rule = self.key_sound_map.get(str(note))
+        if rule and isinstance(rule, dict) and rule.get("type") == "drum":
+            drum_note = rule.get("drum_note", 36)
+            if self.pygame_output:
+                try:
+                    self.pygame_output.note_off(drum_note, 64, 9)
+                except Exception:
+                    pass
+            if self.rtmidi_out and self.rtmidi_out.is_port_open():
+                try:
+                    self.rtmidi_out.send_message([0x89, drum_note, 64])
+                except Exception:
+                    pass
+            return
 
         if self.pygame_output:
             try:

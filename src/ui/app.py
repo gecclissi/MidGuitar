@@ -19,6 +19,7 @@ from src.ui.drum_view import DrumView
 from src.ui.monitor_view import MonitorView
 from src.ui.mapping_dialog import MappingDialog
 from src.ui.sound_manager_dialog import SoundManagerDialog
+from src.ui.batch_key_mapper_dialog import BatchKeyMapperDialog
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
@@ -66,12 +67,13 @@ class MidGuitarApp(ctk.CTk):
             octave_shift=self.config.get("octave_shift", 0)
         )
 
-        # Inicializa o motor de áudio com as amostras salvas
+        # Inicializa o motor de áudio com as amostras e regras de teclas salvas
         self.audio = AudioEngine(
             midi_out_port_name=self.config.get("midi_out_port"),
             instrument_id=self.config.get("instrument_id", 29),
             volume=self.config.get("volume", 85),
-            initial_samples=self.config.get("custom_samples", {})
+            initial_samples=self.config.get("custom_samples", {}),
+            key_sound_map=self.config.get("key_sound_map", {})
         )
 
         # Inicializa o leitor MIDI universal
@@ -229,7 +231,8 @@ class MidGuitarApp(ctk.CTk):
         )
         self.keyboard_view = KeyboardView(
             self.instrument_container, fg_color="transparent",
-            on_key_click=self._on_keyboard_key_clicked
+            on_key_click=self._on_keyboard_key_clicked,
+            on_open_key_mapper=self.open_batch_key_mapper
         )
         self.drum_view = DrumView(
             self.instrument_container, fg_color="transparent",
@@ -268,11 +271,19 @@ class MidGuitarApp(ctk.CTk):
             fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(weight="bold"),
             command=self.open_sound_manager
         )
-        btn_sound_mgr.pack(side="left", padx=(0, 6))
+        btn_sound_mgr.pack(side="left", padx=(0, 4))
+
+        # BOTÃO EM DESTAQUE: CONFIGURAR SONS POR TECLA & LOTE
+        btn_batch_keys = ctk.CTkButton(
+            row1, text="⚡ Sons por Tecla (Lote)", width=175, height=28,
+            fg_color="#6366F1", hover_color="#4F46E5", font=ctk.CTkFont(weight="bold"),
+            command=self.open_batch_key_mapper
+        )
+        btn_batch_keys.pack(side="left", padx=4)
 
         # Botão dedicado para abrir o Editor de Mapeamentos
         btn_open_map = ctk.CTkButton(
-            row1, text="🎛️ Mapear Notas & Casas", width=160, height=28,
+            row1, text="🎛️ Mapear Casas & Acordes", width=160, height=28,
             fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(weight="bold"),
             command=self.open_mapping_editor
         )
@@ -376,7 +387,19 @@ class MidGuitarApp(ctk.CTk):
     def _on_keyboard_key_clicked(self, note: int):
         """Disparado quando o usuário clica em uma tecla do teclado."""
         note_name = midi_note_to_name(note)
-        self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Tecla {note_name} (Nota {note})")
+        rule = self.audio.get_key_rule(note)
+        if rule and isinstance(rule, dict):
+            rtype = rule.get("type")
+            if rtype == "sample":
+                fname = os.path.basename(rule.get("path", ""))
+                self.monitor.log(time.strftime("%H:%M:%S"), "SAMPLE", f"Tecla {note_name} ➔ Áudio Customizado: {fname}")
+            elif rtype == "instrument":
+                self.monitor.log(time.strftime("%H:%M:%S"), "TIMBRE", f"Tecla {note_name} ➔ Timbre GM {rule.get('id')}")
+            elif rtype == "drum":
+                self.monitor.log(time.strftime("%H:%M:%S"), "DRUM", f"Tecla {note_name} ➔ Percussão GM {rule.get('drum_note')}")
+        else:
+            self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Tecla {note_name} (Nota {note})")
+
         self.audio.play_note(note, velocity=110, channel=0)
         self.after(400, lambda: self.audio.stop_note(note, channel=0))
 
@@ -386,6 +409,25 @@ class MidGuitarApp(ctk.CTk):
         self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Corda {string_num} Casa {fret} ➔ {note_name} (Nota {note})")
         self.audio.play_note(note, velocity=110, channel=0)
         self.after(400, lambda: self.audio.stop_note(note, channel=0))
+
+    # -------------------------------------------------------------
+    # MAPEADOR DE TECLAS & SONS EM LOTE
+    # -------------------------------------------------------------
+    def open_batch_key_mapper(self):
+        """Abre o mapeador avançado de teclas e sons individuais/em lote."""
+        BatchKeyMapperDialog(
+            self,
+            audio_engine=self.audio,
+            current_map=self.config.get("key_sound_map", {}),
+            on_save_callback=self._on_key_sound_map_updated
+        )
+
+    def _on_key_sound_map_updated(self, updated_map: dict):
+        """Salva as regras de sons por tecla e atualiza o motor de áudio."""
+        self.config["key_sound_map"] = updated_map
+        save_config(self.config)
+        self.audio.set_key_sound_map(updated_map)
+        self.monitor.log(time.strftime("%H:%M:%S"), "SISTEMA", f"Mapeamento de teclas atualizado: {len(updated_map)} regras ativas")
 
     # -------------------------------------------------------------
     # GERENCIAMENTO DE SONS CUSTOMIZADOS (.WAV / .MP3)
