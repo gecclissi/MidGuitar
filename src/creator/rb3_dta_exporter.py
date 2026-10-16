@@ -91,6 +91,25 @@ def export_rb3_song_package(song: ChartSong, output_base_dir: str, audio_source_
     mid_path = os.path.join(song_track_dir, f"{clean_shortname}.mid")
     save_midi(mid, mid_path)
 
+    # 2.1 Copia áudio para dentro da pasta da música
+    import shutil
+    if song.audio_stems:
+        for stem_p in song.audio_stems:
+            if os.path.exists(stem_p):
+                fname = os.path.basename(stem_p)
+                dest_p = os.path.join(song_track_dir, fname)
+                try:
+                    shutil.copy2(stem_p, dest_p)
+                except Exception as e:
+                    print(f"[RB3Exporter] Erro ao copiar stem {fname}: {e}")
+    elif song.audio_path and os.path.exists(song.audio_path):
+        ext = os.path.splitext(song.audio_path)[1].lower()
+        dest_audio = os.path.join(song_track_dir, f"{clean_shortname}{ext}")
+        try:
+            shutil.copy2(song.audio_path, dest_audio)
+        except Exception as e:
+            print(f"[RB3Exporter] Erro ao copiar áudio: {e}")
+
     # 3. Informações de áudio e guia de carregamento
     readme_path = os.path.join(rb3_root, "COMO_JOGAR_NO_RB3.txt")
     readme_content = f"""============================================================

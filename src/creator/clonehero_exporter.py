@@ -49,16 +49,26 @@ loading_phrase = Criado e gravado com MidGuitar Universal Studio!
     with open(ini_path, "w", encoding="utf-8") as f:
         f.write(ini_content)
 
-    # 3. Copia o arquivo de áudio
-    audio_path = audio_source_path or song.audio_path
-    if audio_path and os.path.exists(audio_path):
-        ext = os.path.splitext(audio_path)[1].lower()
-        dest_filename = f"song{ext}"
-        dest_audio = os.path.join(target_dir, dest_filename)
-        try:
-            shutil.copy2(audio_path, dest_audio)
-        except Exception as e:
-            print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
+    # 3. Copia arquivos de áudio (todos os stems ou faixa mestre)
+    if song.audio_stems:
+        for stem_p in song.audio_stems:
+            if os.path.exists(stem_p):
+                fname = os.path.basename(stem_p)
+                dest_p = os.path.join(target_dir, fname)
+                try:
+                    shutil.copy2(stem_p, dest_p)
+                except Exception as e:
+                    print(f"[CloneHeroExporter] Erro ao copiar stem {fname}: {e}")
+    else:
+        audio_path = audio_source_path or song.audio_path
+        if audio_path and os.path.exists(audio_path):
+            ext = os.path.splitext(audio_path)[1].lower()
+            dest_filename = f"song{ext}"
+            dest_audio = os.path.join(target_dir, dest_filename)
+            try:
+                shutil.copy2(audio_path, dest_audio)
+            except Exception as e:
+                print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
 
     # 4. Copia a arte do álbum se existir
     if song.album_art_path and os.path.exists(song.album_art_path):

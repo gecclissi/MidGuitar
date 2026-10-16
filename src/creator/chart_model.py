@@ -34,6 +34,7 @@ class ChartSong:
     time_signature: tuple = (4, 4)
     preview_start_ms: int = 30000
     audio_path: Optional[str] = None
+    audio_stems: List[str] = field(default_factory=list)
     album_art_path: Optional[str] = None
     
     # Dificuldades de 0 a 7 (-1 se não tiver)

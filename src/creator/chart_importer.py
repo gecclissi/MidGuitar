@@ -54,12 +54,18 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         except Exception:
             pass
 
-    # 2. Busca arquivo de áudio
-    for candidate in ["song.ogg", "song.mp3", "song.wav", "guitar.ogg", "audio.ogg"]:
-        audio_candidate = os.path.join(folder_path, candidate)
-        if os.path.exists(audio_candidate):
-            song.audio_path = audio_candidate
-            break
+    # 2. Busca arquivos de áudio (Stems individuais ou mixagem geral)
+    for f in os.listdir(folder_path):
+        f_lower = f.lower()
+        if f_lower.endswith((".ogg", ".mp3", ".wav", ".flac", ".opus")):
+            full_p = os.path.join(folder_path, f)
+            song.audio_stems.append(full_p)
+            stem_base = os.path.splitext(f_lower)[0]
+            if stem_base in ["song", "guitar", "audio"] and not song.audio_path:
+                song.audio_path = full_p
+
+    if not song.audio_path and song.audio_stems:
+        song.audio_path = song.audio_stems[0]
 
     # 3. Busca e analisa notes.mid
     mid_file = os.path.join(folder_path, "notes.mid")
