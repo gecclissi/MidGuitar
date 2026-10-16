@@ -48,6 +48,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.after(150, self.focus_force)
 
         self._build_ui()
+        self._update_target_game_desc("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
         self._start_playback_poll()
 
     def _build_ui(self):
@@ -136,33 +137,81 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
         self.info_label.pack(expand=True, pady=20)
 
-        # Barra de Ações Rápidas de Conversão
-        act_box = ctk.CTkFrame(tab, fg_color="transparent")
-        act_box.pack(fill="x", padx=10, pady=8)
+        # Seletor de Jogo de Destino
+        target_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
+        target_box.pack(fill="x", padx=10, pady=(6, 8))
+
+        sel_game_row = ctk.CTkFrame(target_box, fg_color="transparent")
+        sel_game_row.pack(fill="x", padx=12, pady=(10, 4))
+
+        ctk.CTkLabel(
+            sel_game_row,
+            text="🎯 Escolha o Jogo de Destino:",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(side="left", padx=(0, 8))
+
+        self.target_game_combo = ctk.CTkComboBox(
+            sel_game_row, width=320, height=32,
+            values=[
+                "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
+                "🎮 Clone Hero / YARG (PC)",
+                "📦 PlayStation 3 Console (CFW / HEN / PKG)",
+                "🟢 Xbox 360 (Rock Band 3 / 2 - RGH / CON)"
+            ],
+            command=self._on_target_game_changed
+        )
+        self.target_game_combo.set("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
+        self.target_game_combo.pack(side="left", padx=4)
+        set_tooltip(self.target_game_combo, "Selecione para qual jogo ou videogame você deseja exportar")
+
+        self.btn_export_selected = ctk.CTkButton(
+            sel_game_row, text="⚡ EXPORTAR AGORA", width=220, height=34,
+            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._on_export_to_selected_game(sync_metadata=False)
+        )
+        self.btn_export_selected.pack(side="right", padx=4)
+        set_tooltip(self.btn_export_selected, "Exporta automaticamente os arquivos no formato do jogo selecionado")
+
+        # Descrição dinâmica do formato do jogo
+        self.target_desc_label = ctk.CTkLabel(
+            target_box,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="#94A3B8",
+            justify="left"
+        )
+        self.target_desc_label.pack(anchor="w", padx=14, pady=(2, 10))
+
+        # Atalhos rápidos diretos
+        quick_row = ctk.CTkFrame(tab, fg_color="transparent")
+        quick_row.pack(fill="x", padx=10, pady=(0, 4))
+
+        ctk.CTkLabel(quick_row, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
         btn_convert_rb3 = ctk.CTkButton(
-            act_box, text="🚀 Converter para Rock Band 3 (Console & RPCS3)", width=280, height=38,
-            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row, text="🚀 RB3 (RPCS3 / Console)", width=170, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_convert_to_rb3
         )
-        btn_convert_rb3.pack(side="left", padx=4)
-        set_tooltip(btn_convert_rb3, "Gera a pasta com songs.dta e arquivo MIDI compatível com Rock Band 3")
+        btn_convert_rb3.pack(side="left", padx=3)
+        set_tooltip(btn_convert_rb3, "Gera pasta com songs.dta e arquivo MIDI compatível com Rock Band 3")
 
         btn_convert_ps3 = ctk.CTkButton(
-            act_box, text="📦 Gerar Pacote PS3 / RPCS3 (PKG + SFO + ICON0)", width=290, height=38,
-            fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row, text="📦 Pacote PS3 (PKG/SFO)", width=170, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_ps3_pkg
         )
-        btn_convert_ps3.pack(side="left", padx=4)
-        set_tooltip(btn_convert_ps3, "Gera estrutura completa com PARAM.SFO, ICON0.PNG e script automático de instalação no RPCS3!")
+        btn_convert_ps3.pack(side="left", padx=3)
+        set_tooltip(btn_convert_ps3, "Gera pacote completo com PARAM.SFO, ICON0.PNG e instalador automático do RPCS3")
 
         btn_convert_ch = ctk.CTkButton(
-            act_box, text="🎮 Exportar para Clone Hero / YARG", width=240, height=38,
-            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row, text="🎮 Clone Hero / YARG", width=160, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_convert_to_clone_hero
         )
-        btn_convert_ch.pack(side="left", padx=4)
-        set_tooltip(btn_convert_ch, "Gera pasta pronta com song.ini, notes.mid e album.png para colar na pasta Songs do Clone Hero")
+        btn_convert_ch.pack(side="left", padx=3)
+        set_tooltip(btn_convert_ch, "Gera pasta pronta com song.ini, notes.mid e album.png para o Clone Hero")
 
     def _on_browse_import_folder(self):
         folder = filedialog.askdirectory(title="Selecione a pasta da música do Clone Hero / Rock Band")
@@ -458,33 +507,77 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         btn_browse_art.pack(padx=14, pady=(8, 14))
         set_tooltip(btn_browse_art, "Carrega a arte do álbum que será exibida no menu do jogo e na tela do PS3/RPCS3")
 
-        # Barra Inferior com Todos os Botões de Exportação
-        export_box = ctk.CTkFrame(tab, fg_color="transparent")
-        export_box.pack(fill="x", padx=10, pady=8)
+        # Seletor de Jogo de Destino (Aba 3)
+        target_box_3 = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
+        target_box_3.pack(fill="x", padx=10, pady=(6, 8))
+
+        sel_game_row_3 = ctk.CTkFrame(target_box_3, fg_color="transparent")
+        sel_game_row_3.pack(fill="x", padx=12, pady=(10, 4))
+
+        ctk.CTkLabel(
+            sel_game_row_3,
+            text="🎯 Escolha o Jogo de Destino:",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(side="left", padx=(0, 8))
+
+        self.target_game_combo_tab3 = ctk.CTkComboBox(
+            sel_game_row_3, width=320, height=32,
+            values=[
+                "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
+                "🎮 Clone Hero / YARG (PC)",
+                "📦 PlayStation 3 Console (CFW / HEN / PKG)",
+                "🟢 Xbox 360 (Rock Band 3 / 2 - RGH / CON)"
+            ],
+            command=self._on_target_game_changed
+        )
+        self.target_game_combo_tab3.set("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
+        self.target_game_combo_tab3.pack(side="left", padx=4)
+        set_tooltip(self.target_game_combo_tab3, "Selecione o formato para o qual a música será compilada")
+
+        self.btn_export_selected_tab3 = ctk.CTkButton(
+            sel_game_row_3, text="⚡ SALVAR E EXPORTAR PARA O JOGO", width=280, height=36,
+            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
+            command=lambda: self._on_export_to_selected_game(sync_metadata=True)
+        )
+        self.btn_export_selected_tab3.pack(side="right", padx=4)
+        set_tooltip(self.btn_export_selected_tab3, "Salva as informações da música e compila para o jogo selecionado")
+
+        self.target_desc_label_tab3 = ctk.CTkLabel(
+            target_box_3,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="#94A3B8",
+            justify="left"
+        )
+        self.target_desc_label_tab3.pack(anchor="w", padx=14, pady=(2, 10))
+
+        # Atalhos rápidos inferiores
+        quick_row_3 = ctk.CTkFrame(tab, fg_color="transparent")
+        quick_row_3.pack(fill="x", padx=10, pady=(0, 4))
+
+        ctk.CTkLabel(quick_row_3, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
         btn_save_rb3 = ctk.CTkButton(
-            export_box, text="🚀 Exportar Rock Band 3 (Console & RPCS3)", width=270, height=40,
-            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row_3, text="🚀 RB3 (RPCS3 / Console)", width=170, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_rb3
         )
-        btn_save_rb3.pack(side="left", padx=4)
-        set_tooltip(btn_save_rb3, "Gera o songs.dta oficial e o arquivo MIDI pronto para carregar no Rock Band 3")
+        btn_save_rb3.pack(side="left", padx=3)
 
         btn_save_ps3 = ctk.CTkButton(
-            export_box, text="📦 Gerar Pacote PS3 / RPCS3 (PKG + SFO)", width=280, height=40,
-            fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row_3, text="📦 Pacote PS3 (PKG/SFO)", width=170, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ps3
         )
-        btn_save_ps3.pack(side="left", padx=4)
-        set_tooltip(btn_save_ps3, "Gera o pacote completo com PARAM.SFO, ICON0.PNG e instalador automático de 1 clique para o RPCS3!")
+        btn_save_ps3.pack(side="left", padx=3)
 
         btn_save_ch = ctk.CTkButton(
-            export_box, text="🎮 Exportar Clone Hero / YARG", width=250, height=40,
-            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(size=12, weight="bold"),
+            quick_row_3, text="🎮 Clone Hero / YARG", width=160, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ch
         )
-        btn_save_ch.pack(side="left", padx=4)
-        set_tooltip(btn_save_ch, "Gera a pasta completa com song.ini, notes.mid, áudio e album.png")
+        btn_save_ch.pack(side="left", padx=3)
 
     def _on_browse_album_art(self):
         f = filedialog.askopenfilename(
@@ -789,3 +882,44 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     def _save_from_editor_ch(self):
         self._sync_fields_to_song()
         self._on_convert_to_clone_hero()
+
+    def _on_target_game_changed(self, choice):
+        """Sincroniza os seletores de jogo entre as abas e atualiza a explicação na tela."""
+        if hasattr(self, "target_game_combo"):
+            self.target_game_combo.set(choice)
+        if hasattr(self, "target_game_combo_tab3"):
+            self.target_game_combo_tab3.set(choice)
+        self._update_target_game_desc(choice)
+
+    def _update_target_game_desc(self, choice):
+        """Atualiza o texto descritivo do jogo de destino para que o usuário saiba exatamente o que será criado."""
+        if "Clone Hero" in choice:
+            desc = "🎮 Clone Hero / YARG: Gera pasta com 'song.ini', 'notes.mid', 'album.png' e áudio. Basta colar na pasta 'Songs' do jogo!"
+        elif "RPCS3" in choice:
+            desc = "🎸 Rock Band 3 (RPCS3): Gera pasta com 'songs.dta', MIDI RBN e o script 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' para instalar com 2 cliques!"
+        elif "PlayStation 3" in choice:
+            desc = "📦 PS3 Real (CFW / HEN): Gera pacote DLC com 'PARAM.SFO' (BLUS30463), 'ICON0.PNG' e 'USRDIR/songs/' para pendrive ou FTP!"
+        elif "Xbox 360" in choice:
+            desc = "🟢 Xbox 360: Gera 'songs/songs.dta' e trilha MIDI RBN compatível com RGH/JTAG ou para compilar em CON com C3 Tools / Le Fluffie."
+        else:
+            desc = ""
+
+        if hasattr(self, "target_desc_label"):
+            self.target_desc_label.configure(text=desc)
+        if hasattr(self, "target_desc_label_tab3"):
+            self.target_desc_label_tab3.configure(text=desc)
+
+    def _on_export_to_selected_game(self, sync_metadata: bool = False):
+        """Identifica qual jogo está selecionado no menu e executa a exportação correta imediatamente!"""
+        if sync_metadata:
+            self._sync_fields_to_song()
+
+        choice = self.target_game_combo.get() if hasattr(self, "target_game_combo") else ""
+        if "Clone Hero" in choice:
+            self._on_convert_to_clone_hero()
+        elif "PlayStation 3" in choice or "RPCS3" in choice:
+            self._on_export_ps3_pkg()
+        elif "Xbox 360" in choice:
+            self._on_convert_to_rb3()
+        else:
+            self._on_convert_to_rb3()
