@@ -21,6 +21,7 @@ from src.ui.mapping_dialog import MappingDialog
 from src.ui.sound_manager_dialog import SoundManagerDialog
 from src.ui.batch_key_mapper_dialog import BatchKeyMapperDialog
 from src.ui.sound_browser_dialog import SoundBrowserDialog
+from src.ui.creator_studio_dialog import CreatorStudioDialog
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
@@ -61,6 +62,7 @@ class MidGuitarApp(ctk.CTk):
 
         # Modo de instrumento inicial
         self.current_instrument_mode = InstrumentMode.AUTO
+        self.creator_studio = None
 
         # Inicializa o mapeador
         self.mapper = GuitarMapper(
@@ -286,12 +288,22 @@ class MidGuitarApp(ctk.CTk):
 
         # Botão Explorador de Sons Espaciais (Em destaque!)
         btn_sound_browser = ctk.CTkButton(
-            bottom_bar, text="🌌 Sons Espaciais & Banco (128)", width=190, height=28,
+            bottom_bar, text="🌌 Sons Espaciais (128)", width=175, height=28,
             fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_sound_browser
         )
-        btn_sound_browser.pack(side="left", padx=(12, 4), pady=6)
+        btn_sound_browser.pack(side="left", padx=(10, 4), pady=6)
         set_tooltip(btn_sound_browser, "Abre o Explorador com todos os 128 instrumentos MIDI, efeitos sci-fi, espaciais, pads e sintetizadores!")
+
+        # Botão Criador & Conversor de Músicas (Substituto de REAPER, Magma e Onyx!)
+        btn_creator = ctk.CTkButton(
+            bottom_bar, text="🎵 Criar & Converter (RB3 / CH)", width=215, height=28,
+            fg_color="#F59E0B", hover_color="#D97706", text_color="#0F172A",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self.open_creator_studio
+        )
+        btn_creator.pack(side="left", padx=4, pady=6)
+        set_tooltip(btn_creator, "Estúdio para criar músicas, gravar ao vivo com seu instrumento e converter músicas do Chorus/C3 para Rock Band 3 e Clone Hero!")
 
         # Botões de Ações Rápidas (Direita)
         btn_batch_keys = ctk.CTkButton(
@@ -323,6 +335,10 @@ class MidGuitarApp(ctk.CTk):
     # -------------------------------------------------------------
     def _on_classic_fret_clicked(self, fret_name: str):
         """Disparado quando o usuário clica em uma das 5 casas da guitarra."""
+        # Se o gravador de músicas estiver gravando ao vivo
+        if self.creator_studio and self.creator_studio.winfo_exists() and self.creator_studio.is_recording:
+            self.creator_studio.record_incoming_note(fret_name)
+
         # Se houver arquivo customizado (.wav/.mp3) importado para este botão
         sample_key = f"fret_{fret_name}"
         if self.audio.get_sample_path(sample_key):
@@ -343,6 +359,10 @@ class MidGuitarApp(ctk.CTk):
 
     def _on_drum_pad_clicked(self, pad_id: str, note: int):
         """Disparado quando o usuário clica em um dos pads de bateria."""
+        # Se o gravador de músicas estiver gravando ao vivo
+        if self.creator_studio and self.creator_studio.winfo_exists() and self.creator_studio.is_recording:
+            self.creator_studio.record_incoming_note(pad_id)
+
         if self.audio.get_sample_path(pad_id):
             self.monitor.log(time.strftime("%H:%M:%S"), "SAMPLE", f"Clique Pad {pad_id.upper()} ➔ Áudio Customizado (.wav/.mp3)")
             self.audio.play_sample(pad_id, velocity=120)
@@ -360,6 +380,10 @@ class MidGuitarApp(ctk.CTk):
 
     def _on_keyboard_key_clicked(self, note: int):
         """Disparado quando o usuário clica em uma tecla do teclado."""
+        # Se o gravador de músicas estiver gravando ao vivo
+        if self.creator_studio and self.creator_studio.winfo_exists() and self.creator_studio.is_recording:
+            self.creator_studio.record_incoming_note(f"key_{note}")
+
         note_name = midi_note_to_name(note)
         rule = self.audio.get_key_rule(note)
         if rule and isinstance(rule, dict):
@@ -408,6 +432,17 @@ class MidGuitarApp(ctk.CTk):
         else:
             self.monitor.pack(side="right", fill="both", padx=(6, 0))
             self.btn_toggle_monitor.configure(text="📡 Monitor [ON]", fg_color="#0EA5E9")
+
+    # -------------------------------------------------------------
+    # ESTÚDIO CRIADOR E CONVERSOR DE MÚSICAS (ROCK BAND 3 & CLONE HERO)
+    # -------------------------------------------------------------
+    def open_creator_studio(self):
+        """Abre o Estúdio Criador e Conversor de Músicas (Substituto de REAPER, Magma e Onyx)."""
+        if not self.creator_studio or not self.creator_studio.winfo_exists():
+            self.creator_studio = CreatorStudioDialog(self, audio_engine=self.audio)
+        else:
+            self.creator_studio.lift()
+            self.creator_studio.focus_force()
 
     # -------------------------------------------------------------
     # MAPEADOR DE TECLAS & SONS EM LOTE
