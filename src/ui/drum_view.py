@@ -48,23 +48,27 @@ class DrumView(ctk.CTkFrame):
         )
         title.pack(side="left")
 
+        from src.ui.tooltip import set_tooltip
+
         if self.on_open_sound_manager:
             btn_sound = ctk.CTkButton(
-                header, text="🎵 Importar Sons (.WAV/.MP3)", width=170, height=24,
+                header, text="📁 Áudios (.WAV/.MP3)", width=155, height=26,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#8B5CF6", hover_color="#7C3AED",
                 command=self.on_open_sound_manager
             )
             btn_sound.pack(side="right", padx=(4, 0))
+            set_tooltip(btn_sound, "Importe gravações reais (.wav / .mp3) para os pratos e tambores")
 
         if self.on_open_mapping:
             btn_edit = ctk.CTkButton(
-                header, text="⚙️ Mapear Sons de Bateria", width=155, height=24,
+                header, text="🎛️ Mapear Sons", width=125, height=26,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#F59E0B", hover_color="#D97706", text_color="#0F172A",
                 command=self.on_open_mapping
             )
             btn_edit.pack(side="right", padx=(4, 0))
+            set_tooltip(btn_edit, "Altere a nota e peça de cada pad da bateria")
 
         self.last_hit_lbl = ctk.CTkLabel(self, text="Último toque: Nenhum", font=ctk.CTkFont(size=11), text_color="#94A3B8")
         self.last_hit_lbl.pack(pady=(0, 2))
@@ -97,6 +101,8 @@ class DrumView(ctk.CTkFrame):
                 command=lambda pid=pad_id: self._on_pad_clicked(pid)
             )
             btn.pack(fill="x", padx=8, pady=(8, 2))
+
+            set_tooltip(btn, f"{cfg['name']}\n• Clique com o mouse para tocar a batida!\n• Dispara o som no Canal 10 da bateria.")
 
             lbl = ctk.CTkLabel(pad_frame, text=f"Nota {self.pad_notes[pad_id]} | Toques: 0", font=ctk.CTkFont(size=11), text_color="#94A3B8")
             lbl.pack(pady=(2, 6))

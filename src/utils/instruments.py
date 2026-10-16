@@ -192,3 +192,80 @@ def build_chord_notes(root_note: int, chord_type: str) -> list[int]:
     """Gera lista de notas MIDI para o acorde especificado."""
     intervals = CHORD_INTERVALS.get(chord_type, [0])
     return [max(0, min(127, root_note + i)) for i in intervals]
+
+# Instrumentos mais populares com nomes fáceis e amigáveis (sem termos técnicos)
+POPULAR_INSTRUMENTS = [
+    (29, "🎸 Guitarra Rock (Distorção / Overdrive)"),
+    (30, "🎸 Guitarra Metal Pesada (Distortion)"),
+    (27, "🎸 Guitarra Limpa (Clean)"),
+    (25, "🎸 Violão Acústico de Aço"),
+    (24, "🎸 Violão de Nylon Clássico"),
+    (28, "🎸 Guitarra Muted (Abafada)"),
+    (33, "🎸 Baixo Elétrico"),
+    (36, "🎸 Baixo Slap"),
+    (38, "🎸 Baixo Sintetizador"),
+    (0,  "🎹 Piano de Cauda"),
+    (4,  "🎹 Piano Elétrico (Rhodes)"),
+    (18, "🎹 Órgão de Rock"),
+    (81, "🎹 Sintetizador Solo (Lead)"),
+    (48, "🎻 Orquestra / Cordas (Strings)"),
+    (61, "🎺 Metais / Brass"),
+    (65, "🎷 Saxofone"),
+    (56, "🎺 Trompete"),
+    (73, "🎶 Flauta"),
+    (127, "💥 Efeito Especial: Tiro"),
+    (125, "🚁 Efeito Especial: Helicóptero"),
+    (126, "👏 Efeito Especial: Aplausos"),
+]
+
+# Estilos e Afinações Rápidas para MUDAR TODAS AS CASAS DE UMA VEZ
+QUICK_FRET_PRESETS = {
+    "⚡ Rock Power Chords (Clássico)": {
+        "green": {"notes": [40, 47, 52], "label": "E5 (Mi)"},
+        "red": {"notes": [45, 52, 57], "label": "A5 (Lá)"},
+        "yellow": {"notes": [50, 57, 62], "label": "D5 (Ré)"},
+        "blue": {"notes": [55, 62, 67], "label": "G5 (Sol)"},
+        "orange": {"notes": [59, 66, 71], "label": "B5 (Si)"},
+        "open_strum": {"notes": [40, 47], "label": "E5 Solto"}
+    },
+    "⚡ Acordes Maiores (Pop / Balada)": {
+        "green": {"notes": [48, 52, 55], "label": "C (Dó)"},
+        "red": {"notes": [55, 59, 62], "label": "G (Sol)"},
+        "yellow": {"notes": [50, 54, 57], "label": "D (Ré)"},
+        "blue": {"notes": [45, 49, 52], "label": "A (Lá)"},
+        "orange": {"notes": [40, 44, 47], "label": "E (Mi)"},
+        "open_strum": {"notes": [48, 55], "label": "C Solto"}
+    },
+    "⚡ Acordes Menores (Emocional)": {
+        "green": {"notes": [45, 48, 52], "label": "Am (Lá Menor)"},
+        "red": {"notes": [40, 43, 47], "label": "Em (Mi Menor)"},
+        "yellow": {"notes": [50, 53, 57], "label": "Dm (Ré Menor)"},
+        "blue": {"notes": [47, 50, 54], "label": "Bm (Si Menor)"},
+        "orange": {"notes": [41, 44, 48], "label": "Fm (Fá Menor)"},
+        "open_strum": {"notes": [45, 52], "label": "Am Solto"}
+    },
+    "⚡ Escala Pentatônica (Solos Rock)": {
+        "green": {"notes": [40], "label": "Mi (E2)"},
+        "red": {"notes": [43], "label": "Sol (G2)"},
+        "yellow": {"notes": [45], "label": "Lá (A2)"},
+        "blue": {"notes": [47], "label": "Si (B2)"},
+        "orange": {"notes": [50], "label": "Ré (D3)"},
+        "open_strum": {"notes": [40], "label": "E Solto"}
+    },
+    "⚡ Metal Pesado (Drop D)": {
+        "green": {"notes": [38, 45, 50], "label": "D5 (Drop D)"},
+        "red": {"notes": [41, 48, 53], "label": "F5 (Fá)"},
+        "yellow": {"notes": [43, 50, 55], "label": "G5 (Sol)"},
+        "blue": {"notes": [44, 51, 56], "label": "Ab5 (Sol#)"},
+        "orange": {"notes": [45, 52, 57], "label": "A5 (Lá)"},
+        "open_strum": {"notes": [38, 45], "label": "D5 Solto"}
+    },
+    "⚡ Blues / Sertanejo com 7ª": {
+        "green": {"notes": [40, 44, 47, 50], "label": "E7 (Mi 7ª)"},
+        "red": {"notes": [45, 49, 52, 55], "label": "A7 (Lá 7ª)"},
+        "yellow": {"notes": [47, 51, 54, 57], "label": "B7 (Si 7ª)"},
+        "blue": {"notes": [50, 54, 57, 60], "label": "D7 (Ré 7ª)"},
+        "orange": {"notes": [55, 59, 62, 65], "label": "G7 (Sol 7ª)"},
+        "open_strum": {"notes": [40, 47], "label": "E7 Solto"}
+    }
+}

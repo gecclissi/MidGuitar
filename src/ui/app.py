@@ -103,131 +103,135 @@ class MidGuitarApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
+        from src.ui.tooltip import set_tooltip
+
         # -------------------------------------------------------------
-        # 1. HEADER
+        # 1. HEADER LIMPO E ELEGANTE
         # -------------------------------------------------------------
-        header = ctk.CTkFrame(self, fg_color="#0F172A", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#0F172A", height=50, corner_radius=0)
         header.pack(fill="x", side="top")
 
         # Título
         title_box = ctk.CTkFrame(header, fg_color="transparent")
-        title_box.pack(side="left", padx=18, pady=10)
+        title_box.pack(side="left", padx=16, pady=8)
 
         title_label = ctk.CTkLabel(
-            title_box, text="🎸 MidGuitar Studio", font=ctk.CTkFont(size=20, weight="bold"), text_color="#38BDF8"
+            title_box, text="🎸 MidGuitar", font=ctk.CTkFont(size=18, weight="bold"), text_color="#38BDF8"
         )
         title_label.pack(side="left")
+        set_tooltip(title_label, "MidGuitar Studio - Plugue seus instrumentos ou toque clicando na tela!")
 
-        subtitle = ctk.CTkLabel(
-            title_box, text="Universal MIDI Studio (Guitarras Pro/6 Cordas • Teclados • Baterias • 5 Botões)",
-            font=ctk.CTkFont(size=12), text_color="#94A3B8"
-        )
-        subtitle.pack(side="left", padx=(10, 0), pady=(3, 0))
-
-        # Badge de Status de Conexão
+        # Badge de Status Centralizado
         self.status_badge = ctk.CTkLabel(
-            header, text="🟡 Modo Virtual (Clique para Testar)", font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#F59E0B", fg_color="#1E293B", corner_radius=12, padx=14, pady=5
+            header, text="🟡 Modo Clique para Tocar", font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#F59E0B", fg_color="#1E293B", corner_radius=12, padx=14, pady=4
         )
-        self.status_badge.pack(side="right", padx=18, pady=12)
+        self.status_badge.pack(side="left", padx=20, pady=10)
+        set_tooltip(self.status_badge, "Indica se seu instrumento físico está conectado ou se você está no modo virtual (mouse)")
+
+        # Controles Rápidos no Header (Direita): Panic e Volume
+        hdr_right = ctk.CTkFrame(header, fg_color="transparent")
+        hdr_right.pack(side="right", padx=14, pady=8)
+
+        # Botão Pânico
+        btn_panic = ctk.CTkButton(
+            hdr_right, text="⏹️ Parar Sons", width=105, height=26,
+            fg_color="#DC2626", hover_color="#B91C1C", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self.panic_stop
+        )
+        btn_panic.pack(side="right", padx=(8, 0))
+        set_tooltip(btn_panic, "Para imediatamente todas as notas que estiverem soando no momento")
+
+        self.volume_label = ctk.CTkLabel(hdr_right, text=f"{self.config.get('volume', 85)}%", width=35, font=ctk.CTkFont(size=11, weight="bold"))
+        self.volume_label.pack(side="right", padx=2)
+
+        self.volume_slider = ctk.CTkSlider(
+            hdr_right, from_=0, to=100, number_of_steps=100, width=110, height=16,
+            command=self._on_volume_changed
+        )
+        self.volume_slider.set(self.config.get("volume", 85))
+        self.volume_slider.pack(side="right", padx=4)
+        set_tooltip(self.volume_slider, "Volume geral de saída de áudio (0 a 100%)")
+
+        ctk.CTkLabel(hdr_right, text="🔊", font=ctk.CTkFont(size=12)).pack(side="right")
 
         # -------------------------------------------------------------
-        # 2. PASSO 1: CONEXÃO E DISPOSITIVOS
+        # 2. BARRA DE CONEXÃO E SELEÇÃO DE INSTRUMENTO (COMPACTA)
         # -------------------------------------------------------------
-        conn_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
-        conn_bar.pack(fill="x", padx=16, pady=(8, 4))
+        toolbar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
+        toolbar.pack(fill="x", padx=16, pady=(6, 4))
 
-        # Tag do Passo 1
-        step1_tag = ctk.CTkLabel(
-            conn_bar, text="1️⃣ CONEXÃO:", font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#38BDF8", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
-        )
-        step1_tag.pack(side="left", padx=(10, 6), pady=8)
+        # Entrada USB/MIDI
+        ctk.CTkLabel(toolbar, text="🔌 Entrada:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
+        self.input_combo = ctk.CTkComboBox(toolbar, width=210, height=28, values=["Nenhum dispositivo"])
+        self.input_combo.pack(side="left", padx=2, pady=6)
+        set_tooltip(self.input_combo, "Escolha sua guitarra, bateria ou teclado USB/MIDI conectado")
 
-        # Entrada (MIDI In / Gamepad)
-        ctk.CTkLabel(conn_bar, text="Entrada MIDI/USB:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(6, 4), pady=8)
-        self.input_combo = ctk.CTkComboBox(conn_bar, width=230, values=["Nenhum dispositivo"])
-        self.input_combo.pack(side="left", padx=4, pady=8)
-
-        # Botão Atualizar
+        # Botão Atualizar/Detectar
         btn_refresh = ctk.CTkButton(
-            conn_bar, text="🔄 Detectar", width=85, height=28,
+            toolbar, text="🔄", width=36, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(weight="bold"),
             command=self.refresh_devices
         )
-        btn_refresh.pack(side="left", padx=4, pady=8)
+        btn_refresh.pack(side="left", padx=2, pady=6)
+        set_tooltip(btn_refresh, "Detectar novamente instrumentos conectados ao PC")
 
-        # Botão Conectar / Desconectar
+        # Botão Conectar
         self.btn_connect = ctk.CTkButton(
-            conn_bar, text="🔌 Conectar", width=105, height=28,
-            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(weight="bold"),
+            toolbar, text="Conectar", width=85, height=28,
+            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.toggle_connection
         )
-        self.btn_connect.pack(side="left", padx=6, pady=8)
+        self.btn_connect.pack(side="left", padx=(2, 10), pady=6)
+        set_tooltip(self.btn_connect, "Conecta ou desconecta o instrumento selecionado")
 
-        # Saída (Sintetizador ou DAW)
-        ctk.CTkLabel(conn_bar, text="Saída de Áudio:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(14, 4), pady=8)
+        # Saída de Áudio
+        ctk.CTkLabel(toolbar, text="🔊 Saída:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(4, 4), pady=6)
         self.output_combo = ctk.CTkComboBox(
-            conn_bar, width=230, values=["Synth Nativo Windows (GS Wavetable)"],
+            toolbar, width=190, height=28, values=["Synth Nativo Windows (GS Wavetable)"],
             command=self._on_output_selected
         )
-        self.output_combo.pack(side="left", padx=4, pady=8)
+        self.output_combo.pack(side="left", padx=2, pady=6)
+        set_tooltip(self.output_combo, "Sintetizador nativo do Windows ou cabo virtual para seu DAW")
 
-        # -------------------------------------------------------------
-        # 3. PASSO 2: ESCOLHA DO INSTRUMENTO
-        # -------------------------------------------------------------
-        mode_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
-        mode_bar.pack(fill="x", padx=16, pady=(4, 6))
-
-        step2_tag = ctk.CTkLabel(
-            mode_bar, text="2️⃣ INSTRUMENTO:", font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#F59E0B", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
-        )
-        step2_tag.pack(side="left", padx=(10, 8), pady=6)
-
+        # Seletor de Instrumento
         self.mode_selector = ctk.CTkSegmentedButton(
-            mode_bar,
+            toolbar,
             values=[
-                "⚡ Auto (Detectar)",
-                "🎸 Guitarra Pro (6 Cordas)",
-                "🎮 Guitarra 5 Botões",
-                "🎹 Teclado (25 Teclas)",
-                "🥁 Bateria (Canal 10)"
+                "🎸 5 Botões",
+                "🎸 Pro (6 Cordas)",
+                "🥁 Bateria",
+                "🎹 Teclado",
+                "⚡ Auto"
             ],
             command=self._on_mode_button_clicked
         )
-        self.mode_selector.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=6)
-        self.mode_selector.set("⚡ Auto (Detectar)")
+        self.mode_selector.pack(side="right", padx=10, pady=6)
+        self.mode_selector.set("🎸 5 Botões")
+        set_tooltip(self.mode_selector, "Alterne qual instrumento você quer visualizar e tocar na tela")
 
         # -------------------------------------------------------------
-        # 4. ÁREA PRINCIPAL (INSTRUMENTO VISUAL + MONITOR)
+        # 3. PALCO CENTRAL (O INSTRUMENTO EM DESTAQUE)
         # -------------------------------------------------------------
         main_split = ctk.CTkFrame(self, fg_color="transparent")
         main_split.pack(fill="both", expand=True, padx=16, pady=4)
 
-        # Container esquerdo: onde os instrumentos visuais alternam
+        # Container esquerdo do instrumento
         self.instrument_container = ctk.CTkFrame(main_split, fg_color="#1E293B", corner_radius=10)
-        self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 6))
 
-        # Faixa de Dica Interativa para o usuário saber imediatamente o que fazer
-        hint_banner = ctk.CTkFrame(self.instrument_container, fg_color="#0F172A", corner_radius=6, height=26)
-        hint_banner.pack(fill="x", padx=8, pady=(8, 2))
-        ctk.CTkLabel(
-            hint_banner,
-            text="💡 COMO TOCAR: Plugue seu instrumento ou CLIQUE COM O MOUSE nos botões/pads/teclas abaixo para testar o som na hora!",
-            font=ctk.CTkFont(size=11, weight="bold"), text_color="#38BDF8"
-        ).pack(pady=4)
-
-        # Cria as 4 visões de instrumentos com suporte completo a clique para ouvir e gerenciar sons
-        self.pro_fretboard = ProFretboardView(
-            self.instrument_container, fg_color="transparent",
-            on_fret_click=self._on_pro_fretboard_clicked
-        )
+        # Cria as 4 visões com suporte completo aos novos seletores de 1 clique
         self.classic_fretboard = FretboardView(
             self.instrument_container, fg_color="transparent",
             on_fret_click=self._on_classic_fret_clicked,
             on_open_mapping=self.open_mapping_editor,
-            on_open_sound_manager=self.open_sound_manager
+            on_open_sound_manager=self.open_sound_manager,
+            on_quick_preset=self._on_quick_fret_preset_selected,
+            on_instrument_change=self._on_quick_instrument_selected
+        )
+        self.pro_fretboard = ProFretboardView(
+            self.instrument_container, fg_color="transparent",
+            on_fret_click=self._on_pro_fretboard_clicked
         )
         self.keyboard_view = KeyboardView(
             self.instrument_container, fg_color="transparent",
@@ -241,108 +245,54 @@ class MidGuitarApp(ctk.CTk):
             on_open_sound_manager=self.open_sound_manager
         )
 
-        # Exibe inicialmente a Guitarra Pro
-        self.active_visual_view = self.pro_fretboard
-        self.pro_fretboard.pack(fill="both", expand=True, padx=6, pady=6)
+        # Exibe inicialmente a Guitarra Clássica de 5 botões (a mais intuitiva para começar)
+        self.active_visual_view = self.classic_fretboard
+        self.classic_fretboard.pack(fill="both", expand=True, padx=6, pady=6)
+        self.classic_fretboard.update_fret_labels_from_preset(self.preset_data)
 
-        # Direita: Monitor MIDI
-        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10, width=320)
-        self.monitor.pack(side="right", fill="both", padx=(8, 0))
+        # Monitor de Eventos MIDI (Direita)
+        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10, width=300)
+        self.monitor.pack(side="right", fill="both", padx=(6, 0))
 
         # -------------------------------------------------------------
-        # 5. PASSO 3: SONS, AMOSTRAS (.WAV/.MP3) & CONTROLE DE ÁUDIO
+        # 4. BARRA INFERIOR (COMPACTA E SEM POLUIÇÃO VISUAL)
         # -------------------------------------------------------------
-        bottom_panel = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=10)
-        bottom_panel.pack(fill="x", padx=16, pady=(6, 12))
+        bottom_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8, height=44)
+        bottom_bar.pack(fill="x", padx=16, pady=(4, 10))
 
-        # Linha 1: Botão Importar Sons, Botão Mapeamento, Preset e Timbre
-        row1 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
-        row1.pack(fill="x", padx=12, pady=(8, 4))
-
-        step3_tag = ctk.CTkLabel(
-            row1, text="3️⃣ SONS:", font=ctk.CTkFont(size=12, weight="bold"),
-            text_color="#A855F7", fg_color="#0F172A", corner_radius=6, padx=8, pady=3
+        # Oitava
+        ctk.CTkLabel(bottom_bar, text="Oitava:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(12, 4), pady=6)
+        self.octave_seg = ctk.CTkSegmentedButton(
+            bottom_bar, values=["-2", "-1", "0", "+1", "+2"], command=self._on_octave_changed
         )
-        step3_tag.pack(side="left", padx=(0, 8))
+        self.octave_seg.pack(side="left", padx=2, pady=6)
+        self.octave_seg.set(str(self.config.get("octave_shift", 0)))
+        set_tooltip(self.octave_seg, "Altera a afinação de todas as notas em oitavas (mais grave ou mais aguda)")
 
-        # BOTÃO EM DESTAQUE: IMPORTAR SONS (.WAV / .MP3)
-        btn_sound_mgr = ctk.CTkButton(
-            row1, text="🎵 Importar Sons (.WAV / .MP3)", width=190, height=28,
-            fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(weight="bold"),
-            command=self.open_sound_manager
-        )
-        btn_sound_mgr.pack(side="left", padx=(0, 4))
-
-        # BOTÃO EM DESTAQUE: CONFIGURAR SONS POR TECLA & LOTE
+        # Botões de Ações Rápidas (Direita)
         btn_batch_keys = ctk.CTkButton(
-            row1, text="⚡ Sons por Tecla (Lote)", width=175, height=28,
-            fg_color="#6366F1", hover_color="#4F46E5", font=ctk.CTkFont(weight="bold"),
+            bottom_bar, text="⚡ Sons por Tecla (Lote)", width=170, height=28,
+            fg_color="#6366F1", hover_color="#4F46E5", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_batch_key_mapper
         )
-        btn_batch_keys.pack(side="left", padx=4)
+        btn_batch_keys.pack(side="right", padx=(4, 12), pady=6)
+        set_tooltip(btn_batch_keys, "Defina o som de cada tecla individualmente ou configure de monte em lote!")
 
-        # Botão dedicado para abrir o Editor de Mapeamentos
+        btn_sound_mgr = ctk.CTkButton(
+            bottom_bar, text="📁 Importar Áudios (.WAV)", width=160, height=28,
+            fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self.open_sound_manager
+        )
+        btn_sound_mgr.pack(side="right", padx=4, pady=6)
+        set_tooltip(btn_sound_mgr, "Importe arquivos reais (.wav / .mp3) para qualquer botão ou prato")
+
         btn_open_map = ctk.CTkButton(
-            row1, text="🎛️ Mapear Casas & Acordes", width=160, height=28,
-            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(weight="bold"),
+            bottom_bar, text="🎛️ Mapear Casas", width=130, height=28,
+            fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_mapping_editor
         )
-        btn_open_map.pack(side="left", padx=4)
-
-        ctk.CTkLabel(row1, text="Preset:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(8, 4))
-        preset_names = [name for _, name in self.preset_list] or ["Padrão"]
-        self.preset_combo = ctk.CTkComboBox(
-            row1, width=150, values=preset_names, command=self._on_preset_selected
-        )
-        self.preset_combo.pack(side="left", padx=4)
-
-        for pid, pname in self.preset_list:
-            if pid == self.current_preset_id:
-                self.preset_combo.set(pname)
-                break
-
-        ctk.CTkLabel(row1, text="Timbre GM:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(8, 4))
-        instrument_options = [f"{num:03d} - {name} ({cat})" for num, name, cat in GM_INSTRUMENTS]
-        self.instrument_combo = ctk.CTkComboBox(
-            row1, width=200, values=instrument_options, command=self._on_instrument_selected
-        )
-        self.instrument_combo.pack(side="left", padx=4)
-        
-        curr_inst = self.config.get("instrument_id", 29)
-        for opt in instrument_options:
-            if opt.startswith(f"{curr_inst:03d}"):
-                self.instrument_combo.set(opt)
-                break
-
-        # Botão Pânico
-        btn_panic = ctk.CTkButton(
-            row1, text="⏹️ Parar Notas (Panic)", width=140, height=28,
-            fg_color="#DC2626", hover_color="#B91C1C", font=ctk.CTkFont(weight="bold"),
-            command=self.panic_stop
-        )
-        btn_panic.pack(side="right", padx=6)
-
-        # Linha 2: Oitava e Volume
-        row2 = ctk.CTkFrame(bottom_panel, fg_color="transparent")
-        row2.pack(fill="x", padx=12, pady=(4, 8))
-
-        ctk.CTkLabel(row2, text="Oitava:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(4, 6))
-        self.octave_seg = ctk.CTkSegmentedButton(
-            row2, values=["-2", "-1", "0", "+1", "+2"], command=self._on_octave_changed
-        )
-        self.octave_seg.pack(side="left", padx=4)
-        self.octave_seg.set(str(self.config.get("octave_shift", 0)))
-
-        ctk.CTkLabel(row2, text="Volume:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(24, 6))
-        self.volume_slider = ctk.CTkSlider(
-            row2, from_=0, to=100, number_of_steps=100, width=180,
-            command=self._on_volume_changed
-        )
-        self.volume_slider.set(self.config.get("volume", 85))
-        self.volume_slider.pack(side="left", padx=4)
-
-        self.volume_label = ctk.CTkLabel(row2, text=f"{int(self.volume_slider.get())}%", width=40)
-        self.volume_label.pack(side="left", padx=2)
+        btn_open_map.pack(side="right", padx=4, pady=6)
+        set_tooltip(btn_open_map, "Editor avançado para escolher notas e acordes individualmente")
 
     # -------------------------------------------------------------
     # CLIQUE DIRETO NAS NOTAS (PREVIEW & TESTE DE ÁUDIO)
@@ -645,6 +595,26 @@ class MidGuitarApp(ctk.CTk):
     # -------------------------------------------------------------
     # CONTROLES DO USUÁRIO
     # -------------------------------------------------------------
+    def _on_quick_instrument_selected(self, inst_id: int):
+        """Muda o som de todas as casas/notas instantaneamente."""
+        self.audio.set_instrument(inst_id)
+        self.config["instrument_id"] = inst_id
+        # Toca uma nota de teste rápida para o usuário ouvir o novo som imediatamente!
+        self.audio.play_note(52, velocity=115, channel=0)
+        self.after(350, lambda: self.audio.stop_note(52, channel=0))
+        self.monitor.log(time.strftime("%H:%M:%S"), "SOM", f"Som de todas as notas alterado para instrumento GM {inst_id}")
+
+    def _on_quick_fret_preset_selected(self, preset_name: str, preset_data: dict):
+        """Muda os acordes/notas de todas as 5 casas de uma vez só."""
+        self.preset_data["frets"] = preset_data
+        self.mapper.set_preset(self.preset_data)
+        self.classic_fretboard.update_fret_labels_from_preset(self.preset_data)
+        # Toca o primeiro acorde para dar feedback imediato
+        first_notes = preset_data.get("green", {}).get("notes", [52])
+        self.audio.play_chord(first_notes, velocity=115)
+        self.after(450, lambda: self.audio.stop_chord(first_notes))
+        self.monitor.log(time.strftime("%H:%M:%S"), "ESTILO", f"Todas as 5 casas configuradas para: {preset_name}")
+
     def _on_preset_selected(self, preset_name: str):
         for pid, pname in self.preset_list:
             if pname == preset_name:

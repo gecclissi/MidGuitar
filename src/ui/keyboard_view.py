@@ -31,6 +31,8 @@ class KeyboardView(ctk.CTkFrame):
         self.chord_lbl = ctk.CTkLabel(header, text="Teclas ativas: Nenhuma", font=ctk.CTkFont(size=12), text_color="#94A3B8")
         self.chord_lbl.pack(side="right")
 
+        from src.ui.tooltip import set_tooltip
+
         if self.on_open_key_mapper:
             btn_mapper = ctk.CTkButton(
                 header, text="⚡ Configurar Sons por Tecla (Lote)", width=225, height=24,
@@ -39,6 +41,7 @@ class KeyboardView(ctk.CTkFrame):
                 command=self.on_open_key_mapper
             )
             btn_mapper.pack(side="right", padx=(4, 10))
+            set_tooltip(btn_mapper, "Defina um som diferente para cada tecla ou selecione várias para configurar de uma só vez!")
 
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True, padx=10, pady=(4, 10))
@@ -46,6 +49,7 @@ class KeyboardView(ctk.CTkFrame):
         # Painel lateral esquerdo: Touch Strip
         touch_frame = ctk.CTkFrame(content, fg_color="#1E293B", width=90, corner_radius=8)
         touch_frame.pack(side="left", fill="y", padx=(0, 8), pady=2)
+        set_tooltip(touch_frame, "Fita de toque do teclado Rock Band 3 (Pitch Bend e Modulação)")
 
         ctk.CTkLabel(touch_frame, text="Touch Strip", font=ctk.CTkFont(size=11, weight="bold")).pack(pady=(6, 2))
         self.touch_bar = ctk.CTkProgressBar(touch_frame, orientation="vertical", width=22, height=140, progress_color="#A855F7")
