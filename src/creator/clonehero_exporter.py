@@ -33,6 +33,9 @@ def export_clone_hero_song(song: ChartSong, output_base_dir: str, audio_source_p
     d_drums = song.diff_drums if song.drum_notes else -1
     d_keys = song.diff_keys if song.keys_notes else -1
     d_vocals = song.diff_vocals if song.vocal_notes else -1
+    d_pro_guitar = getattr(song, "diff_pro_guitar", 3) if getattr(song, "pro_guitar_notes", None) else -1
+    d_pro_bass = getattr(song, "diff_pro_bass", 2) if getattr(song, "pro_bass_notes", None) else -1
+    d_pro_keys = getattr(song, "diff_pro_keys", 3) if getattr(song, "pro_keys_notes", None) else -1
 
     ini_content = f"""[song]
 name = {song.title}
@@ -48,6 +51,9 @@ diff_bass = {d_bass}
 diff_drums = {d_drums}
 diff_keys = {d_keys}
 diff_vocals = {d_vocals}
+diff_guitar_real = {d_pro_guitar}
+diff_bass_real = {d_pro_bass}
+diff_keys_real = {d_pro_keys}
 preview_start_time = {song.preview_start_ms}
 icon = midguitar
 loading_phrase = Criado e gravado com MidGuitar Universal Studio!

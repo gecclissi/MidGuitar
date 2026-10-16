@@ -126,7 +126,14 @@ PRO_KEYS_MAX_NOTE = 72
 # -------------------------------------------------------------------------
 # GUITARRA PRO / BAIXO PRO (PART REAL_GUITAR / PART REAL_BASS)
 # -------------------------------------------------------------------------
-# 6 cordas: Corda 1 (Mi agudo) até Corda 6 (Mi grave)
+# 6 cordas: Corda 6 Mi grave (string_idx=0) até Corda 1 Mi agudo (string_idx=5)
+# No MIDI RBN2: pitch = base_diff + string_idx, velocity = 100 + fret (0 a 17)
+PRO_GUITAR_STRING_BASE = {
+    "Expert": 96,
+    "Hard": 72,
+    "Medium": 48,
+    "Easy": 24,
+}
 PRO_GUITAR_OVERDRIVE = 116
 PRO_GUITAR_SOLO = 103
 

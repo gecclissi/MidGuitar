@@ -27,6 +27,9 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
     has_bass = len(song.bass_notes) > 0
     has_drums = len(song.drum_notes) > 0
     has_keys = len(song.keys_notes) > 0
+    has_pro_guitar = len(getattr(song, "pro_guitar_notes", [])) > 0
+    has_pro_bass = len(getattr(song, "pro_bass_notes", [])) > 0
+    has_pro_keys = len(getattr(song, "pro_keys_notes", [])) > 0
     vocal_parts_count = 1 if has_vocals else 0
 
     has_multistem = len(song.audio_stems) > 1
@@ -87,9 +90,9 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
       (bass {rank_to_dta(song.diff_bass, has_bass)})
       (keys {rank_to_dta(song.diff_keys, has_keys)})
       (vocals {rank_to_dta(song.diff_vocals, has_vocals)})
-      (real_guitar 0)
-      (real_bass 0)
-      (real_keys 0)
+      (real_guitar {rank_to_dta(getattr(song, 'diff_pro_guitar', 3), has_pro_guitar)})
+      (real_bass {rank_to_dta(getattr(song, 'diff_pro_bass', 2), has_pro_bass)})
+      (real_keys {rank_to_dta(getattr(song, 'diff_pro_keys', 3), has_pro_keys)})
       (band {rank_to_dta(song.diff_band, any([has_drums, has_guitar, has_bass, has_keys, has_vocals]))})
    )
 )

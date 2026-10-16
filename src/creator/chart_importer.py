@@ -226,7 +226,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
     for track in mid.tracks:
         track_name = ""
         current_tick = 0
-        active_notes = {} # pitch -> start_tick
+        active_notes = {} # pitch -> (start_tick, velocity)
         recent_lyrics = {} # tick -> lyric
 
         for msg in track:
@@ -239,10 +239,10 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
             elif msg.type == 'lyrics':
                 recent_lyrics[current_tick] = msg.text
             elif msg.type == 'note_on' and msg.velocity > 0:
-                active_notes[msg.note] = current_tick
+                active_notes[msg.note] = (current_tick, msg.velocity)
             elif (msg.type == 'note_off') or (msg.type == 'note_on' and msg.velocity == 0):
                 if msg.note in active_notes:
-                    start_tick = active_notes.pop(msg.note)
+                    start_tick, on_vel = active_notes.pop(msg.note)
                     start_ms = int((start_tick / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0)
                     duration_ms = max(100, int(((current_tick - start_tick) / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0))
 
@@ -258,6 +258,38 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                                 pitch=msg.note,
                                 lyric=syl,
                                 is_phrase_end=False
+                            ))
+                    elif "REAL_GUITAR" in track_name or "REAL_BASS" in track_name:
+                        from src.creator.chart_model import ProGuitarNote
+                        from src.creator.rbn_specs import PRO_GUITAR_STRING_BASE
+                        for diff, base_p in PRO_GUITAR_STRING_BASE.items():
+                            if base_p <= msg.note <= base_p + 5:
+                                str_idx = msg.note - base_p
+                                fret_num = max(0, min(22, on_vel - 100)) if on_vel >= 100 else 0
+                                target_list = song.pro_bass_notes if "REAL_BASS" in track_name else song.pro_guitar_notes
+                                target_list.append(ProGuitarNote(
+                                    time_ms=start_ms,
+                                    string_idx=str_idx,
+                                    fret=fret_num,
+                                    duration_ms=duration_ms,
+                                    difficulty=diff
+                                ))
+                                break
+                    elif "REAL_KEYS" in track_name:
+                        from src.creator.chart_model import ProKeysNote
+                        if 48 <= msg.note <= 72:
+                            pk_diff = "Expert"
+                            if track_name.endswith("_H"):
+                                pk_diff = "Hard"
+                            elif track_name.endswith("_M"):
+                                pk_diff = "Medium"
+                            elif track_name.endswith("_E"):
+                                pk_diff = "Easy"
+                            song.pro_keys_notes.append(ProKeysNote(
+                                time_ms=start_ms,
+                                pitch=msg.note,
+                                duration_ms=duration_ms,
+                                difficulty=pk_diff
                             ))
                     elif "GUITAR" in track_name:
                         if msg.note in inv_fret_notes:
@@ -281,4 +313,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
     song.bass_notes.sort(key=lambda n: n.time_ms)
     song.drum_notes.sort(key=lambda n: n.time_ms)
     song.keys_notes.sort(key=lambda n: n.time_ms)
+    song.pro_guitar_notes.sort(key=lambda n: n.time_ms)
+    song.pro_bass_notes.sort(key=lambda n: n.time_ms)
+    song.pro_keys_notes.sort(key=lambda n: n.time_ms)
     song.vocal_notes.sort(key=lambda n: n.time_ms)

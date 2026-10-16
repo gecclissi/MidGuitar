@@ -13,7 +13,7 @@ Gera automaticamente para todas as dificuldades (Expert, Hard, Medium, Easy).
 
 import math
 from typing import List, Tuple
-from src.creator.chart_model import ChartSong, NoteEvent, TextEvent, VocalNote
+from src.creator.chart_model import ChartSong, NoteEvent, TextEvent, VocalNote, ProGuitarNote, ProKeysNote
 
 def get_audio_duration_ms(audio_path: str) -> int:
     """Tenta obter a duração real em milissegundos do arquivo de áudio."""
@@ -49,6 +49,10 @@ def auto_generate_chart(
     Se clear_existing for False, preserva as trilhas que já possuem notas!
     REGRA DE OURO DO MICROFONE: Se a música NÃO possuir letra (lyrics_raw vazio), NÃO gera vocais falsos!
     """
+    if isinstance(total_duration_ms, list):
+        selected_instruments = total_duration_ms
+        total_duration_ms = 180000
+
     first_sound_ms = 2000
     last_sound_ms = total_duration_ms - 2000
     energy_windows = []
@@ -72,7 +76,7 @@ def auto_generate_chart(
                 last_sound_ms = total_duration_ms - 2000
 
     if selected_instruments is None:
-        selected_instruments = ["guitar", "bass", "drum", "keys"]
+        selected_instruments = ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys"]
 
     # Validação estrita do Microfone: Sem letra = Sem microfone!
     has_real_lyrics = bool(song.lyrics_raw and song.lyrics_raw.strip())
@@ -245,7 +249,114 @@ def auto_generate_chart(
         from src.creator.lyric_processor import align_lyrics_to_song
         align_lyrics_to_song(song, song.lyrics_raw, start_delay_ms=max(3000, first_sound_ms + int(measure_ms)))
 
-    # 8. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
+    # 8. GERAR PRO GUITAR & PRO BASS (PART REAL_GUITAR / PART REAL_BASS - 6 Cordas / 17 Casas)
+    pro_root_frets = [0, 3, 5, 7, 2]
+    if ("pro_guitar" in selected_instruments or "guitar" in selected_instruments) and (clear_existing or not song.pro_guitar_notes):
+        song.pro_guitar_notes.clear()
+        for m in range(total_measures):
+            m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
+            r_fret = pro_root_frets[m % len(pro_root_frets)]
+            is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
+            is_solo = (m >= m_solo and m < m_chorus2)
+
+            for b in range(4):
+                t_beat = int(m_start + b * beat_ms)
+                if _is_silent_at(t_beat):
+                    continue
+                dur = int(beat_ms * 0.8)
+                # Expert: Power chord de 3 cordas (tônica + quinta + oitava) ou solo nas cordas agudas
+                if is_solo:
+                    s_idx = 3 + (b % 3)
+                    f_val = r_fret + (b * 2) % 7
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=s_idx, fret=f_val, duration_ms=dur, difficulty="Expert"))
+                else:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=dur, difficulty="Expert"))
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=1, fret=r_fret + 2, duration_ms=dur, difficulty="Expert"))
+                    if is_chorus:
+                        song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=2, fret=r_fret + 2, duration_ms=dur, difficulty="Expert"))
+
+                # Hard: Acorde de 2 cordas (tônica + quinta)
+                song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=dur, difficulty="Hard"))
+                if b % 2 == 0:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=1, fret=r_fret + 2, duration_ms=dur, difficulty="Hard"))
+
+                # Medium: Notas individuais nos tempos 1 e 3
+                if b in [0, 2]:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=int(beat_ms * 1.5), difficulty="Medium"))
+
+                # Easy: Apenas 1 nota fundamental por compasso (tempo 1)
+                if b == 0:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=int(measure_ms * 0.8), difficulty="Easy"))
+
+    if ("pro_bass" in selected_instruments or "bass" in selected_instruments) and (clear_existing or not song.pro_bass_notes):
+        song.pro_bass_notes.clear()
+        for m in range(total_measures):
+            m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
+            r_fret = pro_root_frets[m % len(pro_root_frets)]
+            for b in range(4):
+                t_beat = int(m_start + b * beat_ms)
+                if _is_silent_at(t_beat):
+                    continue
+                dur = int(beat_ms * 0.8)
+                song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=dur, difficulty="Expert"), is_bass=True)
+                if b in [0, 1, 2]:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=dur, difficulty="Hard"), is_bass=True)
+                if b in [0, 2]:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=int(beat_ms * 1.5), difficulty="Medium"), is_bass=True)
+                if b == 0:
+                    song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=int(measure_ms * 0.8), difficulty="Easy"), is_bass=True)
+
+    # 9. GERAR PRO KEYS (PART REAL_KEYS_X / H / M / E - Teclado Real 25 Teclas C3=48 a C5=72)
+    pro_keys_chords = [
+        (60, 64, 67),  # C Major (Dó - Mi - Sol)
+        (67, 71, 62),  # G Major (Sol - Si - Ré)
+        (57, 60, 64),  # A Minor (Lá - Dó - Mi)
+        (53, 57, 60),  # F Major (Fá - Lá - Dó)
+    ]
+    if ("pro_keys" in selected_instruments or "keys" in selected_instruments) and (clear_existing or not song.pro_keys_notes):
+        song.pro_keys_notes.clear()
+        for m in range(total_measures):
+            m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
+            p_root, p_third, p_fifth = pro_keys_chords[m % len(pro_keys_chords)]
+            is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
+
+            # Expert: Tríade completa (3 teclas reais) ou arpejo rítmico no refrão
+            if is_chorus:
+                for b in range(4):
+                    t_beat = int(m_start + b * beat_ms)
+                    if _is_silent_at(t_beat):
+                        continue
+                    dur = int(beat_ms * 0.85)
+                    song.add_pro_keys_note(ProKeysNote(time_ms=t_beat, pitch=p_root, duration_ms=dur, difficulty="Expert"))
+                    song.add_pro_keys_note(ProKeysNote(time_ms=t_beat, pitch=p_third, duration_ms=dur, difficulty="Expert"))
+                    if b % 2 == 0:
+                        song.add_pro_keys_note(ProKeysNote(time_ms=t_beat, pitch=p_fifth, duration_ms=dur, difficulty="Expert"))
+            else:
+                dur = int(measure_ms * 0.9)
+                song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_root, duration_ms=dur, difficulty="Expert"))
+                song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_third, duration_ms=dur, difficulty="Expert"))
+                song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_fifth, duration_ms=dur, difficulty="Expert"))
+
+            # Hard: Díade harmônica (Tônica + Terça)
+            dur_m = int(measure_ms * 0.9)
+            song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_root, duration_ms=dur_m, difficulty="Hard"))
+            song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_third, duration_ms=dur_m, difficulty="Hard"))
+
+            # Medium: Nota melódica principal nos tempos 1 e 3
+            song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_root, duration_ms=int(beat_ms * 1.8), difficulty="Medium"))
+            if not _is_silent_at(int(m_start + 2 * beat_ms)):
+                song.add_pro_keys_note(ProKeysNote(time_ms=int(m_start + 2 * beat_ms), pitch=p_third, duration_ms=int(beat_ms * 1.8), difficulty="Medium"))
+
+            # Easy: 1 nota longa por compasso (sem acordes)
+            song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_root, duration_ms=dur_m, difficulty="Easy"))
+
+    # 10. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
     if generate_all_diffs:
         _generate_lower_difficulties(song, selected_instruments)
 
@@ -266,7 +377,7 @@ def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
     lanes_order = ["green", "red", "yellow", "blue", "orange"]
 
     for inst in instruments:
-        if inst == "vocals":
+        if inst in ["vocals", "pro_guitar", "pro_bass", "pro_keys"]:
             continue
 
         track_notes = getattr(song, f"{inst}_notes", [])
@@ -391,7 +502,7 @@ def generate_missing_instruments_only(
     Retorna a lista dos instrumentos que foram gerados.
     """
     if instruments is None:
-        instruments = ["guitar", "bass", "drum", "keys", "vocals"]
+        instruments = ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys", "vocals"]
 
     missing = []
     has_real_lyrics = bool(song.lyrics_raw and song.lyrics_raw.strip())

@@ -33,6 +33,23 @@ class VocalNote:
     is_phrase_end: bool = False # Fim da frase vocal (Nota 105)
 
 @dataclass
+class ProGuitarNote:
+    time_ms: int
+    string_idx: int = 0          # 0 (Corda 6 Mi grave) a 5 (Corda 1 Mi agudo)
+    fret: int = 0                # Casa 0 a 17
+    duration_ms: int = 200
+    difficulty: str = "Expert"   # "Easy", "Medium", "Hard", "Expert"
+    is_overdrive: bool = False
+
+@dataclass
+class ProKeysNote:
+    time_ms: int
+    pitch: int = 60              # Tecla real do teclado (48 = C3 até 72 = C5)
+    duration_ms: int = 250
+    difficulty: str = "Expert"   # "Easy", "Medium", "Hard", "Expert"
+    is_overdrive: bool = False
+
+@dataclass
 class ChartSong:
     title: str = "Nova Música"
     artist: str = "Artista"
@@ -55,6 +72,9 @@ class ChartSong:
     diff_drums: int = 3
     diff_keys: int = 2
     diff_vocals: int = 3
+    diff_pro_guitar: int = 3
+    diff_pro_bass: int = 2
+    diff_pro_keys: int = 3
     diff_band: int = 3
 
     # Trilhas de notas
@@ -63,11 +83,23 @@ class ChartSong:
     drum_notes: List[NoteEvent] = field(default_factory=list)
     keys_notes: List[NoteEvent] = field(default_factory=list)
     vocal_notes: List[VocalNote] = field(default_factory=list)
+    pro_guitar_notes: List[ProGuitarNote] = field(default_factory=list)
+    pro_bass_notes: List[ProGuitarNote] = field(default_factory=list)
+    pro_keys_notes: List[ProKeysNote] = field(default_factory=list)
     events: List[TextEvent] = field(default_factory=list)
 
     def add_vocal_note(self, note: VocalNote):
         self.vocal_notes.append(note)
         self.vocal_notes.sort(key=lambda n: n.time_ms)
+
+    def add_pro_guitar_note(self, note: ProGuitarNote, is_bass: bool = False):
+        target = self.pro_bass_notes if is_bass else self.pro_guitar_notes
+        target.append(note)
+        target.sort(key=lambda n: n.time_ms)
+
+    def add_pro_keys_note(self, note: ProKeysNote):
+        self.pro_keys_notes.append(note)
+        self.pro_keys_notes.sort(key=lambda n: n.time_ms)
 
     def add_note(self, track: str, note_event: NoteEvent):
         """Adiciona uma nota à trilha especificada mantendo ordenado por tempo."""
@@ -113,11 +145,17 @@ class ChartSong:
             "diff_bass": self.diff_bass,
             "diff_drums": self.diff_drums,
             "diff_keys": self.diff_keys,
+            "diff_pro_guitar": self.diff_pro_guitar,
+            "diff_pro_bass": self.diff_pro_bass,
+            "diff_pro_keys": self.diff_pro_keys,
             "diff_band": self.diff_band,
             "guitar_notes": [n.__dict__ for n in self.guitar_notes],
             "bass_notes": [n.__dict__ for n in self.bass_notes],
             "drum_notes": [n.__dict__ for n in self.drum_notes],
             "keys_notes": [n.__dict__ for n in self.keys_notes],
+            "pro_guitar_notes": [n.__dict__ for n in self.pro_guitar_notes],
+            "pro_bass_notes": [n.__dict__ for n in self.pro_bass_notes],
+            "pro_keys_notes": [n.__dict__ for n in self.pro_keys_notes],
             "events": [e.__dict__ for e in self.events],
         }
 
@@ -139,11 +177,17 @@ class ChartSong:
             diff_bass=data.get("diff_bass", 2),
             diff_drums=data.get("diff_drums", 3),
             diff_keys=data.get("diff_keys", 2),
+            diff_pro_guitar=data.get("diff_pro_guitar", 3),
+            diff_pro_bass=data.get("diff_pro_bass", 2),
+            diff_pro_keys=data.get("diff_pro_keys", 3),
             diff_band=data.get("diff_band", 3),
         )
         song.guitar_notes = [NoteEvent(**n) for n in data.get("guitar_notes", [])]
         song.bass_notes = [NoteEvent(**n) for n in data.get("bass_notes", [])]
         song.drum_notes = [NoteEvent(**n) for n in data.get("drum_notes", [])]
         song.keys_notes = [NoteEvent(**n) for n in data.get("keys_notes", [])]
+        song.pro_guitar_notes = [ProGuitarNote(**n) for n in data.get("pro_guitar_notes", [])]
+        song.pro_bass_notes = [ProGuitarNote(**n) for n in data.get("pro_bass_notes", [])]
+        song.pro_keys_notes = [ProKeysNote(**n) for n in data.get("pro_keys_notes", [])]
         song.events = [TextEvent(**e) for e in data.get("events", [])]
         return song

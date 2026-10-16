@@ -38,58 +38,42 @@ O **MidGuitar Studio** é uma central universal de instrumentos MIDI desenvolvid
 
 ---
 
-## 🎵 Estúdio Criador & Conversor de Músicas (Rock Band 3, PS3 PKG & Clone Hero)
+## 🎵 Estúdio Criador & Conversor de Músicas (Rock Band 3, Rock Band 2, Pro Guitar & Keys, PS3, Xbox 360, PS4 & Clone Hero)
 
-O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100% o fluxo fragmentado e complexo de ferramentas legadas da comunidade.
+O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fluxo fragmentado e complexo de ferramentas legadas da comunidade (REAPER, Magma v2, C3 CON Tools e Onyx).
 
 ### ⏳ Como era o Processo Antigo vs 🚀 Como é Agora com o MidGuitar
 
 | Etapa | Processo Antigo (Sofrimento com 4 programas) | Como é com o MidGuitar (Tudo em 1 App) |
 | :--- | :--- | :--- |
-| **Criação de Notas** | Tinha que abrir o **REAPER**, configurar templates MIDI cheios de pistas e colocar **nota por nota à mão** durante dias ou semanas. | **✨ Auto-Chart Inteligente:** Crie todas as notas para **Guitarra, Baixo, Bateria, Teclado e Vocais em 1 segundo**, ou edite visualmente no **Mini-REAPER integrado**. |
-| **Mecânica de Vocais** | Tinha que mapear manualmente notas de afinação (Pitch 36-84), marcadores de frase (Nota 105), overdrive (Nota 106) e digitar cada sílaba com hífens. | **🎤 Suporte Total a Vocais:** O Auto-Chart gera frases melódicas, afinações na escala, pontuação de frases (105), overdrive (106) e letras sincronizadas automaticamente! |
-| **Separação de Faixas** | Tinha que usar DAWs pesadas e converter áudios estéreo e multitracks manualmente. | **🔊 Stems e Mix Automáticos:** Copia e mapeia automaticamente trilhas separadas (`guitar.ogg`, `bass.ogg`, `drums.ogg`, `song.ogg`) ou faixas mixadas. |
-| **Conversão e Compilação** | Precisava de programas externos como **Magma v2**, **C3 CON Tools** ou **Onyx** para gerar arquivos `.dta`. | **⚡ Conversor 1 Clique:** Converte charts do Chorus Encore, RhythmVerse, C3 e Clone Hero direto para o Rock Band 3 sem programas adicionais. |
+| **Criação de Notas & Dificuldades** | Tinha que abrir o **REAPER**, configurar templates MIDI cheios de pistas e colocar **nota por nota à mão** durante dias para cada dificuldade. | **✨ Auto-Chart Inteligente:** Arraste o MP3 e crie todas as notas para **Guitarra, Baixo, Bateria, Teclado, Pro Guitar (6 cordas), Pro Bass, Pro Keys (25 teclas) e Vocais em 1 clique** nas **4 dificuldades (Easy, Medium, Hard e Expert)**, ou edite visualmente no **Mini-REAPER integrado**. |
+| **Modo PRO (Pro Guitar / Pro Keys)** | Mapear `PART REAL_GUITAR` (6 cordas x 17 casas com velocidades MIDI 100..117) e `PART REAL_KEYS_X/H/M/E` no REAPER exigia semanas de trabalho técnico. | **🎸🎹 Geração e Edição PRO Nativa:** Gera automaticamente acordes reais de 6 cordas (Power Chords, barre chords e solos com números de casas) e tríades/melodias reais de 25 teclas (C3..C5) em todas as 4 dificuldades! |
+| **Mecânica de Vocais & Regra Sem Letra** | Tinha que mapear manualmente notas de afinação (Pitch 36-84), marcadores de frase (Nota 105) e digitar cada sílaba. Sem letra, gerava notas mudas quebradas. | **🎤 Suporte Total a Vocais (.txt / .lrc / .srt):** Arraste ou cole a letra/legenda (`.txt`, `.lrc` ou `.srt`) para habilitar o microfone e sincronizar sílabas! **Se não houver letra, o Microfone fica desativado automaticamente (`vocal_parts 0`)**. |
+| **Áudio Multitrack `.mogg` Oficial** | Tinha que usar ferramentas externas para injetar o cabeçalho binário Harmonix `0x0A` no OGG Vorbis, senão a música ficava muda no PS3/Xbox. | **🔊 Gerador `.mogg` (`0x0A`) Nativo Integrado:** Converte qualquer MP3/WAV/FLAC em `.mogg` não-criptografado oficial com tabela de seek a cada 20.000 samples — toca perfeitamente no Rock Band 3 e Rock Band 2! |
+| **Conversão Multi-Plataforma** | Precisava de **Magma v2**, **C3 CON Tools** ou **Onyx** para converter entre jogos e consoles. | **⚡ Exportação Universal em 1 Clique:** Exporta nativamente para **Rock Band 3 (PS3/RPCS3 `BLUS30463`)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147`, Xbox 360 `45410869` & RB2 Deluxe)**, **Xbox 360 (`45410914`)**, **PS4 (`CUSA02084`)** e **Clone Hero / YARG**. |
 | **Compilar Várias Músicas (Packs)** | Tinha que mesclar textos de `songs.dta` manualmente ou usar empacotadores com menus confusos em inglês. | **📦 Compilador de Mega Pacotes:** Selecione uma pasta com dezenas de músicas e o app compila tudo em um **único `songs.dta` unificado** e organizado em `USRDIR/songs/`. |
 | **Capa do Álbum** | Tinha que redimensionar manualmente em editores de imagem para tamanhos exatos do console (320x176). | **🖼️ Tratamento Automático:** Suba qualquer JPG/PNG e o app gera o `ICON0.PNG` oficial para a XMB do PS3 e o `album.png` do Clone Hero. |
-| **Instalação no RPCS3 (Emulador)** | Tinha que caçar a pasta oculta `dev_hdd0/game/BLUS30463/USRDIR/songs/` na mão dentro do Windows. | **🚀 Script Automático de 1 Clique:** O app gera o arquivo `INSTALAR_NO_RPCS3_AUTOMATICO.bat` dentro da pasta. Dois cliques nele e a música é instalada sozinha! |
-| **Gravação com Instrumento Real** | Não existia integração direta de tocar e mapear. | **🔴 Gravação ao Vivo:** Conecte sua guitarra USB, teclado ou bateria eletrônica e toque no ritmo da música para registrar notas na linha do tempo em tempo real. |
+| **Instalação no RPCS3 (RB3 e RB2)** | Tinha que caçar a pasta oculta `dev_hdd0/game/BLUS30463` ou `BLUS30147` na mão dentro do Windows. | **🚀 Scripts Automáticos de 1 Clique:** O app gera `INSTALAR_NO_RPCS3_AUTOMATICO.bat` (RB3) e `INSTALAR_NO_RB2_RPCS3.bat` (RB2) dentro da pasta. Dois cliques e instala sozinho! |
 
 ---
 
 ### 🌟 As 5 Abas do Estúdio Criador
 
-1. **⚡ Conversor 1 Clique (Individual)**:
-   - Aponte para qualquer pasta de música baixada da internet e converta instantaneamente para **Rock Band 3 (RPCS3)**, **PlayStation 3 (PKG/SFO)** ou **Clone Hero / YARG**.
+1. **⚡ Criação Rápida (MP3 + Letra) & Conversor 1 Clique**:
+   - **Opção A (Criar do Zero):** Arraste seu arquivo `.mp3` e sua letra/legenda opcional (`.txt`, `.lrc`, `.srt`) e clique em **GERAR TUDO AUTOMATICAMENTE**!
+   - **Opção B (Importar de Fãs):** Aponte para qualquer pasta de música baixada (Chorus Encore, RhythmVerse, C3) para converter ou **Completar Instrumentos Faltantes** sem apagar as trilhas originais!
+   - Exporte em 1 clique para **Rock Band 3 (RPCS3/PS3)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147` & Xbox 360 `45410869`)**, **Xbox 360 (`45410914`)**, **PlayStation 4 (`CUSA02084`)** ou **Clone Hero / YARG**.
 2. **📦 Compilador de Pacotes em Lote (Multi-Músicas PS3/CH)**:
-   - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique para o emulador RPCS3 ou console real.
-3. **🎛️ Editor Visual de Notas (Mini-REAPER, Auto-Chart & Teste ao Vivo)**:
-   - Linha do tempo visual estilo DAW com pistas coloridas (Verde, Vermelha, Amarela, Azul, Laranja, Overdrive e Solo) para Guitarra, Baixo, Bateria, Teclado e Vocais.
-   - Clique com o botão esquerdo para adicionar/remover notas com encaixe automático na grade (*Grid Snap* em 1/4, 1/8, 1/16 ou livre). Botão direito para apagar notas.
-   - **✨ Botão `GERAR NOTAS!`**: Cria a música inteira automaticamente para os instrumentos selecionados.
-   - **🎤 Sincronizador de Letra da Música (.txt / .lrc)**:
-     - Cole a letra da música ou carregue arquivos `.txt` ou `.lrc` (com minutagem).
-     - Divisor silábico automático oficial Rock Band Network (com hífens terminadores de sílaba continuada).
-     - Sincronização automática das sílabas na linha do tempo com marcação de frases (Nota 105) e Overdrive (Nota 106).
-     - Visualização das palavras/sílabas escritas diretamente abaixo das notas na trilha `🎤 Vocais`!
-   - **🎚️ Suporte a Faixas Isoladas (Stems Multi-Track)**:
-     - Aceita tanto áudio único estéreo quanto pastas com stems separados (`guitar.ogg`, `bass.ogg`, `drums.ogg`, `vocals.ogg`, `song.ogg`) para o mixer oficial do Rock Band 3 e Clone Hero!
-   - **🎮 Barra de Toque & Teste Interativo**:
-     - Botões coloridos interativos: `🟩 Casa 1 (A)`, `🟥 Casa 2 (S)`, `🟨 Casa 3 (J)`, `🟦 Casa 4 (K)`, `🟧 Casa 5 (L)`, `⚡ Palheta (Espaço)` e `🎤 Vocal (V)`.
-     - **Toque com o Teclado do Computador**: Toque diretamente com as teclas do teclado do PC enquanto a música toca!
-     - **Modos de Palheta Flexíveis**:
-       - *Palheta Livre*: tocou na tecla da casa já emite o som imediatamente.
-       - *Palheta Obrigatória (Estilo Guitar Hero / Rock Band)*: segure a casa e aperte a palheta (ex: Barra de Espaço ou Enter) para palhetar!
-     - **Suporte a Instrumentos Reais**: Plugue sua guitarra USB/MIDI, guitarra Rock Band, Gamepad, bateria eletrônica ou teclado e toque ao vivo com detecção automática e feedback visual das casas!
-     - **Teste Vocal Integrado**: Tecla dedicada para disparar e gravar afinações vocais melódicas (Dó, Ré, Mi, Sol, Lá, Dó) e conferir a harmonia vocal.
-     - **Janela de Configuração de Teclas**: Clique em `⌨️ Teclas & Palheta...` para remapear livremente qualquer ação para a tecla que preferir.
+   - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique.
+3. **🎛️ Editor Visual de Notas (Mini-REAPER, Modo PRO, Auto-Chart & Teste ao Vivo)**:
+   - Linha do tempo visual estilo DAW para **Guitarra (5 Casas)**, **Baixo**, **Bateria**, **Teclado**, **Pro Guitar (6 Cordas com número da casa visível)**, **Pro Bass**, **Pro Keys (25 Teclas)** e **Vocais**.
+   - Seletor de **Dificuldade (`Expert`, `Hard`, `Medium`, `Easy`)** para inspecionar e editar qualquer nível individualmente com o mouse.
+   - **🎤 Sincronizador de Letra e Legenda (`.txt` / `.lrc` / `.srt`)**: Divisor silábico automático oficial Rock Band Network e trava inteligente (*Sem Letra = Sem Microfone*).
+   - **🎮 Barra de Toque & Teste Interativo**: Toque junto com a música usando o teclado do PC (`A, S, J, K, L + Espaço`) ou instrumentos USB/MIDI reais plugados!
 4. **🖼️ Metadados, Capa & Exportação**:
-   - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter.
-   - Upload de imagem de capa com pré-visualização em miniatura em tempo real.
-   - Botão direto para gerenciar e sincronizar letras.
-   - Seletor de Jogo de Destino com cards informativos dinâmicos.
+   - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter, upload de capa com preview em tempo real e exportação direta.
 5. **📖 Guia Passo a Passo (Para Leigos)**:
-   - Tutorial ilustrado passo a passo com 9 passos cobrindo criação manual, auto-chart, importação, gravação ao vivo, teste no teclado, letras e compilação para RPCS3 e consoles.
+   - Tutorial ilustrado passo a passo cobrindo criação em 1 clique, modo PRO, importação, edição e instalação em todos os jogos e consoles.
 
 ---
 

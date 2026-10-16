@@ -163,6 +163,42 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         _build_vocal_track(vocal_track, song.vocal_notes, song.bpm)
         vocal_track.append(MetaMessage('end_of_track', time=0))
 
+    # -------------------------------------------------------------
+    # PISTA 8: PART REAL_GUITAR (Pro Guitar 6 Cordas / 17 Casas)
+    # -------------------------------------------------------------
+    if getattr(song, "pro_guitar_notes", None):
+        pg_track = MidiTrack()
+        mid.tracks.append(pg_track)
+        pg_track.append(MetaMessage('track_name', name='PART REAL_GUITAR', time=0))
+        _build_pro_guitar_track(pg_track, song.pro_guitar_notes, song.bpm)
+        pg_track.append(MetaMessage('end_of_track', time=0))
+
+    # -------------------------------------------------------------
+    # PISTA 9: PART REAL_BASS (Pro Bass 4/6 Cordas)
+    # -------------------------------------------------------------
+    if getattr(song, "pro_bass_notes", None):
+        pb_track = MidiTrack()
+        mid.tracks.append(pb_track)
+        pb_track.append(MetaMessage('track_name', name='PART REAL_BASS', time=0))
+        _build_pro_guitar_track(pb_track, song.pro_bass_notes, song.bpm)
+        pb_track.append(MetaMessage('end_of_track', time=0))
+
+    # -------------------------------------------------------------
+    # PISTAS 10..13: PART REAL_KEYS_X / H / M / E (Pro Keys 25 Teclas Reais)
+    # -------------------------------------------------------------
+    if getattr(song, "pro_keys_notes", None):
+        pk_suffixes = [("Expert", "X"), ("Hard", "H"), ("Medium", "M"), ("Easy", "E")]
+        for diff_name, suffix in pk_suffixes:
+            diff_pk_notes = [n for n in song.pro_keys_notes if n.difficulty == diff_name]
+            if not diff_pk_notes:
+                diff_pk_notes = [n for n in song.pro_keys_notes if n.difficulty == "Expert"]
+            if diff_pk_notes:
+                pk_track = MidiTrack()
+                mid.tracks.append(pk_track)
+                pk_track.append(MetaMessage('track_name', name=f'PART REAL_KEYS_{suffix}', time=0))
+                _build_pro_keys_track(pk_track, diff_pk_notes, song.bpm)
+                pk_track.append(MetaMessage('end_of_track', time=0))
+
     return mid
 
 def _build_vocal_track(track: MidiTrack, notes: list, bpm: float):
@@ -265,6 +301,54 @@ def _append_timed_events_to_track(track: MidiTrack, timed_events: list):
         delta = max(0, tick - last_tick)
         track.append(Message(ev_type, note=pitch, velocity=vel, time=delta))
         last_tick = tick
+
+def _build_pro_guitar_track(track: MidiTrack, notes: list, bpm: float):
+    """
+    Constrói a trilha PART REAL_GUITAR / PART REAL_BASS conforme a especificação RBN2:
+    - Pitch = Base da Dificuldade (Easy=24, Medium=48, Hard=72, Expert=96) + índice da corda (0 a 5)
+    - Velocity = 100 + número da casa/traste (0 a 17, logo velocity 100 a 117)
+    """
+    from src.creator.rbn_specs import PRO_GUITAR_STRING_BASE, PRO_GUITAR_OVERDRIVE
+    timed_events = []
+    for n in notes:
+        base_pitch = PRO_GUITAR_STRING_BASE.get(n.difficulty, 96)
+        pitch = base_pitch + max(0, min(5, int(n.string_idx)))
+        vel = 100 + max(0, min(17, int(n.fret)))
+        start_tick = ms_to_ticks(n.time_ms, bpm)
+        duration_ticks = max(120, ms_to_ticks(n.duration_ms, bpm))
+        end_tick = start_tick + duration_ticks
+
+        timed_events.append((start_tick, "note_on", pitch, vel))
+        timed_events.append((end_tick, "note_off", pitch, 0))
+        if getattr(n, "is_overdrive", False):
+            timed_events.append((start_tick, "note_on", PRO_GUITAR_OVERDRIVE, 100))
+            timed_events.append((end_tick, "note_off", PRO_GUITAR_OVERDRIVE, 0))
+
+    _append_timed_events_to_track(track, timed_events)
+
+def _build_pro_keys_track(track: MidiTrack, notes: list, bpm: float):
+    """
+    Constrói as trilhas PART REAL_KEYS_X / H / M / E (Teclado Real de 25 Teclas C3=48 a C5=72).
+    Inclui também a nota âncora de Range Shift (Nota 0 = C3..C5) no início da trilha.
+    """
+    from src.creator.rbn_specs import KEYS_OVERDRIVE
+    timed_events = [
+        (0, "note_on", 0, 100),
+        (120, "note_off", 0, 0),
+    ]
+    for n in notes:
+        pitch = max(48, min(72, int(n.pitch)))
+        start_tick = ms_to_ticks(n.time_ms, bpm)
+        duration_ticks = max(120, ms_to_ticks(n.duration_ms, bpm))
+        end_tick = start_tick + duration_ticks
+
+        timed_events.append((start_tick, "note_on", pitch, 100))
+        timed_events.append((end_tick, "note_off", pitch, 0))
+        if getattr(n, "is_overdrive", False):
+            timed_events.append((start_tick, "note_on", KEYS_OVERDRIVE, 100))
+            timed_events.append((end_tick, "note_off", KEYS_OVERDRIVE, 0))
+
+    _append_timed_events_to_track(track, timed_events)
 
 def save_midi(mid: MidiFile, filepath: str):
     """Salva o arquivo MIDI no caminho especificado."""

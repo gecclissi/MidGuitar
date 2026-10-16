@@ -14,6 +14,7 @@ LANE_COLORS = {
     "yellow": "#FACC15",
     "blue": "#38BDF8",
     "orange": "#FB923C",
+    "purple": "#C084FC",
     "overdrive": "#A855F7",
     "solo": "#F59E0B",
     "vocal_high": "#F472B6",
@@ -29,6 +30,25 @@ LANE_NAMES_GUITAR = [
     ("orange", "Laranja (Casa 5)"),
     ("overdrive", "⭐ Overdrive"),
     ("solo", "⚡ Solo"),
+]
+
+LANE_NAMES_PRO_GUITAR = [
+    ("green", "Corda 6 - Mi Grave (E2)"),
+    ("red", "Corda 5 - Lá (A2)"),
+    ("yellow", "Corda 4 - Ré (D3)"),
+    ("blue", "Corda 3 - Sol (G3)"),
+    ("orange", "Corda 2 - Si (B3)"),
+    ("purple", "Corda 1 - Mi Agudo (E4)"),
+    ("overdrive", "⭐ Overdrive Pro"),
+]
+
+LANE_NAMES_PRO_KEYS = [
+    ("green", "🎹 Dó / Ré (C-D)"),
+    ("red", "🎹 Mi / Fá (E-F)"),
+    ("yellow", "🎹 Sol (G)"),
+    ("blue", "🎹 Lá (A)"),
+    ("orange", "🎹 Si / Dó Agudo (B-C5)"),
+    ("overdrive", "⭐ Overdrive Pro Keys"),
 ]
 
 LANE_NAMES_DRUMS = [
@@ -114,6 +134,10 @@ class MiniReaperCanvas(tk.Frame):
             return LANE_NAMES_DRUMS
         elif self.current_track == "vocals":
             return LANE_NAMES_VOCALS
+        elif self.current_track in ["pro_guitar", "pro_bass"]:
+            return LANE_NAMES_PRO_GUITAR
+        elif self.current_track == "pro_keys":
+            return LANE_NAMES_PRO_KEYS
         return LANE_NAMES_GUITAR
 
     def _get_notes(self) -> List[NoteEvent]:
@@ -125,6 +149,25 @@ class MiniReaperCanvas(tk.Frame):
             return self.song.drum_notes
         elif self.current_track == "keys":
             return self.song.keys_notes
+        elif self.current_track in ["pro_guitar", "pro_bass"]:
+            src_list = self.song.pro_bass_notes if self.current_track == "pro_bass" else self.song.pro_guitar_notes
+            str_lanes = ["green", "red", "yellow", "blue", "orange", "purple"]
+            events = []
+            for pgn in src_list:
+                l_key = str_lanes[max(0, min(5, pgn.string_idx))]
+                ne = NoteEvent(time_ms=pgn.time_ms, lane=l_key, duration_ms=pgn.duration_ms, difficulty=pgn.difficulty)
+                ne._pro_fret = pgn.fret
+                events.append(ne)
+            return events
+        elif self.current_track == "pro_keys":
+            pk_lanes = ["green", "red", "yellow", "blue", "orange"]
+            events = []
+            for pkn in self.song.pro_keys_notes:
+                l_key = pk_lanes[(pkn.pitch - 48) % 5]
+                ne = NoteEvent(time_ms=pkn.time_ms, lane=l_key, duration_ms=pkn.duration_ms, difficulty=pkn.difficulty)
+                ne._pro_pitch = pkn.pitch
+                events.append(ne)
+            return events
         elif self.current_track == "vocals":
             v_events = []
             for vn in self.song.vocal_notes:
@@ -133,7 +176,7 @@ class MiniReaperCanvas(tk.Frame):
                     lane = "vocal_high"
                 elif vn.pitch <= 62:
                     lane = "vocal_low"
-                if vn.is_phrase_marker:
+                if getattr(vn, "is_phrase_end", False) or getattr(vn, "is_overdrive", False):
                     lane = "overdrive"
                 v_events.append(NoteEvent(time_ms=vn.time_ms, lane=lane, duration_ms=vn.duration_ms, difficulty="Expert"))
             return v_events
@@ -230,6 +273,14 @@ class MiniReaperCanvas(tk.Frame):
                 width=1,
                 tags=("chart_note", tag_id)
             )
+            if hasattr(note, "_pro_fret"):
+                self.canvas.create_text(
+                    x_start + 8, (y_top + y_bot) / 2,
+                    text=str(note._pro_fret),
+                    fill="#0F172A",
+                    font=("Segoe UI", 8, "bold"),
+                    tags=("chart_note", tag_id)
+                )
 
         # 3.1 Se for trilha vocal, desenha o texto da letra sincronizada
         if self.current_track == "vocals":
@@ -287,6 +338,42 @@ class MiniReaperCanvas(tk.Frame):
             snapped_sec = round(time_sec / snap_step) * snap_step
             time_ms = max(0, int(snapped_sec * 1000))
 
+            if self.current_track in ["pro_guitar", "pro_bass"]:
+                from src.creator.chart_model import ProGuitarNote
+                src_list = self.song.pro_bass_notes if self.current_track == "pro_bass" else self.song.pro_guitar_notes
+                str_idx = max(0, min(5, lane_idx))
+                for pgn in list(src_list):
+                    if pgn.string_idx == str_idx and pgn.difficulty == self.current_difficulty and abs(pgn.time_ms - time_ms) < 40:
+                        src_list.remove(pgn)
+                        self.redraw()
+                        if self.on_change:
+                            self.on_change()
+                        return
+                src_list.append(ProGuitarNote(time_ms=time_ms, string_idx=str_idx, fret=3, duration_ms=self.default_sustain_ms, difficulty=self.current_difficulty))
+                src_list.sort(key=lambda n: n.time_ms)
+                self.redraw()
+                if self.on_change:
+                    self.on_change()
+                return
+
+            if self.current_track == "pro_keys":
+                from src.creator.chart_model import ProKeysNote
+                pitch_map = {0: 48, 1: 52, 2: 55, 3: 60, 4: 64}
+                pk_pitch = pitch_map.get(lane_idx, 60)
+                for pkn in list(self.song.pro_keys_notes):
+                    if (pkn.pitch - 48) % 5 == (pk_pitch - 48) % 5 and pkn.difficulty == self.current_difficulty and abs(pkn.time_ms - time_ms) < 40:
+                        self.song.pro_keys_notes.remove(pkn)
+                        self.redraw()
+                        if self.on_change:
+                            self.on_change()
+                        return
+                self.song.pro_keys_notes.append(ProKeysNote(time_ms=time_ms, pitch=pk_pitch, duration_ms=self.default_sustain_ms, difficulty=self.current_difficulty))
+                self.song.pro_keys_notes.sort(key=lambda n: n.time_ms)
+                self.redraw()
+                if self.on_change:
+                    self.on_change()
+                return
+
             # Verifica se já existe uma nota muito perto nessa mesma pista para evitar duplicatas
             notes = self._get_notes()
             for n in list(notes):
@@ -337,6 +424,30 @@ class MiniReaperCanvas(tk.Frame):
         if 0 <= lane_idx < len(lanes):
             lane_key = lanes[lane_idx][0]
             click_ms = (x / self.pixels_per_second) * 1000.0
+
+            if self.current_track in ["pro_guitar", "pro_bass"]:
+                src_list = self.song.pro_bass_notes if self.current_track == "pro_bass" else self.song.pro_guitar_notes
+                str_idx = max(0, min(5, lane_idx))
+                for pgn in list(src_list):
+                    if pgn.string_idx == str_idx and pgn.difficulty == self.current_difficulty:
+                        if pgn.time_ms - 50 <= click_ms <= pgn.time_ms + max(160, pgn.duration_ms) + 50:
+                            src_list.remove(pgn)
+                            self.redraw()
+                            if self.on_change:
+                                self.on_change()
+                            break
+                return
+
+            if self.current_track == "pro_keys":
+                for pkn in list(self.song.pro_keys_notes):
+                    if pkn.difficulty == self.current_difficulty:
+                        if pkn.time_ms - 50 <= click_ms <= pkn.time_ms + max(160, pkn.duration_ms) + 50:
+                            self.song.pro_keys_notes.remove(pkn)
+                            self.redraw()
+                            if self.on_change:
+                                self.on_change()
+                            break
+                return
 
             if self.current_track == "vocals":
                 to_remove_v = None
