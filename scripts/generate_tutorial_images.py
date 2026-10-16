@@ -645,29 +645,26 @@ def generate_07_exportacao_jogos(output_path):
     
     platforms = [
         ("PlayStation 3 (Pacote PKG / RPCS3)",
-         "Gera o arquivo instalavel .PKG e pasta NPEB... pronta.\n"
-         "Basta colocar na raiz do pendrive FAT32 e instalar no PS3 (CFW/HEN)\n"
-         "ou arrastar direto para dentro do emulador RPCS3 no PC!",
+         "Gera o arquivo .PKG e pasta NPEB... pronta para pendrive FAT32 no PS3 ou RPCS3.",
          CYAN_ACCENT, True),
-        ("Clone Hero / YARG (Pasta de Musica)",
-         "Gera a pasta pronta contendo notes.chart, song.ini e audio.\n"
-         "Basta copiar ou mover para a pasta 'Songs' do seu Clone Hero\n"
-         "e clicar em 'Scan Songs' no jogo para tocar imediatamente!",
+        ("Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)",
+         "Gera a estrutura Content/45410914/ pronta para pendrive (Horizon/FATX) e pasta songs.",
          GREEN_ACCENT, False),
-        ("Rock Band 3 (Formato CON / Xbox 360)",
-         "Gera a estrutura oficial com songs.dta multitrack, MIDI e audio.\n"
-         "Compativel com pendrive de Xbox 360 e emulador Xenia\n"
-         "ou para bibliotecas personalizadas de Rock Band 3.",
+        ("PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)",
+         "Gera arquivos para RB4 (CUSA02084), project.gp4 para orbis-pub-gen e suporte a YARG.",
+         PURPLE_ACCENT, False),
+        ("Clone Hero / YARG (Pasta de Musica PC/Mac)",
+         "Gera pasta pronta com notes.chart, song.ini e audio. Basta colar na pasta 'Songs'!",
          AMBER_ACCENT, False)
     ]
     
     for i, (title, desc, color, selected) in enumerate(platforms):
-        py = wy + 110 + i * 135
+        py = wy + 105 + i * 102
         pw = ww - 60
-        ph = 120
+        ph = 92
         draw.rounded_rectangle([(wx + 30, py), (wx + 30 + pw, py + ph)], radius=10, fill=BG_DARK, outline=color, width=2 if selected else 1)
         
-        rx, ry = wx + 55, py + 25
+        rx, ry = wx + 55, py + 22
         draw.ellipse([(rx - 10, ry - 10), (rx + 10, ry + 10)], outline=color, width=2)
         if selected:
             draw.ellipse([(rx - 5, ry - 5), (rx + 5, ry + 5)], fill=color)
@@ -675,7 +672,7 @@ def generate_07_exportacao_jogos(output_path):
         draw.text((rx + 20, ry - 10), title, font=FONT_BOLD, fill=TEXT_WHITE)
         
         for l_idx, line in enumerate(desc.split("\n")):
-            draw.text((rx + 20, ry + 18 + l_idx * 18), line, font=FONT_SMALL, fill=TEXT_MUTED)
+            draw.text((rx + 20, ry + 16 + l_idx * 16), line, font=FONT_SMALL, fill=TEXT_MUTED)
             
     # Seletor de Pasta de Saída
     draw.rounded_rectangle([(wx + 30, wy + 525), (wx + ww - 30, wy + 565)], radius=6, fill=BG_DARK, outline=BORDER_COLOR)

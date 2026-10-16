@@ -22,7 +22,9 @@ from src.creator.chart_importer import import_song_from_folder
 from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
 from src.creator.ps3_pkg_exporter import export_ps3_pkg_structure
-from src.creator.auto_charter import auto_generate_chart
+from src.creator.xbox360_exporter import export_xbox360_structure
+from src.creator.ps4_exporter import export_ps4_structure
+from src.creator.auto_charter import auto_generate_chart, generate_missing_instruments_only, recalculate_track_difficulties
 from src.creator.pack_compiler import scan_folder_for_songs, compile_ps3_song_pack, compile_clone_hero_pack
 from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
@@ -156,7 +158,31 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             text_color="#94A3B8",
             justify="center"
         )
-        self.info_label.pack(expand=True, pady=20)
+        self.info_label.pack(expand=True, pady=12)
+
+        # Botões de Ação Imediata para Músicas de Fãs Importadas
+        self.import_actions_row = ctk.CTkFrame(self.info_box, fg_color="transparent")
+        self.import_actions_row.pack(fill="x", padx=12, pady=(0, 10))
+
+        btn_edit_reaper = ctk.CTkButton(
+            self.import_actions_row,
+            text="🎛️ Abrir no Mini-REAPER para Editar",
+            fg_color="#0284C7", hover_color="#0369A1",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._go_to_reaper_tab
+        )
+        btn_edit_reaper.pack(side="left", padx=4)
+        set_tooltip(btn_edit_reaper, "Abre a música importada no editor visual para você ver, adicionar notas ou editar partes faltantes")
+
+        btn_fill_missing = ctk.CTkButton(
+            self.import_actions_row,
+            text="⚡ Completar Instrumentos Faltantes (Gerar sem apagar existentes)",
+            fg_color="#8B5CF6", hover_color="#7C3AED",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._on_generate_missing_clicked
+        )
+        btn_fill_missing.pack(side="left", padx=4)
+        set_tooltip(btn_fill_missing, "Gera automaticamente notas para os instrumentos que faltam nesta música preservando as que já foram feitas por fãs!")
 
         # Seletor de Jogo de Destino
         target_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
@@ -173,12 +199,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ).pack(side="left", padx=(0, 8))
 
         self.target_game_combo = ctk.CTkComboBox(
-            sel_game_row, width=320, height=32,
+            sel_game_row, width=350, height=32,
             values=[
                 "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
-                "🎮 Clone Hero / YARG (PC)",
+                "🎮 Clone Hero / YARG (PC / Mac / Linux)",
                 "📦 PlayStation 3 Console (CFW / HEN / PKG)",
-                "🟢 Xbox 360 (Rock Band 3 / 2 - RGH / CON)"
+                "🟢 Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)",
+                "🔵 PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)"
             ],
             command=self._on_target_game_changed
         )
@@ -187,7 +214,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(self.target_game_combo, "Selecione para qual jogo ou videogame você deseja exportar")
 
         self.btn_export_selected = ctk.CTkButton(
-            sel_game_row, text="⚡ EXPORTAR AGORA", width=220, height=34,
+            sel_game_row, text="⚡ EXPORTAR AGORA", width=200, height=34,
             fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
             command=lambda: self._on_export_to_selected_game(sync_metadata=False)
         )
@@ -211,28 +238,39 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ctk.CTkLabel(quick_row, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
         btn_convert_rb3 = ctk.CTkButton(
-            quick_row, text="🚀 RB3 (RPCS3 / Console)", width=170, height=28,
+            quick_row, text="🚀 RB3 (RPCS3)", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_convert_to_rb3
         )
-        btn_convert_rb3.pack(side="left", padx=3)
-        set_tooltip(btn_convert_rb3, "Gera pasta com songs.dta e arquivo MIDI compatível com Rock Band 3")
+        btn_convert_rb3.pack(side="left", padx=2)
 
         btn_convert_ps3 = ctk.CTkButton(
-            quick_row, text="📦 Pacote PS3 (PKG/SFO)", width=170, height=28,
+            quick_row, text="📦 PS3 (PKG)", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_ps3_pkg
         )
-        btn_convert_ps3.pack(side="left", padx=3)
-        set_tooltip(btn_convert_ps3, "Gera pacote completo com PARAM.SFO, ICON0.PNG e instalador automático do RPCS3")
+        btn_convert_ps3.pack(side="left", padx=2)
+
+        btn_convert_x360 = ctk.CTkButton(
+            quick_row, text="🟢 Xbox 360", width=120, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._on_export_xbox360
+        )
+        btn_convert_x360.pack(side="left", padx=2)
+
+        btn_convert_ps4 = ctk.CTkButton(
+            quick_row, text="🔵 PS4 (RB4)", width=120, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._on_export_ps4
+        )
+        btn_convert_ps4.pack(side="left", padx=2)
 
         btn_convert_ch = ctk.CTkButton(
-            quick_row, text="🎮 Clone Hero / YARG", width=160, height=28,
+            quick_row, text="🎮 Clone Hero", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_convert_to_clone_hero
         )
-        btn_convert_ch.pack(side="left", padx=3)
-        set_tooltip(btn_convert_ch, "Gera pasta pronta com song.ini, notes.mid e album.png para o Clone Hero")
+        btn_convert_ch.pack(side="left", padx=2)
 
     def _on_browse_import_folder(self):
         folder = filedialog.askdirectory(title="Selecione a pasta da música do Clone Hero / Rock Band")
@@ -584,6 +622,31 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         btn_lyrics.pack(side="right", padx=3)
         set_tooltip(btn_lyrics, "Cole a letra da música ou carregue arquivo .txt/.lrc para dividir em sílabas e sincronizar com a voz!")
 
+        # Linha 2 de Ferramentas: Instrumentos Faltantes e Dificuldades
+        ab_row2 = ctk.CTkFrame(auto_bar, fg_color="transparent")
+        ab_row2.pack(fill="x", padx=10, pady=(0, 4))
+
+        ctk.CTkLabel(
+            ab_row2, text="🛠️ Edição & Dificuldades:",
+            font=ctk.CTkFont(size=10, weight="bold"), text_color="#C7D2FE"
+        ).pack(side="left", padx=(0, 6))
+
+        btn_gen_missing = ctk.CTkButton(
+            ab_row2, text="⚡ Gerar APENAS Instrumentos Faltantes (Preserva Existentes)",
+            fg_color="#4F46E5", hover_color="#4338CA", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._on_generate_missing_clicked
+        )
+        btn_gen_missing.pack(side="left", padx=3)
+        set_tooltip(btn_gen_missing, "Gera apenas os instrumentos que não possuem notas, sem apagar ou modificar as trilhas já criadas por fãs!")
+
+        btn_recalc_diffs = ctk.CTkButton(
+            ab_row2, text="🎯 Recalcular Dificuldades Canônicas (Hard, Medium, Easy)",
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=11),
+            command=self._on_recalculate_diffs_clicked
+        )
+        btn_recalc_diffs.pack(side="left", padx=3)
+        set_tooltip(btn_recalc_diffs, "Recalcula Hard (5 cores com acordes), Medium (4 cores sem laranja) e Easy (3 cores sem acordes) a partir do Expert!")
+
         # Barra Interativa de Toque & Teste (Teclado PC / Instrumentos Plugados / Palheta)
         test_bar = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#334155")
         test_bar.pack(fill="x", padx=10, pady=(2, 4))
@@ -919,12 +982,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ).pack(side="left", padx=(0, 8))
 
         self.target_game_combo_tab3 = ctk.CTkComboBox(
-            sel_game_row_3, width=320, height=32,
+            sel_game_row_3, width=350, height=32,
             values=[
                 "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
-                "🎮 Clone Hero / YARG (PC)",
+                "🎮 Clone Hero / YARG (PC / Mac / Linux)",
                 "📦 PlayStation 3 Console (CFW / HEN / PKG)",
-                "🟢 Xbox 360 (Rock Band 3 / 2 - RGH / CON)"
+                "🟢 Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)",
+                "🔵 PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)"
             ],
             command=self._on_target_game_changed
         )
@@ -933,7 +997,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(self.target_game_combo_tab3, "Selecione o formato para o qual a música será compilada")
 
         self.btn_export_selected_tab3 = ctk.CTkButton(
-            sel_game_row_3, text="⚡ SALVAR E EXPORTAR PARA O JOGO", width=280, height=36,
+            sel_game_row_3, text="⚡ SALVAR E EXPORTAR PARA O JOGO", width=260, height=36,
             fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
             command=lambda: self._on_export_to_selected_game(sync_metadata=True)
         )
@@ -956,25 +1020,39 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ctk.CTkLabel(quick_row_3, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
         btn_save_rb3 = ctk.CTkButton(
-            quick_row_3, text="🚀 RB3 (RPCS3 / Console)", width=170, height=28,
+            quick_row_3, text="🚀 RB3 (RPCS3)", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_rb3
         )
-        btn_save_rb3.pack(side="left", padx=3)
+        btn_save_rb3.pack(side="left", padx=2)
 
         btn_save_ps3 = ctk.CTkButton(
-            quick_row_3, text="📦 Pacote PS3 (PKG/SFO)", width=170, height=28,
+            quick_row_3, text="📦 PS3 (PKG)", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ps3
         )
-        btn_save_ps3.pack(side="left", padx=3)
+        btn_save_ps3.pack(side="left", padx=2)
+
+        btn_save_x360 = ctk.CTkButton(
+            quick_row_3, text="🟢 Xbox 360", width=120, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._save_from_editor_xbox360
+        )
+        btn_save_x360.pack(side="left", padx=2)
+
+        btn_save_ps4 = ctk.CTkButton(
+            quick_row_3, text="🔵 PS4 (RB4)", width=120, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._save_from_editor_ps4
+        )
+        btn_save_ps4.pack(side="left", padx=2)
 
         btn_save_ch = ctk.CTkButton(
-            quick_row_3, text="🎮 Clone Hero / YARG", width=160, height=28,
+            quick_row_3, text="🎮 Clone Hero", width=120, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ch
         )
-        btn_save_ch.pack(side="left", padx=3)
+        btn_save_ch.pack(side="left", padx=2)
 
     def _on_browse_album_art(self):
         f = filedialog.askopenfilename(
@@ -1627,6 +1705,38 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         pkg_dir = export_clone_hero_song(self.song, out_dir)
         messagebox.showinfo("Sucesso Clone Hero!", f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!")
 
+    def _on_export_xbox360(self):
+        if not self.song.title:
+            messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
+            return
+        out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote Xbox 360 (Rock Band 3)")
+        if not out_dir:
+            return
+        pkg_dir = export_xbox360_structure(self.song, out_dir)
+        messagebox.showinfo(
+            "Sucesso Xbox 360!",
+            f"Pacote para Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
+            f"• Pasta 'Content/0000000000000000/45410914/' pronta para pendrive (Horizon/FATXplorer) ou RGH/JTAG!\n"
+            f"• Pasta 'songs/' pronta para Aurora, Freestyle ou emulador Xenia no PC.\n"
+            f"• Veja o arquivo 'COMO_INSTALAR_NO_XBOX360.txt' dentro da pasta!"
+        )
+
+    def _on_export_ps4(self):
+        if not self.song.title:
+            messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
+            return
+        out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote PlayStation 4 (Rock Band 4)")
+        if not out_dir:
+            return
+        pkg_dir = export_ps4_structure(self.song, out_dir)
+        messagebox.showinfo(
+            "Sucesso PlayStation 4!",
+            f"Pacote para PlayStation 4 (Rock Band 4) gerado com sucesso em:\n{pkg_dir}\n\n"
+            f"• Arquivos DTA, MIDI e Áudio prontos para /user/appmeta/CUSA02084/ ou YARG no PS4 (GoldHEN/HEN)!\n"
+            f"• Arquivo 'project.gp4' pronto para compilar em .pkg pelo orbis-pub-gen (FPKG)!\n"
+            f"• Veja o arquivo 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta!"
+        )
+
     def _save_from_editor_rb3(self):
         self._sync_fields_to_song()
         self._on_convert_to_rb3()
@@ -1635,9 +1745,62 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self._sync_fields_to_song()
         self._on_export_ps3_pkg()
 
+    def _save_from_editor_x360(self):
+        self._sync_fields_to_song()
+        self._on_export_xbox360()
+
+    def _save_from_editor_xbox360(self):
+        self._sync_fields_to_song()
+        self._on_export_xbox360()
+
+    def _save_from_editor_ps4(self):
+        self._sync_fields_to_song()
+        self._on_export_ps4()
+
     def _save_from_editor_ch(self):
         self._sync_fields_to_song()
         self._on_convert_to_clone_hero()
+
+    def _go_to_reaper_tab(self):
+        """Alterna diretamente para a aba do Mini-REAPER para editar notas."""
+        self.tabview.set("🎛️ Editor Visual de Notas (Mini-REAPER)")
+
+    def _on_generate_missing_clicked(self):
+        """Gera automaticamente apenas os instrumentos que não possuem notas, preservando as trilhas de fãs já existentes."""
+        intensity = self.intensity_combo.get() if hasattr(self, "intensity_combo") else "⚡ Rock Enérgico"
+        missing = generate_missing_instruments_only(self.song, intensity=intensity, generate_all_diffs=True)
+        self.timeline.redraw()
+        self._update_note_counter()
+        self._sync_song_to_fields()
+
+        if missing:
+            names_map = {"guitar": "Guitarra", "bass": "Baixo", "drum": "Bateria", "keys": "Teclado", "vocals": "Vocais"}
+            pt_names = [names_map.get(m, m) for m in missing]
+            messagebox.showinfo(
+                "Instrumentos Faltantes Gerados!",
+                f"✨ Os seguintes instrumentos estavam vazios e foram gerados com sucesso:\n\n"
+                f"• {', '.join(pt_names)}\n\n"
+                f"Todas as suas trilhas já existentes foram 100% PRESERVADAS sem nenhuma alteração!"
+            )
+        else:
+            messagebox.showinfo(
+                "Tudo Completo!",
+                "Todos os instrumentos (Guitarra, Baixo, Bateria, Teclado e Vocais) já possuem notas cadastradas!\nNenhum instrumento estava faltando nesta música."
+            )
+
+    def _on_recalculate_diffs_clicked(self):
+        """Recalcula Hard, Medium e Easy a partir do Expert seguindo as regras canônicas de dificuldade."""
+        recalculate_track_difficulties(self.song)
+        self.timeline.redraw()
+        self._update_note_counter()
+        messagebox.showinfo(
+            "Dificuldades Recalculadas!",
+            "🎯 As dificuldades foram geradas no padrão canônico oficial:\n\n"
+            "• Hard: Todas as 5 cores (Verde, Vermelha, Amarela, Azul, Laranja), acordes duplos e ritmo mais rápido.\n"
+            "• Medium: 4 cores (Verde, Vermelha, Amarela, Azul), sem laranja, ritmo moderado.\n"
+            "• Easy: Apenas 3 cores (Verde, Vermelha, Amarela), quase nenhum azul, estritamente notas individuais (sem acordes).\n\n"
+            "Alterne a dificuldade no seletor do Mini-REAPER para conferir!"
+        )
 
     def _on_target_game_changed(self, choice):
         """Sincroniza os seletores de jogo entre as abas e atualiza a explicação na tela."""
@@ -1656,7 +1819,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         elif "PlayStation 3" in choice:
             desc = "📦 PS3 Real (CFW / HEN): Gera pacote DLC com 'PARAM.SFO' (BLUS30463), 'ICON0.PNG' e 'USRDIR/songs/' para pendrive ou FTP!"
         elif "Xbox 360" in choice:
-            desc = "🟢 Xbox 360: Gera 'songs/songs.dta' e trilha MIDI RBN compatível com RGH/JTAG ou para compilar em CON com C3 Tools / Le Fluffie."
+            desc = "🟢 Xbox 360: Gera estrutura 'Content/0000000000000000/45410914/' pronta para pendrive (Horizon/FATX) e pasta 'songs/' para RGH/JTAG/Xenia!"
+        elif "PlayStation 4" in choice or "PS4" in choice:
+            desc = "🔵 PlayStation 4: Gera arquivos para Rock Band 4 (CUSA02084), 'project.gp4' para orbis-pub-gen (FPKG) e suporte a PS4 HEN / YARG!"
         else:
             desc = ""
 
@@ -1676,7 +1841,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         elif "PlayStation 3" in choice or "RPCS3" in choice:
             self._on_export_ps3_pkg()
         elif "Xbox 360" in choice:
-            self._on_convert_to_rb3()
+            self._on_export_xbox360()
+        elif "PlayStation 4" in choice or "PS4" in choice:
+            self._on_export_ps4()
         else:
             self._on_convert_to_rb3()
 

@@ -122,15 +122,61 @@ Escolha a plataforma de destino e gere o pacote final sem depender de nenhuma fe
    * Gera o arquivo `.pkg` instalável e a pasta `NPEB...`.
    * **Como instalar no PS3 Real:** Copie o arquivo `.pkg` para a raiz de um pendrive formatado em FAT32. Conecte no PS3 (com CFW ou HEN ativado), vá no menu *Package Manager -> Standard* e instale com 1 clique!
    * **Como jogar no RPCS3 (Emulador de PC):** Arraste o arquivo `.pkg` para a janela do emulador e confirme a instalação.
-2. **🎸 Clone Hero / YARG (Pasta de Música)**:
+2. **🟢 Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)**:
+   * Gera a estrutura oficial `Content/0000000000000000/45410914/00000002/` e pasta `songs/`.
+   * **Como usar no Xbox 360 (RGH/JTAG):** Basta copiar a pasta gerada para o HD interno ou externo (via Aurora ou Freestyle Dash).
+   * **Como usar via Pendrive (Console Bloqueado/FATX):** Injete a pasta no pendrive usando o Horizon ou FATXplorer.
+   * **Como jogar no emulador Xenia (PC):** Copie para `xenia/content/45410914/00000002/`.
+3. **🔵 PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)**:
+   * Gera a estrutura com `songs.dta`, `{shortname}.mid`, áudio e o arquivo de compilação `project.gp4` para o *orbis-pub-gen*.
+   * Compatível com consoles PlayStation 4 desbloqueados (GoldHEN 5.05 a 11.00) e compatível com YARG.
+4. **🎸 Clone Hero / YARG (Pasta de Música PC/Mac)**:
    * Gera a pasta com `notes.chart` (ou `notes.mid`), `song.ini` e o arquivo de áudio.
    * Copie a pasta para o diretório `Songs` do Clone Hero e clique em *Settings -> Scan Songs* dentro do jogo.
-3. **💿 Rock Band 3 (Formato CON / Xbox 360)**:
-   * Gera a estrutura de arquivos oficial com `songs.dta`, MIDI multitrack e áudio. Compatível com consoles Xbox 360 e emulador Xenia.
 
 ---
 
-## 🎸 8. Modo Performance ao Vivo e Teste com Guitarra ou Teclado
+## 🛠️ 8. Como Editar Músicas de Fãs e Gerar Apenas Instrumentos Faltantes
+
+Baixou uma música criada por outro fã do *Chorus Encore*, *C3 Universe* ou *RhythmVerse* que só tinha Guitarra e Baixo, mas não tinha Bateria, Teclado ou Vocais?
+
+```mermaid
+flowchart TD
+    A["Importar Pasta da Música de Fã (Aba 1)"] --> B["Verificação Automática: Guitarra (OK), Bateria (FALTANDO)"]
+    B --> C["Opção 1: 'Abrir no Mini-REAPER para Editar'"]
+    B --> D["Opção 2: 'Completar Instrumentos Faltantes'"]
+    C --> E["Edite notas, adicione notas com botão esquerdo ou apague com direito"]
+    D --> F["O MidGuitar gera Bateria, Teclado ou Vocal preservando 100% a Guitarra original!"]
+```
+
+### 📌 Como usar:
+1. **Na Aba 1 (Importar)**: Ao carregar a pasta da música, o MidGuitar mostra o diagnóstico exato:
+   * `🎸 Guitarra: 540 notas mapeadas (Presente)`
+   * `🎸 Baixo: 420 notas mapeadas (Presente)`
+   * `🥁 Bateria: 0 notas (Faltando)`
+   * `🎹 Teclado: 0 notas (Faltando)`
+   * `🎤 Vocais: 0 notas (Faltando)`
+2. **Clique em `[⚡ Completar Instrumentos Faltantes]`**: O algoritmo detecta o que está vazio e cria apenas as notas dos instrumentos que faltavam, **sem apagar nem alterar nenhuma nota da Guitarra ou do Baixo que o fã já tinha feito!**
+3. **Clique em `[🎛️ Abrir no Mini-REAPER para Editar]`**: Você pode navegar pela linha do tempo, ouvir com a música e alterar qualquer nota, adicionar solos ou corrigir ritmos.
+
+---
+
+## 🎯 9. As 4 Dificuldades Canônicas do Rock Band / Guitar Hero
+
+O MidGuitar respeita rigorosamente a física e as regras musicais de cada dificuldade:
+
+| Nível de Dificuldade | Cores / Casas Utilizadas | Ritmo e Acordes | Descrição Oficial |
+| :--- | :--- | :--- | :--- |
+| **🟢 Fácil (Easy)** | **Apenas 3 cores:** Verde, Vermelha e Amarela. Quase nenhum azul, **zero laranja**. | **NUNCA acordes!** Estritamente notas individuais nos tempos fortes (semínimas/mínimas). | Ritmo calmo e espaçado (mínimo 380ms) para quem está aprendendo a segurar o instrumento. |
+| **🟡 Médio (Medium)** | **4 cores:** Verde, Vermelha, Amarela e Azul. **Sem laranja** (transposta para azul). | Acordes duplos simples apenas nos tempos fortes. Ritmo moderado. | Não exige alcançar a casa laranja (dedinho mindinho), permitindo um jogo dinâmico. |
+| **🟠 Difícil (Hard)** | **Todas as 5 cores:** Verde, Vermelha, Amarela, Azul e Laranja. | Acordes duplos em várias posições. Solos rápidos simplificados para colcheias (8 avos). | O Hard traz toda a emoção e todas as 5 cores, com velocidade desafiadora mas acessível. |
+| **🔴 Expert (Muito Difícil)** | **Todas as 5 cores** com HOPOs completos, solos em semicolcheias (16 avos) e acordes triplos. | Transcrição musical completa de 100% das notas da música. | O desafio máximo para mestres da guitarra e bateria. |
+
+> **Dica:** Na Aba 3 (ou Mini-REAPER), basta clicar em **`[🎯 Recalcular Dificuldades Canônicas]`** para gerar Hard, Medium e Easy a partir do Expert a qualquer momento!
+
+---
+
+## 🎸 10. Modo Performance ao Vivo e Teste com Guitarra ou Teclado
 
 Depois de criar a música (ou a qualquer momento), você pode tocar ao vivo usando seu teclado de computador ou conectando instrumentos USB reais!
 

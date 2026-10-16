@@ -34,10 +34,12 @@ def auto_generate_chart(
     total_duration_ms: int = 180000,
     selected_instruments: List[str] = None,
     intensity: str = "Rock",
-    generate_all_diffs: bool = True
+    generate_all_diffs: bool = True,
+    clear_existing: bool = True
 ) -> ChartSong:
     """
     Gera automaticamente notas completas, rítmicas e musicais sincronizadas com o BPM.
+    Se clear_existing for False, preserva as trilhas que já possuem notas!
     """
     if song.audio_path:
         detected_dur = get_audio_duration_ms(song.audio_path)
@@ -53,86 +55,89 @@ def auto_generate_chart(
     eighth_ms = beat_ms / 2.0                # Tempo de 1 colcheia
     total_measures = int(total_duration_ms / measure_ms)
 
-    # 1. Limpa trilhas que serão geradas
+    # 1. Limpa trilhas que serão geradas (apenas se clear_existing for True)
     for inst in selected_instruments:
-        song.clear_track(inst)
-    song.events.clear()
+        if clear_existing:
+            song.clear_track(inst)
+    if clear_existing or not song.events:
+        song.events.clear()
+        # 2. Gera Seções Musicais (EVENTS)
+        song.events.append(TextEvent(time_ms=0, text="[music_start]"))
+        m_intro = min(4, total_measures // 8)
+        m_verse1 = m_intro + min(8, total_measures // 5)
+        m_chorus1 = m_verse1 + min(8, total_measures // 5)
+        m_verse2 = m_chorus1 + min(8, total_measures // 5)
+        m_solo = m_verse2 + min(6, total_measures // 6)
+        m_chorus2 = m_solo + min(8, total_measures // 5)
 
-    # 2. Gera Seções Musicais (EVENTS)
-    song.events.append(TextEvent(time_ms=0, text="[music_start]"))
-    m_intro = min(4, total_measures // 8)
-    m_verse1 = m_intro + min(8, total_measures // 5)
-    m_chorus1 = m_verse1 + min(8, total_measures // 5)
-    m_verse2 = m_chorus1 + min(8, total_measures // 5)
-    m_solo = m_verse2 + min(6, total_measures // 6)
-    m_chorus2 = m_solo + min(8, total_measures // 5)
-
-    song.events.append(TextEvent(time_ms=int(m_intro * measure_ms), text="[section intro]"))
-    song.events.append(TextEvent(time_ms=int(m_verse1 * measure_ms), text="[section verse1]"))
-    song.events.append(TextEvent(time_ms=int(m_chorus1 * measure_ms), text="[section chorus1]"))
-    song.events.append(TextEvent(time_ms=int(m_verse2 * measure_ms), text="[section verse2]"))
-    song.events.append(TextEvent(time_ms=int(m_solo * measure_ms), text="[section solo]"))
-    song.events.append(TextEvent(time_ms=int(m_chorus2 * measure_ms), text="[section chorus2]"))
-    song.events.append(TextEvent(time_ms=max(0, total_duration_ms - 4000), text="[section outro]"))
+        song.events.append(TextEvent(time_ms=int(m_intro * measure_ms), text="[section intro]"))
+        song.events.append(TextEvent(time_ms=int(m_verse1 * measure_ms), text="[section verse1]"))
+        song.events.append(TextEvent(time_ms=int(m_chorus1 * measure_ms), text="[section chorus1]"))
+        song.events.append(TextEvent(time_ms=int(m_verse2 * measure_ms), text="[section verse2]"))
+        song.events.append(TextEvent(time_ms=int(m_solo * measure_ms), text="[section solo]"))
+        song.events.append(TextEvent(time_ms=int(m_chorus2 * measure_ms), text="[section chorus2]"))
+        song.events.append(TextEvent(time_ms=max(0, total_duration_ms - 4000), text="[section outro]"))
+    else:
+        m_intro = min(4, total_measures // 8)
+        m_verse1 = m_intro + min(8, total_measures // 5)
+        m_chorus1 = m_verse1 + min(8, total_measures // 5)
+        m_verse2 = m_chorus1 + min(8, total_measures // 5)
+        m_solo = m_verse2 + min(6, total_measures // 6)
+        m_chorus2 = m_solo + min(8, total_measures // 5)
 
     # Progressões de Acordes Simbolizadas (0=Verde, 1=Vermelho, 2=Amarelo, 3=Azul, 4=Laranja)
     chord_progression = [0, 2, 3, 1] # I - V - vi - IV clássico do Rock/Pop
     lanes_5 = ["green", "red", "yellow", "blue", "orange"]
 
     # 3. GERAR BATERIA
-    if "drum" in selected_instruments:
+    if "drum" in selected_instruments and (clear_existing or not song.drum_notes):
+        song.clear_track("drum")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
             is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
             is_solo = (m >= m_solo and m < m_chorus2)
-            is_fill_measure = (m % 8 == 7) # Virada no final de frases de 8 compassos
+            is_fill_measure = (m % 8 == 7)
 
-            # Prato Crash no início de compassos de refrão ou início de estrofe
             if m % 4 == 0 or is_chorus and m % 2 == 0:
                 song.add_note("drum", NoteEvent(time_ms=m_start, lane="green", duration_ms=160, difficulty="Expert"))
 
             if is_fill_measure:
-                # Virada de bateria emocionante (Fill nos tempos 3 e 4)
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="red", duration_ms=120, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 2.5 * beat_ms), lane="yellow", duration_ms=120, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 3 * beat_ms), lane="blue", duration_ms=120, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 3.5 * beat_ms), lane="red", duration_ms=120, difficulty="Expert"))
             else:
-                # Ritmo base: Bumbo no tempo 1 e 3
                 song.add_note("drum", NoteEvent(time_ms=m_start, lane="orange", duration_ms=160, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="orange", duration_ms=160, difficulty="Expert"))
 
-                # Caixa no tempo 2 e 4
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 1 * beat_ms), lane="red", duration_ms=160, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 3 * beat_ms), lane="red", duration_ms=160, difficulty="Expert"))
 
-                # Chimbal (yellow) ou Prato Condução (blue no refrão) em colcheias
                 cymbal_lane = "blue" if is_chorus else "yellow"
                 for b8 in range(8):
                     t8 = int(m_start + b8 * eighth_ms)
                     song.add_note("drum", NoteEvent(time_ms=t8, lane=cymbal_lane, duration_ms=120, difficulty="Expert"))
 
-                # Overdrive a cada 16 compassos
                 if m % 16 == 8:
                     od_note = NoteEvent(time_ms=m_start, lane="overdrive", duration_ms=int(2 * measure_ms), difficulty="Expert", is_overdrive=True)
                     song.add_note("drum", od_note)
 
     # 4. GERAR BAIXO
-    if "bass" in selected_instruments:
+    if "bass" in selected_instruments and (clear_existing or not song.bass_notes):
+        song.clear_track("bass")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
             root_idx = chord_progression[m % len(chord_progression)]
             root_lane = lanes_5[root_idx]
 
-            # Pulso contínuo de colcheias ou semínimas no baixo
             for b in range(4):
                 t_beat = int(m_start + b * beat_ms)
-                # Variação sutil na 4ª batida
                 active_lane = root_lane if b < 3 else lanes_5[(root_idx + 1) % len(lanes_5)]
                 song.add_note("bass", NoteEvent(time_ms=t_beat, lane=active_lane, duration_ms=int(beat_ms * 0.75), difficulty="Expert"))
 
     # 5. GERAR GUITARRA (5 CASAS)
-    if "guitar" in selected_instruments:
+    if "guitar" in selected_instruments and (clear_existing or not song.guitar_notes):
+        song.clear_track("guitar")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
             root_idx = chord_progression[m % len(chord_progression)]
@@ -140,10 +145,8 @@ def auto_generate_chart(
             is_solo = (m >= m_solo and m < m_chorus2)
 
             if is_solo:
-                # Solo de guitarra épico com notas rápidas (semicolcheias / arpeggios e sustains)
                 solo_marker = NoteEvent(time_ms=m_start, lane="solo", duration_ms=int(measure_ms), difficulty="Expert")
                 song.add_note("guitar", solo_marker)
-                # 8 notas por compasso com alternância melódica
                 for s in range(8):
                     t_solo = int(m_start + s * eighth_ms)
                     note_lane = lanes_5[(s * 2 + root_idx) % 5]
@@ -151,7 +154,6 @@ def auto_generate_chart(
                     dur = int(eighth_ms * 0.9) if s != 7 else int(beat_ms * 1.5)
                     song.add_note("guitar", NoteEvent(time_ms=t_solo, lane=note_lane, duration_ms=dur, difficulty="Expert", is_hopo=is_hopo))
             elif is_chorus:
-                # Acordes duplos cheios de energia no refrão (Power Chords)
                 lane_1 = lanes_5[root_idx]
                 lane_2 = lanes_5[(root_idx + 1) % 5]
                 for b in range(4):
@@ -160,30 +162,28 @@ def auto_generate_chart(
                     song.add_note("guitar", NoteEvent(time_ms=t_beat, lane=lane_1, duration_ms=dur, difficulty="Expert"))
                     song.add_note("guitar", NoteEvent(time_ms=t_beat, lane=lane_2, duration_ms=dur, difficulty="Expert"))
             else:
-                # Versos / Introdução: Ritmo sincopado agradável
                 lane_1 = lanes_5[root_idx]
                 for b in [0, 1.5, 2.5, 3]:
                     t_note = int(m_start + b * beat_ms)
                     song.add_note("guitar", NoteEvent(time_ms=t_note, lane=lane_1, duration_ms=int(beat_ms * 0.7), difficulty="Expert"))
 
-            # Frase de Overdrive na guitarra a cada 16 compassos
             if m % 16 == 4:
                 song.add_note("guitar", NoteEvent(time_ms=m_start, lane="overdrive", duration_ms=int(2 * measure_ms), difficulty="Expert", is_overdrive=True))
 
     # 6. GERAR TECLADO (KEYS)
-    if "keys" in selected_instruments:
+    if "keys" in selected_instruments and (clear_existing or not song.keys_notes):
+        song.clear_track("keys")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
             root_idx = chord_progression[m % len(chord_progression)]
-            # Teclado sustenta acordes longos de acompanhamento (Pads harmônicos)
             k_lane1 = lanes_5[(root_idx + 2) % 5]
             k_lane2 = lanes_5[(root_idx + 4) % 5]
             dur = int(measure_ms * 0.95)
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane1, duration_ms=dur, difficulty="Expert"))
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane2, duration_ms=dur, difficulty="Expert"))
 
-    # 7. GERAR VOCAIS (PART VOCALS com Pitch, Frases, Letras e Overdrive)
-    if "vocals" in selected_instruments:
+    # 7. GERAR VOCAIS (PART VOCALS)
+    if "vocals" in selected_instruments and (clear_existing or not song.vocal_notes):
         song.vocal_notes.clear()
         vocal_scale = [60, 62, 64, 65, 67, 69, 72]
         sample_lyrics = ["Yeah", "Come", "on", "feel", "the", "sound", "to-", "night", "sing", "out", "loud", "let's", "go!"]
@@ -196,7 +196,6 @@ def auto_generate_chart(
                 sample_lyrics = parsed_syls
 
         for m in range(total_measures):
-            # Dá pausa na introdução e no solo de guitarra
             is_intro = (m < m_intro)
             is_solo = (m >= m_solo and m < m_chorus2)
             if is_intro or is_solo:
@@ -213,7 +212,7 @@ def auto_generate_chart(
                 t_vocal = int(m_start + b * beat_ms)
                 pitch = vocal_scale[(root_idx + b) % len(vocal_scale)]
                 if is_chorus:
-                    pitch += 12 # Uma oitava acima no refrão
+                    pitch += 12
 
                 lyr = sample_lyrics[(m * 4 + b) % len(sample_lyrics)]
                 last_in_phrase = is_phrase_end and (b == 3)
@@ -233,26 +232,173 @@ def auto_generate_chart(
 
     return song
 
+
 def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
-    """Gera automaticamente as versões Hard, Medium e Easy a partir do Expert."""
+    """
+    Gera as versões Hard, Medium e Easy a partir do Expert conforme os padrões canônicos
+    oficiais de Rock Band e Guitar Hero:
+    - Hard: Todas as 5 pistas (Verde, Vermelha, Amarela, Azul, Laranja). Mantém acordes duplos.
+            Reduz ritmos de 16 avos (solos muito rápidos) para colcheias (8 avos).
+    - Medium: 4 pistas principais (Verde, Vermelha, Amarela, Azul). Quase NENHUMA Laranja
+              (notas laranjas são transpostas para azul). Apenas acordes simples nos tempos fortes.
+    - Easy: 3 pistas principais (Verde, Vermelha, Amarela). Quase NENHUM azul (apenas Verde, Vermelho, Amarelo).
+            ESTRITAMENTE NOTAS INDIVIDUAIS (sem nenhum acorde). Ritmo lento e espaçado (mínimo 350ms).
+    """
+    lanes_order = ["green", "red", "yellow", "blue", "orange"]
+
     for inst in instruments:
-        expert_notes = [n for n in getattr(song, f"{inst}_notes", []) if n.difficulty == "Expert" and n.lane not in ["overdrive", "solo"]]
+        if inst == "vocals":
+            continue
 
-        # Hard: ~70% das notas (elimina subdivisões muito rápidas)
-        for i, n in enumerate(expert_notes):
-            if i % 4 != 3: # Remove 1 a cada 4 notas
-                song.add_note(inst, NoteEvent(time_ms=n.time_ms, lane=n.lane, duration_ms=n.duration_ms, difficulty="Hard", is_hopo=n.is_hopo))
+        track_notes = getattr(song, f"{inst}_notes", [])
+        # Mantém apenas as notas Expert (e marcadores especiais de solo/overdrive)
+        filtered = [n for n in track_notes if n.difficulty == "Expert" or n.lane in ["overdrive", "solo"]]
+        setattr(song, f"{inst}_notes", filtered)
 
-        # Medium: ~40% das notas (apenas tempos fortes e notas principais)
-        for i, n in enumerate(expert_notes):
-            if i % 2 == 0:
-                # Transpõe a casa laranja (5) para azul (4) para facilitar no Medium
-                med_lane = "blue" if n.lane == "orange" else n.lane
-                song.add_note(inst, NoteEvent(time_ms=n.time_ms, lane=med_lane, duration_ms=n.duration_ms, difficulty="Medium"))
+        expert_notes = [n for n in filtered if n.difficulty == "Expert" and n.lane not in ["overdrive", "solo"]]
+        if not expert_notes:
+            continue
 
-        # Easy: ~20% das notas (apenas semibreves/mínimas nas cores mais fáceis)
-        for i, n in enumerate(expert_notes):
-            if i % 4 == 0:
-                # No Easy usa apenas verde e vermelha
-                easy_lane = "green" if n.lane in ["green", "yellow", "orange"] else "red"
-                song.add_note(inst, NoteEvent(time_ms=n.time_ms, lane=easy_lane, duration_ms=max(200, n.duration_ms), difficulty="Easy"))
+        # Agrupa notas por tempo (para preservar acordes do Expert)
+        notes_by_time = {}
+        for n in expert_notes:
+            notes_by_time.setdefault(n.time_ms, []).append(n)
+
+        sorted_times = sorted(notes_by_time.keys())
+
+        # -------------------------------------------------------------
+        # 1. HARD (~75% das notas, 5 cores: G, R, Y, B, O, acordes duplos)
+        # -------------------------------------------------------------
+        last_hard_time = -1000
+        for i, t in enumerate(sorted_times):
+            simul_notes = notes_by_time[t]
+            # No Hard: elimina apenas subdivisões de 16 avos coladas (< 120ms)
+            if t - last_hard_time < 120 and (i % 2 != 0):
+                continue
+            last_hard_time = t
+
+            sorted_simul = sorted(simul_notes, key=lambda x: lanes_order.index(x.lane) if x.lane in lanes_order else 99)
+            chosen = sorted_simul[:2] if len(sorted_simul) > 2 else sorted_simul
+
+            for n in chosen:
+                song.add_note(inst, NoteEvent(
+                    time_ms=n.time_ms,
+                    lane=n.lane,
+                    duration_ms=n.duration_ms,
+                    difficulty="Hard",
+                    is_hopo=n.is_hopo
+                ))
+
+        # -------------------------------------------------------------
+        # 2. MEDIUM (~45% das notas, 4 cores: G, R, Y, B. Sem Laranja!)
+        # -------------------------------------------------------------
+        last_med_time = -1000
+        for i, t in enumerate(sorted_times):
+            if t - last_med_time < 180 or (i % 2 != 0 and (t - last_med_time < 280)):
+                continue
+            last_med_time = t
+
+            simul_notes = notes_by_time[t]
+            first_note = simul_notes[0]
+            # Transpõe laranja para azul no Medium
+            m_lane = "blue" if first_note.lane == "orange" else first_note.lane
+            song.add_note(inst, NoteEvent(
+                time_ms=first_note.time_ms,
+                lane=m_lane,
+                duration_ms=first_note.duration_ms,
+                difficulty="Medium"
+            ))
+
+            # Acorde duplo simples apenas em tempos fortes
+            if len(simul_notes) > 1 and i % 4 == 0:
+                sec_lane = "blue" if simul_notes[1].lane == "orange" else simul_notes[1].lane
+                if sec_lane != m_lane:
+                    song.add_note(inst, NoteEvent(
+                        time_ms=simul_notes[1].time_ms,
+                        lane=sec_lane,
+                        duration_ms=simul_notes[1].duration_ms,
+                        difficulty="Medium"
+                    ))
+
+        # -------------------------------------------------------------
+        # 3. EASY (~20% das notas, 3 cores: G, R, Y. NUNCA ACORDES!)
+        # -------------------------------------------------------------
+        last_easy_time = -1000
+        for i, t in enumerate(sorted_times):
+            if t - last_easy_time < 380:
+                continue
+            if i % 3 != 0:
+                continue
+            last_easy_time = t
+
+            simul_notes = notes_by_time[t]
+            primary_note = simul_notes[0]
+
+            # No Easy: apenas Verde, Vermelho e Amarelo! Quase nenhum azul, zero laranja!
+            if primary_note.lane == "orange":
+                easy_lane = "yellow"
+            elif primary_note.lane == "blue":
+                easy_lane = "yellow" if i % 2 == 0 else "red"
+            else:
+                easy_lane = primary_note.lane
+
+            song.add_note(inst, NoteEvent(
+                time_ms=primary_note.time_ms,
+                lane=easy_lane,
+                duration_ms=max(260, primary_note.duration_ms),
+                difficulty="Easy"
+            ))
+
+
+def recalculate_track_difficulties(song: ChartSong, instruments: List[str] = None):
+    """
+    Recalcula as dificuldades Hard, Medium e Easy para os instrumentos selecionados
+    mantendo intactas as notas do Expert.
+    """
+    if instruments is None:
+        instruments = ["guitar", "bass", "drum", "keys"]
+    _generate_lower_difficulties(song, instruments)
+
+
+def generate_missing_instruments_only(
+    song: ChartSong,
+    instruments: List[str] = None,
+    intensity: str = "Rock",
+    generate_all_diffs: bool = True
+) -> List[str]:
+    """
+    Gera APENAS os instrumentos que estão vazios (sem notas), preservando 100%
+    das trilhas já criadas por fãs ou pelo usuário.
+    Retorna a lista dos instrumentos que foram gerados.
+    """
+    if instruments is None:
+        instruments = ["guitar", "bass", "drum", "keys", "vocals"]
+
+    missing = []
+    for inst in instruments:
+        if inst == "vocals":
+            if not song.vocal_notes:
+                missing.append("vocals")
+        else:
+            if not getattr(song, f"{inst}_notes", []):
+                missing.append(inst)
+
+    if missing:
+        auto_generate_chart(
+            song,
+            selected_instruments=missing,
+            intensity=intensity,
+            generate_all_diffs=generate_all_diffs,
+            clear_existing=False
+        )
+
+    # Para qualquer trilha existente que só tenha Expert, recalcula Hard/Medium/Easy
+    if generate_all_diffs:
+        for inst in ["guitar", "bass", "drum", "keys"]:
+            notes = getattr(song, f"{inst}_notes", [])
+            has_lower = any(n.difficulty in ["Hard", "Medium", "Easy"] for n in notes)
+            if notes and not has_lower:
+                _generate_lower_difficulties(song, [inst])
+
+    return missing
+
