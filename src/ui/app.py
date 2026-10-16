@@ -20,6 +20,7 @@ from src.ui.monitor_view import MonitorView
 from src.ui.mapping_dialog import MappingDialog
 from src.ui.sound_manager_dialog import SoundManagerDialog
 from src.ui.batch_key_mapper_dialog import BatchKeyMapperDialog
+from src.ui.sound_browser_dialog import SoundBrowserDialog
 from src.midi.detector import (
     get_midi_input_ports, get_midi_output_ports, get_gamepad_devices,
     find_rockband_midi_input, find_default_midi_output
@@ -41,8 +42,8 @@ class MidGuitarApp(ctk.CTk):
         super().__init__()
 
         self.title("MidGuitar - Universal Rock Band & MIDI Studio")
-        self.geometry("1060x720")
-        self.minsize(920, 620)
+        self.geometry("1100x740")
+        self.minsize(860, 560)
 
         # Configura ícone da janela
         try:
@@ -156,47 +157,60 @@ class MidGuitarApp(ctk.CTk):
         ctk.CTkLabel(hdr_right, text="🔊", font=ctk.CTkFont(size=12)).pack(side="right")
 
         # -------------------------------------------------------------
-        # 2. BARRA DE CONEXÃO E SELEÇÃO DE INSTRUMENTO (COMPACTA)
+        # 2. BARRA DE CONEXÃO E SELEÇÃO DE INSTRUMENTO (RESPONSIVA)
         # -------------------------------------------------------------
         toolbar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
-        toolbar.pack(fill="x", padx=16, pady=(6, 4))
+        toolbar.pack(fill="x", padx=14, pady=(6, 4))
 
-        # Entrada USB/MIDI
-        ctk.CTkLabel(toolbar, text="🔌 Entrada:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
-        self.input_combo = ctk.CTkComboBox(toolbar, width=210, height=28, values=["Nenhum dispositivo"])
-        self.input_combo.pack(side="left", padx=2, pady=6)
+        # Linha 1 do Toolbar: Conexões USB/MIDI e Monitor
+        tb_top = ctk.CTkFrame(toolbar, fg_color="transparent")
+        tb_top.pack(fill="x", padx=8, pady=(4, 2))
+
+        ctk.CTkLabel(tb_top, text="🔌 Entrada:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(4, 4))
+        self.input_combo = ctk.CTkComboBox(tb_top, width=190, height=26, values=["Nenhum dispositivo"])
+        self.input_combo.pack(side="left", padx=2)
         set_tooltip(self.input_combo, "Escolha sua guitarra, bateria ou teclado USB/MIDI conectado")
 
-        # Botão Atualizar/Detectar
         btn_refresh = ctk.CTkButton(
-            toolbar, text="🔄", width=36, height=28,
+            tb_top, text="🔄", width=32, height=26,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(weight="bold"),
             command=self.refresh_devices
         )
-        btn_refresh.pack(side="left", padx=2, pady=6)
+        btn_refresh.pack(side="left", padx=2)
         set_tooltip(btn_refresh, "Detectar novamente instrumentos conectados ao PC")
 
-        # Botão Conectar
         self.btn_connect = ctk.CTkButton(
-            toolbar, text="Conectar", width=85, height=28,
+            tb_top, text="Conectar", width=75, height=26,
             fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.toggle_connection
         )
-        self.btn_connect.pack(side="left", padx=(2, 10), pady=6)
+        self.btn_connect.pack(side="left", padx=(2, 10))
         set_tooltip(self.btn_connect, "Conecta ou desconecta o instrumento selecionado")
 
-        # Saída de Áudio
-        ctk.CTkLabel(toolbar, text="🔊 Saída:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(4, 4), pady=6)
+        ctk.CTkLabel(tb_top, text="🔊 Saída:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(4, 4))
         self.output_combo = ctk.CTkComboBox(
-            toolbar, width=190, height=28, values=["Synth Nativo Windows (GS Wavetable)"],
+            tb_top, width=175, height=26, values=["Synth Nativo Windows (GS Wavetable)"],
             command=self._on_output_selected
         )
-        self.output_combo.pack(side="left", padx=2, pady=6)
+        self.output_combo.pack(side="left", padx=2)
         set_tooltip(self.output_combo, "Sintetizador nativo do Windows ou cabo virtual para seu DAW")
 
-        # Seletor de Instrumento
+        # Botão para Ocultar/Exibir o Monitor (Garante espaço total para a tela)
+        self.btn_toggle_monitor = ctk.CTkButton(
+            tb_top, text="📡 Monitor [ON]", width=95, height=26,
+            fg_color="#0EA5E9", hover_color="#0284C7", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self.toggle_monitor
+        )
+        self.btn_toggle_monitor.pack(side="right", padx=4)
+        set_tooltip(self.btn_toggle_monitor, "Ocultar ou exibir o monitor MIDI lateral para dar mais espaço ao instrumento")
+
+        # Linha 2 do Toolbar: Modos de Instrumento
+        tb_bottom = ctk.CTkFrame(toolbar, fg_color="transparent")
+        tb_bottom.pack(fill="x", padx=8, pady=(2, 4))
+
+        ctk.CTkLabel(tb_bottom, text="🎮 Instrumento:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#94A3B8").pack(side="left", padx=(4, 6))
         self.mode_selector = ctk.CTkSegmentedButton(
-            toolbar,
+            tb_bottom,
             values=[
                 "🎸 5 Botões",
                 "🎸 Pro (6 Cordas)",
@@ -206,7 +220,7 @@ class MidGuitarApp(ctk.CTk):
             ],
             command=self._on_mode_button_clicked
         )
-        self.mode_selector.pack(side="right", padx=10, pady=6)
+        self.mode_selector.pack(side="left", padx=2)
         self.mode_selector.set("🎸 5 Botões")
         set_tooltip(self.mode_selector, "Alterne qual instrumento você quer visualizar e tocar na tela")
 
@@ -214,20 +228,21 @@ class MidGuitarApp(ctk.CTk):
         # 3. PALCO CENTRAL (O INSTRUMENTO EM DESTAQUE)
         # -------------------------------------------------------------
         main_split = ctk.CTkFrame(self, fg_color="transparent")
-        main_split.pack(fill="both", expand=True, padx=16, pady=4)
+        main_split.pack(fill="both", expand=True, padx=14, pady=4)
 
         # Container esquerdo do instrumento
         self.instrument_container = ctk.CTkFrame(main_split, fg_color="#1E293B", corner_radius=10)
         self.instrument_container.pack(side="left", fill="both", expand=True, padx=(0, 6))
 
-        # Cria as 4 visões com suporte completo aos novos seletores de 1 clique
+        # Cria as 4 visões com suporte completo aos novos seletores e banco de sons
         self.classic_fretboard = FretboardView(
             self.instrument_container, fg_color="transparent",
             on_fret_click=self._on_classic_fret_clicked,
             on_open_mapping=self.open_mapping_editor,
             on_open_sound_manager=self.open_sound_manager,
             on_quick_preset=self._on_quick_fret_preset_selected,
-            on_instrument_change=self._on_quick_instrument_selected
+            on_instrument_change=self._on_quick_instrument_selected,
+            on_open_sound_browser=self.open_sound_browser
         )
         self.pro_fretboard = ProFretboardView(
             self.instrument_container, fg_color="transparent",
@@ -250,44 +265,53 @@ class MidGuitarApp(ctk.CTk):
         self.classic_fretboard.pack(fill="both", expand=True, padx=6, pady=6)
         self.classic_fretboard.update_fret_labels_from_preset(self.preset_data)
 
-        # Monitor de Eventos MIDI (Direita)
-        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10, width=300)
+        # Monitor de Eventos MIDI (Direita) - Largura compacta de 240px
+        self.monitor = MonitorView(main_split, fg_color="#1E293B", corner_radius=10, width=240)
         self.monitor.pack(side="right", fill="both", padx=(6, 0))
 
         # -------------------------------------------------------------
-        # 4. BARRA INFERIOR (COMPACTA E SEM POLUIÇÃO VISUAL)
+        # 4. BARRA INFERIOR (COMPACTA E RESPONSIVA)
         # -------------------------------------------------------------
-        bottom_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8, height=44)
-        bottom_bar.pack(fill="x", padx=16, pady=(4, 10))
+        bottom_bar = ctk.CTkFrame(self, fg_color="#1E293B", corner_radius=8)
+        bottom_bar.pack(fill="x", padx=14, pady=(4, 8))
 
         # Oitava
-        ctk.CTkLabel(bottom_bar, text="Oitava:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(12, 4), pady=6)
+        ctk.CTkLabel(bottom_bar, text="Oitava:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
         self.octave_seg = ctk.CTkSegmentedButton(
-            bottom_bar, values=["-2", "-1", "0", "+1", "+2"], command=self._on_octave_changed
+            bottom_bar, values=["-2", "-1", "0", "+1", "+2"], width=130, command=self._on_octave_changed
         )
         self.octave_seg.pack(side="left", padx=2, pady=6)
         self.octave_seg.set(str(self.config.get("octave_shift", 0)))
         set_tooltip(self.octave_seg, "Altera a afinação de todas as notas em oitavas (mais grave ou mais aguda)")
 
+        # Botão Explorador de Sons Espaciais (Em destaque!)
+        btn_sound_browser = ctk.CTkButton(
+            bottom_bar, text="🌌 Sons Espaciais & Banco (128)", width=190, height=28,
+            fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self.open_sound_browser
+        )
+        btn_sound_browser.pack(side="left", padx=(12, 4), pady=6)
+        set_tooltip(btn_sound_browser, "Abre o Explorador com todos os 128 instrumentos MIDI, efeitos sci-fi, espaciais, pads e sintetizadores!")
+
         # Botões de Ações Rápidas (Direita)
         btn_batch_keys = ctk.CTkButton(
-            bottom_bar, text="⚡ Sons por Tecla (Lote)", width=170, height=28,
+            bottom_bar, text="⚡ Sons por Tecla", width=125, height=28,
             fg_color="#6366F1", hover_color="#4F46E5", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_batch_key_mapper
         )
-        btn_batch_keys.pack(side="right", padx=(4, 12), pady=6)
-        set_tooltip(btn_batch_keys, "Defina o som de cada tecla individualmente ou configure de monte em lote!")
+        btn_batch_keys.pack(side="right", padx=(4, 10), pady=6)
+        set_tooltip(btn_batch_keys, "Defina o som de cada tecla individualmente ou configure em lote!")
 
         btn_sound_mgr = ctk.CTkButton(
-            bottom_bar, text="📁 Importar Áudios (.WAV)", width=160, height=28,
+            bottom_bar, text="📁 Áudios (.WAV)", width=120, height=28,
             fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_sound_manager
         )
         btn_sound_mgr.pack(side="right", padx=4, pady=6)
-        set_tooltip(btn_sound_mgr, "Importe arquivos reais (.wav / .mp3) para qualquer botão ou prato")
+        set_tooltip(btn_sound_mgr, "Importe arquivos de áudio reais (.wav / .mp3) para qualquer botão ou prato")
 
         btn_open_map = ctk.CTkButton(
-            bottom_bar, text="🎛️ Mapear Casas", width=130, height=28,
+            bottom_bar, text="🎛️ Mapear Casas", width=115, height=28,
             fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(size=11, weight="bold"),
             command=self.open_mapping_editor
         )
@@ -359,6 +383,31 @@ class MidGuitarApp(ctk.CTk):
         self.monitor.log(time.strftime("%H:%M:%S"), "TESTE", f"Clique Corda {string_num} Casa {fret} ➔ {note_name} (Nota {note})")
         self.audio.play_note(note, velocity=110, channel=0)
         self.after(400, lambda: self.audio.stop_note(note, channel=0))
+
+    # -------------------------------------------------------------
+    # EXPLORADOR DE SONS ESPACIAIS E GERAIS (128 SONS GM)
+    # -------------------------------------------------------------
+    def open_sound_browser(self):
+        """Abre o Explorador de Sons com todos os 128 instrumentos e efeitos espaciais/sci-fi."""
+        SoundBrowserDialog(
+            self,
+            current_instrument_id=self.config.get("instrument_id", 29),
+            on_select_instrument=self._on_browser_instrument_selected,
+            audio_engine=self.audio
+        )
+
+    def _on_browser_instrument_selected(self, inst_id: int):
+        self._on_quick_instrument_selected(inst_id)
+        self.classic_fretboard.set_selected_instrument(inst_id)
+
+    def toggle_monitor(self):
+        """Oculta ou exibe o monitor MIDI lateral para dar espaço ao instrumento."""
+        if self.monitor.winfo_ismapped():
+            self.monitor.pack_forget()
+            self.btn_toggle_monitor.configure(text="📡 Monitor [OFF]", fg_color="#334155")
+        else:
+            self.monitor.pack(side="right", fill="both", padx=(6, 0))
+            self.btn_toggle_monitor.configure(text="📡 Monitor [ON]", fg_color="#0EA5E9")
 
     # -------------------------------------------------------------
     # MAPEADOR DE TECLAS & SONS EM LOTE

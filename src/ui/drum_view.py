@@ -52,7 +52,7 @@ class DrumView(ctk.CTkFrame):
 
         if self.on_open_sound_manager:
             btn_sound = ctk.CTkButton(
-                header, text="📁 Áudios (.WAV/.MP3)", width=155, height=26,
+                header, text="📁 Áudios", width=100, height=26,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#8B5CF6", hover_color="#7C3AED",
                 command=self.on_open_sound_manager
@@ -62,7 +62,7 @@ class DrumView(ctk.CTkFrame):
 
         if self.on_open_mapping:
             btn_edit = ctk.CTkButton(
-                header, text="🎛️ Mapear Sons", width=125, height=26,
+                header, text="🎛️ Mapear", width=95, height=26,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#F59E0B", hover_color="#D97706", text_color="#0F172A",
                 command=self.on_open_mapping

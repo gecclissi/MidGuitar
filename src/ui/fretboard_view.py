@@ -17,13 +17,14 @@ FRET_COLORS = {
 }
 
 class FretboardView(ctk.CTkFrame):
-    def __init__(self, master, on_fret_click=None, on_open_mapping=None, on_open_sound_manager=None, on_quick_preset=None, on_instrument_change=None, **kwargs):
+    def __init__(self, master, on_fret_click=None, on_open_mapping=None, on_open_sound_manager=None, on_quick_preset=None, on_instrument_change=None, on_open_sound_browser=None, **kwargs):
         super().__init__(master, **kwargs)
         self.on_fret_click = on_fret_click
         self.on_open_mapping = on_open_mapping
         self.on_open_sound_manager = on_open_sound_manager
         self.on_quick_preset = on_quick_preset
         self.on_instrument_change = on_instrument_change
+        self.on_open_sound_browser = on_open_sound_browser
 
         self.fret_buttons = {}
         self.fret_labels = {}
@@ -31,54 +32,68 @@ class FretboardView(ctk.CTkFrame):
 
     def _init_ui(self):
         # -------------------------------------------------------------
-        # BARRA DE AÇÃO DIRETA (MUDAR TUDO DE UMA VEZ)
+        # BARRA DE AÇÃO DIRETA (MUDAR TUDO DE UMA VEZ & SONS ESPACIAIS)
         # -------------------------------------------------------------
         action_bar = ctk.CTkFrame(self, fg_color="#182234", corner_radius=8)
         action_bar.pack(fill="x", padx=8, pady=(4, 6))
 
-        # 1. Trocar o Som/Timbre da Guitarra (Muda o som de tudo de uma vez!)
-        ctk.CTkLabel(action_bar, text="🎵 Som:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#38BDF8").pack(side="left", padx=(10, 4), pady=6)
+        # Linha 1: Som Geral e Estilo de Acordes
+        row1 = ctk.CTkFrame(action_bar, fg_color="transparent")
+        row1.pack(fill="x", padx=6, pady=(4, 2))
+
+        ctk.CTkLabel(row1, text="🎵 Som:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#38BDF8").pack(side="left", padx=(4, 4))
         
         self.inst_options = [f"{num:03d} - {name}" for num, name in POPULAR_INSTRUMENTS]
         self.inst_combo = ctk.CTkComboBox(
-            action_bar, width=230, height=28, values=self.inst_options,
+            row1, width=220, height=26, values=self.inst_options,
             command=self._on_instrument_selected
         )
-        self.inst_combo.pack(side="left", padx=2, pady=6)
+        self.inst_combo.pack(side="left", padx=2)
         self.inst_combo.set(self.inst_options[0])
-        set_tooltip(self.inst_combo, "Muda o som de TODAS as casas de uma vez só!\nEscolha Guitarra, Baixo, Violão, Piano, etc.")
+        set_tooltip(self.inst_combo, "Muda o som de TODAS as casas de uma vez só!\nEscolha Guitarra, Sons Espaciais, Violão, Baixo, etc.")
 
-        # 2. Mudar as Notas de Todas as Casas (Presets Rápidos)
-        ctk.CTkLabel(action_bar, text="⚡ Estilo:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#F59E0B").pack(side="left", padx=(12, 4), pady=6)
+        # Botão para abrir o Explorador dos 128 Sons (Espaciais, Sci-Fi, Efeitos)
+        if self.on_open_sound_browser:
+            btn_browser = ctk.CTkButton(
+                row1, text="🌌 Explorar 128 Sons...", width=145, height=26,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#0284C7", hover_color="#0369A1", command=self.on_open_sound_browser
+            )
+            btn_browser.pack(side="left", padx=(6, 4))
+            set_tooltip(btn_browser, "Abre a lista com todos os 128 sons MIDI, efeitos sci-fi, espaciais, pads e sintetizadores!")
+
+        ctk.CTkLabel(row1, text="⚡ Estilo:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#F59E0B").pack(side="left", padx=(10, 4))
         
         self.preset_options = list(QUICK_FRET_PRESETS.keys())
         self.preset_combo = ctk.CTkComboBox(
-            action_bar, width=210, height=28, values=self.preset_options,
+            row1, width=210, height=26, values=self.preset_options,
             command=self._on_quick_preset_selected
         )
-        self.preset_combo.pack(side="left", padx=2, pady=6)
+        self.preset_combo.pack(side="left", padx=2)
         self.preset_combo.set(self.preset_options[0])
-        set_tooltip(self.preset_combo, "Muda as notas e acordes de todas as 5 casas de uma vez!\n(Rock Power Chords, Acordes Maiores, Menores, Metal Drop D, Solos)")
+        set_tooltip(self.preset_combo, "Muda as notas e acordes de todas as 5 casas de uma vez!\n(Rock Power Chords, Viagem Espacial, Synthwave, Acordes, Metal)")
 
-        # 3. Botão Personalizar Casas
+        # Linha 2: Ações de Customização (Espaçada e Responsiva)
+        row2 = ctk.CTkFrame(action_bar, fg_color="transparent")
+        row2.pack(fill="x", padx=6, pady=(2, 4))
+
         if self.on_open_mapping:
             btn_map = ctk.CTkButton(
-                action_bar, text="🎛️ Editar", width=75, height=28,
+                row2, text="🎛️ Editar Mapeamento Individual", width=190, height=24,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#334155", hover_color="#475569", command=self.on_open_mapping
             )
-            btn_map.pack(side="right", padx=(2, 8), pady=6)
+            btn_map.pack(side="left", padx=(4, 4))
             set_tooltip(btn_map, "Abre a tela detalhada para escolher nota por nota se desejar")
 
-        # 4. Botão Importar Áudios
         if self.on_open_sound_manager:
             btn_sound = ctk.CTkButton(
-                action_bar, text="📁 Áudios", width=80, height=28,
+                row2, text="📁 Importar Áudios (.WAV / .MP3)", width=180, height=24,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#8B5CF6", hover_color="#7C3AED", command=self.on_open_sound_manager
             )
-            btn_sound.pack(side="right", padx=2, pady=6)
-            set_tooltip(btn_sound, "Importe arquivos reais (.wav / .mp3) do seu computador")
+            btn_sound.pack(side="left", padx=4)
+            set_tooltip(btn_sound, "Importe arquivos de áudio reais (.wav / .mp3) do seu computador")
 
         # -------------------------------------------------------------
         # OS 5 BOTÕES / CASAS DA GUITARRA (CLIQUE DIRETO)
@@ -206,3 +221,19 @@ class FretboardView(ctk.CTkFrame):
                 if not label_text and "notes" in info:
                     label_text = str(info["notes"])
                 self.fret_labels[fret_key].configure(text=label_text)
+
+    def set_selected_instrument(self, inst_id: int):
+        """Atualiza a seleção do combobox de instrumentos se disponível."""
+        target_prefix = f"{inst_id:03d} -"
+        for opt in self.inst_options:
+            if opt.startswith(target_prefix):
+                self.inst_combo.set(opt)
+                return
+        # Se for um dos 128 que não está na lista curta de populares, adiciona temporariamente
+        from src.utils.instruments import INSTRUMENT_PORTUGUESE_NAMES, INSTRUMENT_NAMES
+        name = INSTRUMENT_PORTUGUESE_NAMES.get(inst_id, INSTRUMENT_NAMES.get(inst_id, f"Instrumento {inst_id}"))
+        new_opt = f"{inst_id:03d} - {name}"
+        if new_opt not in self.inst_options:
+            self.inst_options.insert(0, new_opt)
+            self.inst_combo.configure(values=self.inst_options)
+        self.inst_combo.set(new_opt)

@@ -35,7 +35,7 @@ class KeyboardView(ctk.CTkFrame):
 
         if self.on_open_key_mapper:
             btn_mapper = ctk.CTkButton(
-                header, text="⚡ Configurar Sons por Tecla (Lote)", width=225, height=24,
+                header, text="⚡ Sons por Tecla (Lote)", width=160, height=24,
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#8B5CF6", hover_color="#7C3AED",
                 command=self.on_open_key_mapper
