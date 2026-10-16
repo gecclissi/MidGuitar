@@ -23,6 +23,7 @@ from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
 from src.creator.ps3_pkg_exporter import export_ps3_pkg_structure
 from src.creator.auto_charter import auto_generate_chart
+from src.creator.pack_compiler import scan_folder_for_songs, compile_ps3_song_pack, compile_clone_hero_pack
 from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
 
@@ -42,6 +43,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.playback_start_time = 0.0
         self.tap_times = []
         self.preview_image_ctk = None
+        self.batch_songs = []
+        self.batch_art_path = None
 
         # Modal focus
         self.transient(master)
@@ -67,7 +70,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         h_desc = ctk.CTkLabel(
             header,
-            text="Crie notas à mão no Editor Visual, grave ao vivo tocando seu instrumento, coloque capa de álbum e exporte para PS3/RPCS3 sem precisar de REAPER, Magma ou Onyx!",
+            text="Crie notas à mão no Editor Visual, grave ao vivo tocando seu instrumento, junte várias músicas em Mega Pacotes e exporte para PS3/RPCS3 sem Magma ou Onyx!",
             font=ctk.CTkFont(size=11),
             text_color="#94A3B8"
         )
@@ -83,12 +86,14 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
         self.tabview.pack(fill="both", expand=True, padx=12, pady=6)
 
-        tab_converter = self.tabview.add("⚡ Conversor 1 Clique (Chorus ➔ RB3/PS3)")
+        tab_converter = self.tabview.add("⚡ Conversor 1 Clique (Individual)")
+        tab_batch = self.tabview.add("📦 Compilador de Pacotes (Multi-Músicas PS3/CH)")
         tab_timeline = self.tabview.add("🎛️ Editor Visual de Notas (Mini-REAPER)")
         tab_metadata = self.tabview.add("🖼️ Metadados, Capa & Exportação")
         tab_guide = self.tabview.add("📖 Guia Passo a Passo (Para Leigos)")
 
         self._build_converter_tab(tab_converter)
+        self._build_batch_tab(tab_batch)
         self._build_timeline_tab(tab_timeline)
         self._build_metadata_tab(tab_metadata)
         self._build_guide_tab(tab_guide)
@@ -250,7 +255,214 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             self._load_art_preview(self.song.album_art_path)
 
     # -------------------------------------------------------------------------
-    # ABA 2: EDITOR VISUAL DE NOTAS (MINI-REAPER) & GRAVAÇÃO
+    # ABA 2: COMPILADOR DE PACOTES EM LOTE (MEGA PACKS PS3 / CH)
+    # -------------------------------------------------------------------------
+    def _build_batch_tab(self, tab):
+        top_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
+        top_box.pack(fill="x", padx=10, pady=(6, 4))
+
+        ctk.CTkLabel(
+            top_box,
+            text="📦 Compilador de Mega Pacotes (Junte 10, 50 ou 100 músicas em um único pacote consolidado):",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(anchor="w", padx=12, pady=(8, 2))
+
+        ctk.CTkLabel(
+            top_box,
+            text="Selecione uma pasta com várias músicas (do Chorus Encore, C3 ou criadas aqui) para compilar tudo em um único songs.dta unificado!",
+            font=ctk.CTkFont(size=11),
+            text_color="#94A3B8"
+        ).pack(anchor="w", padx=12, pady=(0, 6))
+
+        btn_row = ctk.CTkFrame(top_box, fg_color="transparent")
+        btn_row.pack(fill="x", padx=12, pady=(2, 8))
+
+        btn_scan = ctk.CTkButton(
+            btn_row, text="📁 Escanear Pasta com Músicas...", width=230, height=32,
+            fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._on_browse_batch_folder
+        )
+        btn_scan.pack(side="left", padx=(0, 6))
+        set_tooltip(btn_scan, "Procura automaticamente todas as músicas dentro da pasta escolhida")
+
+        btn_add_current = ctk.CTkButton(
+            btn_row, text="➕ Incluir Música Atual do Editor", width=220, height=32,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=11),
+            command=self._on_add_current_song_to_batch
+        )
+        btn_add_current.pack(side="left", padx=4)
+        set_tooltip(btn_add_current, "Adiciona a música que você acabou de criar no editor para este pacote")
+
+        btn_clear_batch = ctk.CTkButton(
+            btn_row, text="🗑️ Limpar Lista", width=120, height=32,
+            fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=11),
+            command=self._on_clear_batch_songs
+        )
+        btn_clear_batch.pack(side="right", padx=2)
+
+        # Lista de Músicas
+        list_frame = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=4)
+
+        header_list = ctk.CTkFrame(list_frame, fg_color="transparent")
+        header_list.pack(fill="x", padx=12, pady=(8, 2))
+
+        self.batch_count_lbl = ctk.CTkLabel(
+            header_list,
+            text="Músicas selecionadas para o pacote: 0",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#F8FAFC"
+        )
+        self.batch_count_lbl.pack(side="left")
+
+        self.batch_scroll = ctk.CTkScrollableFrame(list_frame, fg_color="#1E293B", corner_radius=6)
+        self.batch_scroll.pack(fill="both", expand=True, padx=10, pady=(4, 8))
+
+        self.batch_empty_lbl = ctk.CTkLabel(
+            self.batch_scroll,
+            text="Nenhuma música na lista ainda.\nClique em 'Escanear Pasta com Músicas...' acima ou adicione a música atual!",
+            font=ctk.CTkFont(size=11),
+            text_color="#64748B"
+        )
+        self.batch_empty_lbl.pack(pady=30)
+
+        # Opções de Compilação
+        compile_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
+        compile_box.pack(fill="x", padx=10, pady=(4, 8))
+
+        c_row1 = ctk.CTkFrame(compile_box, fg_color="transparent")
+        c_row1.pack(fill="x", padx=12, pady=(8, 4))
+
+        ctk.CTkLabel(c_row1, text="Nome do Pacote:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(0, 6))
+        self.batch_name_entry = ctk.CTkEntry(c_row1, width=280)
+        self.batch_name_entry.insert(0, "Mega Pack Rock Band 3")
+        self.batch_name_entry.pack(side="left", padx=4)
+
+        ctk.CTkLabel(c_row1, text="Destino:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 6))
+        self.batch_target_combo = ctk.CTkComboBox(
+            c_row1, width=280,
+            values=[
+                "🎸 Rock Band 3 (RPCS3 - dev_hdd0 USRDIR)",
+                "📦 PlayStation 3 Console (Mega Pacote PKG)",
+                "🎮 Clone Hero (Pasta Coletiva Songs)"
+            ]
+        )
+        self.batch_target_combo.set("🎸 Rock Band 3 (RPCS3 - dev_hdd0 USRDIR)")
+        self.batch_target_combo.pack(side="left", padx=4)
+
+        btn_art = ctk.CTkButton(
+            c_row1, text="🖼️ Capa do Pacote...", width=140, fg_color="#334155",
+            command=self._on_browse_batch_art
+        )
+        btn_art.pack(side="right", padx=2)
+
+        c_row2 = ctk.CTkFrame(compile_box, fg_color="transparent")
+        c_row2.pack(fill="x", padx=12, pady=(4, 8))
+
+        btn_compile = ctk.CTkButton(
+            c_row2, text="📦 COMPILAR E GERAR MEGA PACOTE AGORA!", width=360, height=36,
+            fg_color="#10B981", hover_color="#059669", font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._on_compile_batch_pack
+        )
+        btn_compile.pack(side="left", padx=2)
+        set_tooltip(btn_compile, "Une todas as músicas em um único songs.dta consolidado e gera o instalador automático!")
+
+        self.batch_art_lbl = ctk.CTkLabel(c_row2, text="Capa: Ícone estilizado padrão", font=ctk.CTkFont(size=10), text_color="#64748B")
+        self.batch_art_lbl.pack(side="right", padx=6)
+
+    def _on_browse_batch_folder(self):
+        f = filedialog.askdirectory(title="Selecione a pasta onde estão as músicas")
+        if not f:
+            return
+        found = scan_folder_for_songs(f)
+        if not found:
+            messagebox.showwarning("Aviso", "Nenhuma pasta de música válida (com song.ini ou .mid) foi encontrada.")
+            return
+
+        added_count = 0
+        for _, song in found:
+            self.batch_songs.append(song)
+            added_count += 1
+        self._refresh_batch_list_ui()
+        messagebox.showinfo("Sucesso!", f"{added_count} músicas foram adicionadas ao compilador de pacotes!")
+
+    def _on_add_current_song_to_batch(self):
+        if not self.song.title or self.song.title == "Nova Música":
+            messagebox.showwarning("Aviso", "A música atual ainda não tem título ou notas geradas.")
+            return
+        self.batch_songs.append(self.song)
+        self._refresh_batch_list_ui()
+
+    def _on_clear_batch_songs(self):
+        self.batch_songs.clear()
+        self._refresh_batch_list_ui()
+
+    def _on_browse_batch_art(self):
+        f = filedialog.askopenfilename(title="Capa do Pacote", filetypes=[("Imagens", "*.png *.jpg *.jpeg")])
+        if f:
+            self.batch_art_path = f
+            self.batch_art_lbl.configure(text=f"Capa: {os.path.basename(f)}", text_color="#38BDF8")
+
+    def _refresh_batch_list_ui(self):
+        for widget in self.batch_scroll.winfo_children():
+            widget.destroy()
+
+        count = len(self.batch_songs)
+        self.batch_count_lbl.configure(text=f"Músicas selecionadas para o pacote: {count}")
+
+        if count == 0:
+            lbl = ctk.CTkLabel(
+                self.batch_scroll,
+                text="Nenhuma música na lista ainda.\nClique em 'Escanear Pasta com Músicas...' acima para carregar dezenas de faixas!",
+                font=ctk.CTkFont(size=11), text_color="#64748B"
+            )
+            lbl.pack(pady=30)
+            return
+
+        for idx, s in enumerate(self.batch_songs):
+            item_frame = ctk.CTkFrame(self.batch_scroll, fg_color="#0F172A", corner_radius=6)
+            item_frame.pack(fill="x", padx=6, pady=3)
+
+            t_text = f"#{idx+1}  🎵 {s.title}  -  {s.artist} ({s.album})  |  BPM: {s.bpm}"
+            ctk.CTkLabel(item_frame, text=t_text, font=ctk.CTkFont(size=11, weight="bold"), text_color="#F8FAFC").pack(side="left", padx=10, pady=6)
+
+            badge_text = []
+            if s.guitar_notes: badge_text.append("🎸")
+            if s.bass_notes: badge_text.append("🎸B")
+            if s.drum_notes: badge_text.append("🥁")
+            if s.keys_notes: badge_text.append("🎹")
+            if s.vocal_notes: badge_text.append("🎤")
+
+            ctk.CTkLabel(item_frame, text=" ".join(badge_text), font=ctk.CTkFont(size=11), text_color="#38BDF8").pack(side="right", padx=10, pady=6)
+
+    def _on_compile_batch_pack(self):
+        if not self.batch_songs:
+            messagebox.showwarning("Aviso", "Adicione ao menos uma música à lista antes de compilar!")
+            return
+
+        out_dir = filedialog.askdirectory(title="Escolha onde salvar o Mega Pacote")
+        if not out_dir:
+            return
+
+        pack_name = self.batch_name_entry.get().strip() or "MegaPack_RB3"
+        choice = self.batch_target_combo.get()
+
+        if "Clone Hero" in choice:
+            res_dir = compile_clone_hero_pack(self.batch_songs, pack_name, out_dir)
+            messagebox.showinfo("Sucesso Clone Hero!", f"Mega Pacote Clone Hero gerado com sucesso em:\n{res_dir}\n\nCole na sua pasta Songs!")
+        else:
+            res_dir = compile_ps3_song_pack(self.batch_songs, pack_name, out_dir, self.batch_art_path)
+            messagebox.showinfo(
+                "Mega Pacote PS3 / RPCS3 Pronto!",
+                f"🎉 Mega Pacote criado com sucesso contendo {len(self.batch_songs)} músicas!\n\n"
+                f"Pasta gerada: {res_dir}\n\n"
+                f"• Todas as músicas foram unificadas em um único songs.dta consolidado!\n"
+                f"• Para instalar no RPCS3: Dê dois cliques em 'INSTALAR_PACOTE_NO_RPCS3.bat' dentro da pasta!"
+            )
+
+    # -------------------------------------------------------------------------
+    # ABA 3: EDITOR VISUAL DE NOTAS (MINI-REAPER) & GRAVAÇÃO
     # -------------------------------------------------------------------------
     def _build_timeline_tab(self, tab):
         # Barra superior com seletores de Instrumento, Dificuldade, Zoom e Grid
