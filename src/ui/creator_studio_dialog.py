@@ -1017,6 +1017,24 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
         ctk.CTkLabel(scroll_frame, text=intro_text, font=ctk.CTkFont(size=11), text_color="#E2E8F0", justify="left").pack(anchor="w", padx=16, pady=2)
 
+        def _open_visual_tutorial():
+            tut_path = os.path.abspath("TUTORIAL_VISUAL.md")
+            if os.path.exists(tut_path):
+                try:
+                    os.startfile(tut_path)
+                except Exception:
+                    pass
+
+        btn_tut = ctk.CTkButton(
+            scroll_frame,
+            text="🖼️ Abrir Tutorial Visual Ilustrado (Tela por Tela com Imagens)",
+            command=_open_visual_tutorial,
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        btn_tut.pack(anchor="w", padx=16, pady=(6, 10))
+
         def add_step(num, title, body_text):
             step_box = ctk.CTkFrame(scroll_frame, fg_color="#1E293B", corner_radius=6)
             step_box.pack(fill="x", padx=14, pady=6)

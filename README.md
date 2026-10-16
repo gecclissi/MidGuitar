@@ -28,6 +28,16 @@ O **MidGuitar Studio** é uma central universal de instrumentos MIDI desenvolvid
 
 ---
 
+## 📸 Guia Visual Passo a Passo (Tela por Tela)
+
+> **Novo por aqui ou quer ver exatamente como criar e exportar músicas sem complicação?**  
+> Acesse o nosso **[📖 TUTORIAL VISUAL ILUSTRADO (TUTORIAL_VISUAL.md)](TUTORIAL_VISUAL.md)**!  
+> Ele contém ilustrações em alta definição de cada uma das telas do aplicativo, badges explicativos passo a passo (1, 2, 3...) e dicas para leigos e veteranos.
+
+[![Tutorial Visual](assets/tutorial/02_estudio_navegacao_geral.png)](TUTORIAL_VISUAL.md)
+
+---
+
 ## 🎵 Estúdio Criador & Conversor de Músicas (Rock Band 3, PS3 PKG & Clone Hero)
 
 O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100% o fluxo fragmentado e complexo de ferramentas legadas da comunidade.
