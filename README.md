@@ -53,11 +53,19 @@ O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100
    - Aponte para qualquer pasta de música baixada da internet e converta instantaneamente para **Rock Band 3 (RPCS3)**, **PlayStation 3 (PKG/SFO)** ou **Clone Hero / YARG**.
 2. **📦 Compilador de Pacotes em Lote (Multi-Músicas PS3/CH)**:
    - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique para o emulador RPCS3 ou console real.
-3. **🎛️ Editor Visual de Notas (Mini-REAPER & Auto-Chart)**:
-   - Linha do tempo visual estilo DAW com pistas coloridas (Verde, Vermelha, Amarela, Azul, Laranja, Overdrive e Solo).
-   - Clique com o botão esquerdo para adicionar/remover notas com encaixe automático na grade (*Grid Snap* em 1/4, 1/8, 1/16 ou livre).
-   - Botão direito para apagar notas.
+3. **🎛️ Editor Visual de Notas (Mini-REAPER, Auto-Chart & Teste ao Vivo)**:
+   - Linha do tempo visual estilo DAW com pistas coloridas (Verde, Vermelha, Amarela, Azul, Laranja, Overdrive e Solo) para Guitarra, Baixo, Bateria, Teclado e Vocais.
+   - Clique com o botão esquerdo para adicionar/remover notas com encaixe automático na grade (*Grid Snap* em 1/4, 1/8, 1/16 ou livre). Botão direito para apagar notas.
    - **✨ Botão `GERAR TODAS AS NOTAS!`**: Cria a música inteira automaticamente para os instrumentos selecionados.
+   - **🎮 Barra de Toque & Teste Interativo**:
+     - Botões coloridos interativos: `🟩 Casa 1 (A)`, `🟥 Casa 2 (S)`, `🟨 Casa 3 (J)`, `🟦 Casa 4 (K)`, `🟧 Casa 5 (L)`, `⚡ Palheta (Espaço)` e `🎤 Vocal (V)`.
+     - **Toque com o Teclado do Computador**: Toque diretamente com as teclas do teclado do PC enquanto a música toca!
+     - **Modos de Palheta Flexíveis**:
+       - *Palheta Livre*: tocou na tecla da casa já emite o som imediatamente.
+       - *Palheta Obrigatória (Estilo Guitar Hero / Rock Band)*: segure a casa e aperte a palheta (ex: Barra de Espaço ou Enter) para palhetar!
+     - **Suporte a Instrumentos Reais**: Plugue sua guitarra USB/MIDI, guitarra Rock Band, Gamepad, bateria eletrônica ou teclado e toque ao vivo com detecção automática e feedback visual das casas!
+     - **Teste Vocal Integrado**: Tecla dedicada para disparar e gravar afinações vocais melódicas (Dó, Ré, Mi, Sol, Lá, Dó) e conferir a harmonia vocal.
+     - **Janela de Configuração de Teclas**: Clique em `⌨️ Teclas & Palheta...` para remapear livremente qualquer ação para a tecla que preferir.
 4. **🖼️ Metadados, Capa & Exportação**:
    - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter.
    - Upload de imagem de capa com pré-visualização em miniatura em tempo real.

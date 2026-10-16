@@ -89,7 +89,9 @@ class MidGuitarApp(ctk.CTk):
             on_pro_guitar_event=self._on_pro_guitar_event,
             on_keyboard_event=self._on_keyboard_event,
             on_drum_event=self._on_drum_event,
-            on_mode_detected=self._on_mode_detected
+            on_mode_detected=self._on_mode_detected,
+            on_classic_fret_event=self._on_classic_fret_event,
+            on_strum_event=self._on_strum_event
         )
 
         # Constrói a interface
@@ -656,12 +658,26 @@ class MidGuitarApp(ctk.CTk):
 
     def _on_pro_guitar_event(self, string_num: int, fret: int, is_active: bool, velocity: int):
         self.after(0, self.pro_fretboard.set_string_fret, string_num, fret, is_active, velocity)
+        if self.creator_studio and self.creator_studio.winfo_exists() and is_active:
+            self.after(0, self.creator_studio.handle_live_instrument_note, f"string_{string_num}")
 
     def _on_keyboard_event(self, note: int, is_active: bool, velocity: int):
         self.after(0, self.keyboard_view.set_key_state, note, is_active)
+        if self.creator_studio and self.creator_studio.winfo_exists() and is_active:
+            self.after(0, self.creator_studio.handle_live_instrument_note, f"key_{note}")
 
     def _on_drum_event(self, note: int, velocity: int):
         self.after(0, self.drum_view.trigger_pad_by_note, note, velocity)
+        if self.creator_studio and self.creator_studio.winfo_exists():
+            self.after(0, self.creator_studio.handle_live_instrument_note, f"drum_{note}")
+
+    def _on_classic_fret_event(self, fret_name: str, is_pressed: bool):
+        if self.creator_studio and self.creator_studio.winfo_exists():
+            self.after(0, self.creator_studio.handle_live_instrument_note, fret_name, is_pressed)
+
+    def _on_strum_event(self, is_down: bool):
+        if self.creator_studio and self.creator_studio.winfo_exists():
+            self.after(0, self.creator_studio.handle_live_instrument_note, "strum", True, True)
 
     def _on_audio_play(self, notes: list[int], velocity: int, channel: int = 0):
         for n in notes:

@@ -15,7 +15,10 @@ LANE_COLORS = {
     "blue": "#38BDF8",
     "orange": "#FB923C",
     "overdrive": "#A855F7",
-    "solo": "#F59E0B"
+    "solo": "#F59E0B",
+    "vocal_high": "#F472B6",
+    "vocal_mid": "#EC4899",
+    "vocal_low": "#DB2777"
 }
 
 LANE_NAMES_GUITAR = [
@@ -36,6 +39,13 @@ LANE_NAMES_DRUMS = [
     ("green", "Prato Ataque (Verde)"),
     ("overdrive", "⭐ Overdrive"),
     ("solo", "⚡ Preenchimento (Fill)"),
+]
+
+LANE_NAMES_VOCALS = [
+    ("vocal_high", "🎤 Vocal Agudo (Sol4/Dó5)"),
+    ("vocal_mid", "🎤 Vocal Médio (Mi4/Sol4)"),
+    ("vocal_low", "🎤 Vocal Grave (Dó4/Ré4)"),
+    ("overdrive", "⭐ Frase Vocal / Overdrive"),
 ]
 
 class MiniReaperCanvas(tk.Frame):
@@ -102,6 +112,8 @@ class MiniReaperCanvas(tk.Frame):
     def get_lanes(self):
         if self.current_track == "drum":
             return LANE_NAMES_DRUMS
+        elif self.current_track == "vocals":
+            return LANE_NAMES_VOCALS
         return LANE_NAMES_GUITAR
 
     def _get_notes(self) -> List[NoteEvent]:
@@ -113,6 +125,18 @@ class MiniReaperCanvas(tk.Frame):
             return self.song.drum_notes
         elif self.current_track == "keys":
             return self.song.keys_notes
+        elif self.current_track == "vocals":
+            v_events = []
+            for vn in self.song.vocal_notes:
+                lane = "vocal_mid"
+                if vn.pitch >= 67:
+                    lane = "vocal_high"
+                elif vn.pitch <= 62:
+                    lane = "vocal_low"
+                if vn.is_phrase_marker:
+                    lane = "overdrive"
+                v_events.append(NoteEvent(time_ms=vn.time_ms, lane=lane, duration_ms=vn.duration_ms, difficulty="Expert"))
+            return v_events
         return []
 
     def redraw(self):
@@ -261,6 +285,24 @@ class MiniReaperCanvas(tk.Frame):
                         self.on_change()
                     return
 
+            if self.current_track == "vocals":
+                from src.creator.chart_model import VocalNote
+                for vn in list(self.song.vocal_notes):
+                    if abs(vn.time_ms - time_ms) < 40:
+                        self.song.vocal_notes.remove(vn)
+                        self.redraw()
+                        if self.on_change:
+                            self.on_change()
+                        return
+                pitch_map = {"vocal_high": 71, "vocal_mid": 65, "vocal_low": 60, "overdrive": 60}
+                p = pitch_map.get(lane_key, 65)
+                is_phrase = (lane_key == "overdrive")
+                self.song.vocal_notes.append(VocalNote(time_ms=time_ms, pitch=p, duration_ms=self.default_sustain_ms, lyric="La", is_phrase_marker=is_phrase))
+                self.redraw()
+                if self.on_change:
+                    self.on_change()
+                return
+
             new_note = NoteEvent(
                 time_ms=time_ms,
                 lane=lane_key,
@@ -282,6 +324,19 @@ class MiniReaperCanvas(tk.Frame):
         if 0 <= lane_idx < len(lanes):
             lane_key = lanes[lane_idx][0]
             click_ms = (x / self.pixels_per_second) * 1000.0
+
+            if self.current_track == "vocals":
+                to_remove_v = None
+                for vn in self.song.vocal_notes:
+                    if vn.time_ms - 50 <= click_ms <= vn.time_ms + max(160, vn.duration_ms) + 50:
+                        to_remove_v = vn
+                        break
+                if to_remove_v:
+                    self.song.vocal_notes.remove(to_remove_v)
+                    self.redraw()
+                    if self.on_change:
+                        self.on_change()
+                return
 
             notes = self._get_notes()
             to_remove = None

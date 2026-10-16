@@ -39,7 +39,9 @@ class MIDIReader:
         on_pro_guitar_event=None,
         on_keyboard_event=None,
         on_drum_event=None,
-        on_mode_detected=None
+        on_mode_detected=None,
+        on_classic_fret_event=None,
+        on_strum_event=None
     ):
         self.mapper = mapper
         self.on_event_callback = on_event_callback      # func(timestamp, event_type, details)
@@ -50,6 +52,8 @@ class MIDIReader:
         self.on_keyboard_event = on_keyboard_event      # func(note, is_active, velocity)
         self.on_drum_event = on_drum_event              # func(note, velocity)
         self.on_mode_detected = on_mode_detected        # func(mode: InstrumentMode)
+        self.on_classic_fret_event = on_classic_fret_event  # func(fret_name: str, is_pressed: bool)
+        self.on_strum_event = on_strum_event            # func(is_down: bool)
 
         self.mode = InstrumentMode.AUTO
         self.midi_in = None
@@ -160,11 +164,15 @@ class MIDIReader:
                     stop_notes, play_notes = self.mapper.handle_fret_change(fret_name, True)
                     self._dispatch_notes(stop_notes, play_notes, velocity)
                     self._log_event("NOTE ON", f"Ch {channel} | Casa {fret_name.upper()} | Vel: {velocity}")
+                    if self.on_classic_fret_event:
+                        self.on_classic_fret_event(fret_name, True)
                     return
                 elif note in (69, 71, 72): # Strum
                     stop_notes, play_notes = self.mapper.handle_strum(is_down=True, is_pressed=True)
                     self._dispatch_notes(stop_notes, play_notes, velocity)
                     self._log_event("STRUM", f"Ch {channel} | Palheta | Vel: {velocity}")
+                    if self.on_strum_event:
+                        self.on_strum_event(True)
                     return
 
             # C) MODO TECLADO (25 teclas C3=48 a C5=72 ou qualquer teclado MIDI)
@@ -203,6 +211,8 @@ class MIDIReader:
                 if fret_name:
                     stop_notes, play_notes = self.mapper.handle_fret_change(fret_name, False)
                     self._dispatch_notes(stop_notes, play_notes)
+                    if self.on_classic_fret_event:
+                        self.on_classic_fret_event(fret_name, False)
                     return
                 elif note in (69, 71, 72):
                     stop_notes, play_notes = self.mapper.handle_strum(is_down=True, is_pressed=False)
@@ -295,6 +305,8 @@ class MIDIReader:
                                 stop_notes, play_notes = self.mapper.handle_fret_change(fret_name, bool(val))
                                 self._dispatch_notes(stop_notes, play_notes, 100)
                                 self._log_event("FRET", f"Casa {fret_name.upper()}: {'PRESSIONADA' if val else 'SOLTA'}")
+                                if self.on_classic_fret_event:
+                                    self.on_classic_fret_event(fret_name, bool(val))
 
                     # 2. D-Pad / Hat (Palheta Strum Up/Down)
                     if js.get_numhats() > 0:
@@ -304,10 +316,14 @@ class MIDIReader:
                                 stop_notes, play_notes = self.mapper.handle_strum(is_down=False, is_pressed=True)
                                 self._dispatch_notes(stop_notes, play_notes, 110)
                                 self._log_event("STRUM", "Palhetada para CIMA")
+                                if self.on_strum_event:
+                                    self.on_strum_event(False)
                             elif hat[1] == -1 and prev_hat[1] != -1:
                                 stop_notes, play_notes = self.mapper.handle_strum(is_down=True, is_pressed=True)
                                 self._dispatch_notes(stop_notes, play_notes, 110)
                                 self._log_event("STRUM", "Palhetada para BAIXO")
+                                if self.on_strum_event:
+                                    self.on_strum_event(True)
                             elif hat[1] == 0:
                                 self.mapper.handle_strum(is_down=True, is_pressed=False)
                             prev_hat = hat

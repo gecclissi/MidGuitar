@@ -26,6 +26,8 @@ from src.creator.auto_charter import auto_generate_chart
 from src.creator.pack_compiler import scan_folder_for_songs, compile_ps3_song_pack, compile_clone_hero_pack
 from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
+from src.ui.key_strum_config_dialog import KeyStrumConfigDialog, DEFAULT_KEYS, KEY_NAMES_FRIENDLY
+from src.utils.config_manager import save_config
 
 class CreatorStudioDialog(ctk.CTkToplevel):
     def __init__(self, master, audio_engine=None):
@@ -45,6 +47,18 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.preview_image_ctk = None
         self.batch_songs = []
         self.batch_art_path = None
+
+        # Configuração de Teclas do Teclado e Modo de Palheta
+        self.key_controls = dict(DEFAULT_KEYS)
+        if hasattr(self.master, "config") and "creator_keyboard_map" in self.master.config:
+            self.key_controls.update(self.master.config["creator_keyboard_map"])
+
+        self.held_frets = set()
+        self.vocal_pitch_counter = 0
+
+        # Bindings do Teclado para Tocar e Palhetar
+        self.bind("<KeyPress>", self._on_window_key_press)
+        self.bind("<KeyRelease>", self._on_window_key_release)
 
         # Modal focus
         self.transient(master)
@@ -473,7 +487,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ctk.CTkLabel(bar, text="Instrumento:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
         self.track_combo = ctk.CTkComboBox(
             bar, width=175,
-            values=["🎸 Guitarra (5 Casas)", "🎸 Baixo", "🥁 Bateria", "🎹 Teclado"],
+            values=["🎸 Guitarra (5 Casas)", "🎸 Baixo", "🥁 Bateria", "🎹 Teclado", "🎤 Vocais"],
             command=self._on_track_changed
         )
         self.track_combo.set("🎸 Guitarra (5 Casas)")
@@ -557,6 +571,99 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
         btn_run_auto.pack(side="right", padx=2)
         set_tooltip(btn_run_auto, "Cria todas as notas musicais, acordes, solos e bateria sincronizados com o BPM em 1 clique!")
+
+        # Barra Interativa de Toque & Teste (Teclado PC / Instrumentos Plugados / Palheta)
+        test_bar = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#334155")
+        test_bar.pack(fill="x", padx=10, pady=(2, 4))
+
+        tb_row = ctk.CTkFrame(test_bar, fg_color="transparent")
+        tb_row.pack(fill="x", padx=10, pady=4)
+
+        ctk.CTkLabel(
+            tb_row, text="🎮 Toque & Teste:",
+            font=ctk.CTkFont(size=11, weight="bold"), text_color="#38BDF8"
+        ).pack(side="left", padx=(0, 6))
+
+        # Botões das Casas
+        self.fret_buttons = {}
+        fret_defs = [
+            ("green", "🟩 Casa 1", "#15803D", "#22C55E"),
+            ("red", "🟥 Casa 2", "#B91C1C", "#EF4444"),
+            ("yellow", "🟨 Casa 3", "#A16207", "#EAB308"),
+            ("blue", "🟦 Casa 4", "#1D4ED8", "#3B82F6"),
+            ("orange", "🟧 Casa 5", "#C2410C", "#F97316"),
+        ]
+
+        for lane, label_base, bg_norm, bg_glow in fret_defs:
+            k = self.key_controls.get(lane, "")
+            display_k = KEY_NAMES_FRIENDLY.get(k.lower(), k.upper())
+            btn = ctk.CTkButton(
+                tb_row,
+                text=f"{label_base} ({display_k})",
+                width=96, height=30,
+                fg_color=bg_norm, hover_color=bg_glow,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                command=lambda l=lane: self._on_fret_button_clicked(l)
+            )
+            btn.pack(side="left", padx=2)
+            self.fret_buttons[lane] = {
+                "widget": btn,
+                "label_base": label_base,
+                "bg_norm": bg_norm,
+                "bg_glow": bg_glow
+            }
+
+        # Botão da Palheta (Strum Bar)
+        strum_k = self.key_controls.get("strum", "space")
+        strum_display = KEY_NAMES_FRIENDLY.get(strum_k.lower(), strum_k.upper())
+        self.btn_strum = ctk.CTkButton(
+            tb_row,
+            text=f"⚡ Palheta ({strum_display})",
+            width=120, height=30,
+            fg_color="#6B21A8", hover_color="#A855F7",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            command=self._on_strum_button_clicked
+        )
+        self.btn_strum.pack(side="left", padx=3)
+        set_tooltip(self.btn_strum, "Dispara a palhetada das notas seguradas ou corda solta")
+
+        # Botão de Teste Vocal
+        vocal_k = self.key_controls.get("vocal_test", "v")
+        vocal_display = KEY_NAMES_FRIENDLY.get(vocal_k.lower(), vocal_k.upper())
+        self.btn_vocal_test = ctk.CTkButton(
+            tb_row,
+            text=f"🎤 Vocal ({vocal_display})",
+            width=96, height=30,
+            fg_color="#9D174D", hover_color="#EC4899",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            command=self._on_vocal_test_clicked
+        )
+        self.btn_vocal_test.pack(side="left", padx=2)
+        set_tooltip(self.btn_vocal_test, "Toca notas melódicas para testar afinação vocal e frases de canto")
+
+        # Configurar Teclas
+        btn_cfg_keys = ctk.CTkButton(
+            tb_row,
+            text="⌨️ Teclas & Palheta...",
+            width=135, height=30,
+            fg_color="#334155", hover_color="#475569",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            command=self._open_key_config_dialog
+        )
+        btn_cfg_keys.pack(side="right", padx=2)
+        set_tooltip(btn_cfg_keys, "Escolha livremente quais teclas do seu teclado tocam as casas, a palheta (espaço) e o vocal!")
+
+        # Indicador / Botão Rápido de Modo de Palheta
+        self.btn_mode_toggle = ctk.CTkButton(
+            tb_row,
+            text=self._get_strum_mode_text(),
+            width=140, height=30,
+            fg_color="#1E293B", hover_color="#334155",
+            font=ctk.CTkFont(size=10),
+            command=self._toggle_strum_mode
+        )
+        self.btn_mode_toggle.pack(side="right", padx=3)
+        set_tooltip(self.btn_mode_toggle, "Clique para alternar entre Palheta Livre (apertou tocou) ou Obrigatória (segure a casa e aperte Palheta/Espaço)")
 
         # Canvas Interativo (Mini-REAPER)
         canvas_box = ctk.CTkFrame(tab, fg_color="#0B0F17", corner_radius=6)
@@ -659,6 +766,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             track_key = "drum"
         elif "Teclado" in choice:
             track_key = "keys"
+        elif "Vocais" in choice:
+            track_key = "vocals"
         self.timeline.set_track(track_key)
         self._update_note_counter()
 
@@ -691,8 +800,11 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.timeline.set_zoom(new_zoom)
 
     def _update_note_counter(self):
-        notes = self.timeline._get_notes()
-        count = sum(1 for n in notes if n.difficulty == self.timeline.current_difficulty or n.lane in ["overdrive", "solo"])
+        if self.timeline.current_track == "vocals":
+            count = len(self.song.vocal_notes)
+        else:
+            notes = self.timeline._get_notes()
+            count = sum(1 for n in notes if n.difficulty == self.timeline.current_difficulty or n.lane in ["overdrive", "solo"])
         self.note_count_lbl.configure(text=f"Notas na Trilha: {count}")
 
     # -------------------------------------------------------------------------
@@ -940,6 +1052,17 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             "• No jogo, vá em Settings -> General -> Scan Songs e a música estará pronta com capa e todas as dificuldades!"
         )
 
+        add_step(
+            "8", "Como Testar e Tocar Junto com a Música (Teclado do PC, Instrumentos Reais & Vocal)",
+            "• Na aba '🎛️ Editor Visual de Notas', clique em '▶️ Tocar Música' para ouvir e ver a linha do tempo correr!\n"
+            "• Você pode tocar junto usando o teclado do computador: A (Verde), S (Vermelho), J (Amarelo), K (Azul), L (Laranja), Espaço (Palheta) e V (Vocal)!\n"
+            "• Clique em '⌨️ Teclas & Palheta...' para personalizar qualquer tecla do teclado e escolher entre:\n"
+            "   - Palheta Livre: ao apertar a tecla da casa já toca o som direto.\n"
+            "   - Palheta Obrigatória (Estilo Guitar Hero): segure a casa e aperte a tecla da palheta (ex: Espaço ou Enter)!\n"
+            "• Se plugar uma guitarra Rock Band, Gamepad USB, bateria eletrônica ou teclado MIDI no PC, o estúdio detecta na hora e pisca as casas ao vivo!\n"
+            "• A tecla Vocal (V) emite sons melódicos de teste vocal para checar a harmonia da canção e gravar faixas de canto!"
+        )
+
     # -------------------------------------------------------------------------
     # SINCRONIZAÇÃO E CONTROLES
     # -------------------------------------------------------------------------
@@ -1053,11 +1176,22 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 self._toggle_playback()
 
     def record_incoming_note(self, lane: str):
-        """Disparado pelo app principal ao apertar uma casa ou pad."""
+        """Disparado pelo teclado do PC ou instrumento físico ao apertar uma casa ou pad."""
         if not self.is_recording or not self.is_playing:
             return
         elapsed_ms = int((time.time() - self.playback_start_time) * 1000)
         sel_track = self.track_combo.get()
+
+        if "Vocais" in sel_track or lane == "vocal":
+            from src.creator.chart_model import VocalNote
+            vocal_pitches = [60, 62, 64, 67, 69, 72]
+            pitch = vocal_pitches[self.vocal_pitch_counter % len(vocal_pitches)]
+            self.vocal_pitch_counter += 1
+            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_marker=False)
+            self.song.vocal_notes.append(v_note)
+            self.timeline.redraw()
+            self._update_note_counter()
+            return
 
         track_key = "guitar"
         if "Baixo" in sel_track:
@@ -1067,13 +1201,24 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         elif "Teclado" in sel_track:
             track_key = "keys"
 
-        note = NoteEvent(time_ms=elapsed_ms, lane=lane, duration_ms=self.timeline.default_sustain_ms, difficulty=self.timeline.current_difficulty)
+        target_lane = lane
+        if lane == "open":
+            target_lane = "orange" if track_key == "drum" else "green"
+
+        note = NoteEvent(time_ms=elapsed_ms, lane=target_lane, duration_ms=self.timeline.default_sustain_ms, difficulty=self.timeline.current_difficulty)
         self.song.add_note(track_key, note)
         self.timeline.redraw()
         self._update_note_counter()
 
     def _clear_current_track_notes(self):
         sel_track = self.track_combo.get()
+        if "Vocais" in sel_track:
+            self.song.vocal_notes.clear()
+            self.timeline.redraw()
+            self._update_note_counter()
+            messagebox.showinfo("Limpo", f"Notas da trilha {sel_track} foram limpas.")
+            return
+
         track_key = "guitar"
         if "Baixo" in sel_track:
             track_key = "bass"
@@ -1085,6 +1230,269 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.timeline.redraw()
         self._update_note_counter()
         messagebox.showinfo("Limpo", f"Notas da trilha {sel_track} foram limpas.")
+
+    # -------------------------------------------------------------------------
+    # TESTE & TOQUE INTERATIVO (TECLADO / INSTRUMENTO FÍSICO / VOCAL)
+    # -------------------------------------------------------------------------
+    def _get_strum_mode_text(self) -> str:
+        mode = self.key_controls.get("strum_mode", "free")
+        if mode == "strum":
+            strum_k = self.key_controls.get("strum", "space")
+            kname = KEY_NAMES_FRIENDLY.get(strum_k.lower(), strum_k.upper())
+            return f"Modo: Palheta [{kname}]"
+        return "Modo: Palheta Livre"
+
+    def _toggle_strum_mode(self):
+        cur = self.key_controls.get("strum_mode", "free")
+        new_mode = "strum" if cur == "free" else "free"
+        self.key_controls["strum_mode"] = new_mode
+        self.btn_mode_toggle.configure(text=self._get_strum_mode_text())
+        self._persist_key_controls()
+
+    def _open_key_config_dialog(self):
+        KeyStrumConfigDialog(
+            self,
+            current_map=self.key_controls,
+            on_save_callback=self._on_key_config_saved
+        )
+
+    def _on_key_config_saved(self, new_map: dict):
+        self.key_controls.update(new_map)
+        self._persist_key_controls()
+        self._refresh_key_buttons_labels()
+
+    def _persist_key_controls(self):
+        if hasattr(self.master, "config"):
+            self.master.config["creator_keyboard_map"] = self.key_controls
+            try:
+                save_config(self.master.config)
+            except Exception:
+                pass
+
+    def _refresh_key_buttons_labels(self):
+        for lane, data in self.fret_buttons.items():
+            k = self.key_controls.get(lane, "")
+            display_k = KEY_NAMES_FRIENDLY.get(k.lower(), k.upper())
+            data["widget"].configure(text=f"{data['label_base']} ({display_k})")
+
+        strum_k = self.key_controls.get("strum", "space")
+        strum_display = KEY_NAMES_FRIENDLY.get(strum_k.lower(), strum_k.upper())
+        self.btn_strum.configure(text=f"⚡ Palheta ({strum_display})")
+
+        vocal_k = self.key_controls.get("vocal_test", "v")
+        vocal_display = KEY_NAMES_FRIENDLY.get(vocal_k.lower(), vocal_k.upper())
+        self.btn_vocal_test.configure(text=f"🎤 Vocal ({vocal_display})")
+
+        self.btn_mode_toggle.configure(text=self._get_strum_mode_text())
+
+    def _is_text_entry_focused(self) -> bool:
+        try:
+            focused = self.focus_get()
+            if not focused:
+                return False
+            f_class = str(type(focused)).lower()
+            if "entry" in f_class or "combobox" in f_class or "text" in f_class:
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _on_window_key_press(self, event):
+        if self._is_text_entry_focused():
+            return
+
+        key_sym = event.keysym.lower()
+        strum_mode = self.key_controls.get("strum_mode", "free")
+
+        # Verifica se corresponde a alguma das 5 casas
+        for lane in ["green", "red", "yellow", "blue", "orange"]:
+            if key_sym == self.key_controls.get(lane, "").lower():
+                self.held_frets.add(lane)
+                self._highlight_fret_button(lane, True)
+                if strum_mode == "free":
+                    self._play_fret_audio(lane)
+                    if self.is_recording and self.is_playing:
+                        self.record_incoming_note(lane)
+                return
+
+        # Verifica se corresponde à Palheta (Strum)
+        if key_sym == self.key_controls.get("strum", "space").lower():
+            self._flash_strum_button()
+            if strum_mode == "strum":
+                if self.held_frets:
+                    for lane in list(self.held_frets):
+                        self._play_fret_audio(lane)
+                        if self.is_recording and self.is_playing:
+                            self.record_incoming_note(lane)
+                else:
+                    self._play_open_audio()
+                    if self.is_recording and self.is_playing:
+                        self.record_incoming_note("open")
+            else:
+                if self.held_frets:
+                    for lane in list(self.held_frets):
+                        self._play_fret_audio(lane)
+                else:
+                    self._play_open_audio()
+            return
+
+        # Verifica se corresponde ao Vocal Test
+        if key_sym == self.key_controls.get("vocal_test", "v").lower():
+            self._trigger_vocal_test()
+            return
+
+    def _on_window_key_release(self, event):
+        if self._is_text_entry_focused():
+            return
+
+        key_sym = event.keysym.lower()
+        strum_mode = self.key_controls.get("strum_mode", "free")
+
+        for lane in ["green", "red", "yellow", "blue", "orange"]:
+            if key_sym == self.key_controls.get(lane, "").lower():
+                self.held_frets.discard(lane)
+                self._highlight_fret_button(lane, False)
+                if strum_mode == "free":
+                    self._stop_fret_audio(lane)
+                return
+
+    def _highlight_fret_button(self, lane: str, is_on: bool):
+        fret_info = self.fret_buttons.get(lane)
+        if not fret_info:
+            return
+        btn = fret_info["widget"]
+        if is_on:
+            btn.configure(fg_color=fret_info["bg_glow"])
+        else:
+            btn.configure(fg_color=fret_info["bg_norm"])
+
+    def _flash_strum_button(self):
+        self.btn_strum.configure(fg_color="#D8B4FE")
+        self.after(150, lambda: self.btn_strum.configure(fg_color="#6B21A8"))
+
+    def _flash_vocal_button(self):
+        self.btn_vocal_test.configure(fg_color="#F472B6")
+        self.after(150, lambda: self.btn_vocal_test.configure(fg_color="#9D174D"))
+
+    def _on_fret_button_clicked(self, lane: str):
+        self._highlight_fret_button(lane, True)
+        self._play_fret_audio(lane)
+        if self.is_recording and self.is_playing:
+            self.record_incoming_note(lane)
+        self.after(180, lambda: self._highlight_fret_button(lane, False))
+
+    def _on_strum_button_clicked(self):
+        self._flash_strum_button()
+        if self.held_frets:
+            for f in list(self.held_frets):
+                self._play_fret_audio(f)
+                if self.is_recording and self.is_playing:
+                    self.record_incoming_note(f)
+        else:
+            self._play_open_audio()
+            if self.is_recording and self.is_playing:
+                self.record_incoming_note("open")
+
+    def _on_vocal_test_clicked(self):
+        self._trigger_vocal_test()
+
+    def _play_fret_audio(self, lane: str):
+        if not self.audio:
+            return
+        track = self.track_combo.get()
+        if "Bateria" in track:
+            drum_map = {"green": 49, "red": 38, "yellow": 42, "blue": 47, "orange": 36, "open": 36}
+            note = drum_map.get(lane, 38)
+            self.audio.play_note(note, velocity=115, channel=9)
+            self.after(200, lambda n=note: self.audio.stop_note(n, channel=9))
+            return
+
+        notes = [52]
+        if hasattr(self.master, "preset_data") and "frets" in self.master.preset_data:
+            notes = self.master.preset_data["frets"].get(lane, {}).get("notes", [52])
+        else:
+            defaults = {"green": [52], "red": [55], "yellow": [57], "blue": [59], "orange": [62], "open": [40]}
+            notes = defaults.get(lane, [52])
+
+        self.audio.play_chord(notes, velocity=115)
+        self.after(450, lambda: self.audio.stop_chord(notes))
+
+    def _play_open_audio(self):
+        if not self.audio:
+            return
+        track = self.track_combo.get()
+        if "Bateria" in track:
+            self.audio.play_note(36, velocity=120, channel=9)
+            self.after(200, lambda: self.audio.stop_note(36, channel=9))
+        else:
+            self.audio.play_chord([40], velocity=115)
+            self.after(400, lambda: self.audio.stop_chord([40]))
+
+    def _stop_fret_audio(self, lane: str):
+        if not self.audio:
+            return
+        if hasattr(self.master, "preset_data") and "frets" in self.master.preset_data:
+            notes = self.master.preset_data["frets"].get(lane, {}).get("notes", [52])
+            self.audio.stop_chord(notes)
+
+    def _trigger_vocal_test(self):
+        vocal_pitches = [60, 62, 64, 67, 69, 72]
+        pitch = vocal_pitches[self.vocal_pitch_counter % len(vocal_pitches)]
+        self.vocal_pitch_counter += 1
+
+        self._flash_vocal_button()
+        if self.audio:
+            self.audio.play_note(pitch, velocity=110, channel=0)
+            self.after(350, lambda p=pitch: self.audio.stop_note(p, channel=0))
+
+        if self.is_recording and self.is_playing:
+            elapsed_ms = int((time.time() - self.playback_start_time) * 1000)
+            from src.creator.chart_model import VocalNote
+            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_marker=False)
+            self.song.vocal_notes.append(v_note)
+            self.timeline.redraw()
+            self._update_note_counter()
+
+    def handle_live_instrument_note(self, lane_or_id: str, is_active: bool = True, is_strum: bool = False):
+        """Recebe eventos de instrumentos físicos plugados (Guitarra, Bateria, Teclado USB/MIDI)."""
+        lane_clean = lane_or_id.lower()
+        if "green" in lane_clean or "casa 1" in lane_clean:
+            lane = "green"
+        elif "red" in lane_clean or "casa 2" in lane_clean or "38" in lane_clean or "snare" in lane_clean:
+            lane = "red"
+        elif "yellow" in lane_clean or "casa 3" in lane_clean or "42" in lane_clean or "hihat" in lane_clean:
+            lane = "yellow"
+        elif "blue" in lane_clean or "casa 4" in lane_clean or "47" in lane_clean or "tom" in lane_clean:
+            lane = "blue"
+        elif "orange" in lane_clean or "casa 5" in lane_clean or "49" in lane_clean or "crash" in lane_clean or "36" in lane_clean:
+            lane = "orange"
+        elif "strum" in lane_clean or is_strum:
+            lane = "strum"
+        elif "vocal" in lane_clean:
+            lane = "vocal"
+        else:
+            lane = "green"
+
+        if lane == "strum":
+            self._flash_strum_button()
+            if self.is_recording and self.is_playing:
+                if self.held_frets:
+                    for f in list(self.held_frets):
+                        self.record_incoming_note(f)
+                else:
+                    self.record_incoming_note("open")
+        elif lane == "vocal":
+            self._trigger_vocal_test()
+        else:
+            if is_active:
+                self.held_frets.add(lane)
+                self._highlight_fret_button(lane, True)
+                strum_mode = self.key_controls.get("strum_mode", "free")
+                if strum_mode == "free" and self.is_recording and self.is_playing:
+                    self.record_incoming_note(lane)
+            else:
+                self.held_frets.discard(lane)
+                self._highlight_fret_button(lane, False)
 
     def _start_playback_poll(self):
         """Atualiza a posição do playhead vermelho no Canvas enquanto a música toca."""
