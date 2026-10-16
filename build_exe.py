@@ -26,6 +26,7 @@ def build():
         "--collect-all=customtkinter",
         "--collect-all=rtmidi",
         "--collect-all=pygame",
+        "--collect-all=PIL",
         "src/main.py"
     ]
 

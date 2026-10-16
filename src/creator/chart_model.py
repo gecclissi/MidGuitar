@@ -34,6 +34,7 @@ class ChartSong:
     time_signature: tuple = (4, 4)
     preview_start_ms: int = 30000
     audio_path: Optional[str] = None
+    album_art_path: Optional[str] = None
     
     # Dificuldades de 0 a 7 (-1 se não tiver)
     diff_guitar: int = 3
@@ -88,6 +89,7 @@ class ChartSong:
             "time_signature": list(self.time_signature),
             "preview_start_ms": self.preview_start_ms,
             "audio_path": self.audio_path,
+            "album_art_path": self.album_art_path,
             "diff_guitar": self.diff_guitar,
             "diff_bass": self.diff_bass,
             "diff_drums": self.diff_drums,
@@ -113,6 +115,7 @@ class ChartSong:
             time_signature=tuple(data.get("time_signature", [4, 4])),
             preview_start_ms=data.get("preview_start_ms", 30000),
             audio_path=data.get("audio_path"),
+            album_art_path=data.get("album_art_path"),
             diff_guitar=data.get("diff_guitar", 3),
             diff_bass=data.get("diff_bass", 2),
             diff_drums=data.get("diff_drums", 3),

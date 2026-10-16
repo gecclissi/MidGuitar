@@ -60,4 +60,14 @@ loading_phrase = Criado e gravado com MidGuitar Universal Studio!
         except Exception as e:
             print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
 
+    # 4. Copia a arte do álbum se existir
+    if song.album_art_path and os.path.exists(song.album_art_path):
+        try:
+            from PIL import Image
+            dest_art = os.path.join(target_dir, "album.png")
+            im = Image.open(song.album_art_path).convert("RGBA")
+            im.save(dest_art, "PNG")
+        except Exception as e:
+            print(f"[CloneHeroExporter] Erro ao salvar arte do álbum: {e}")
+
     return target_dir
