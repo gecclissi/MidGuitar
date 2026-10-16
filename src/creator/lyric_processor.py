@@ -8,11 +8,49 @@ import re
 from typing import List, Tuple, Optional
 from src.creator.chart_model import ChartSong, VocalNote
 
-def parse_lrc_content(lrc_text: str) -> List[Tuple[int, str]]:
+def parse_srt_content(srt_text: str) -> List[Tuple[int, str]]:
     """
-    Analisa texto no formato LRC com tags de tempo [mm:ss.xx] ou [mm:ss:xxx].
+    Analisa legendas no formato SRT (ex: 00:00:12,340 --> 00:00:15,600).
     Retorna lista ordenada de tuplas (tempo_ms, linha_de_letra).
     """
+    entries = []
+    blocks = re.split(r'\n\s*\n', srt_text.strip())
+    ts_pattern = re.compile(r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})')
+
+    for block in blocks:
+        lines = [l.strip() for l in block.splitlines() if l.strip()]
+        if len(lines) < 2:
+            continue
+        ts_match = None
+        text_lines = []
+        for l in lines:
+            if not ts_match:
+                m = ts_pattern.search(l)
+                if m:
+                    ts_match = m
+            else:
+                clean_l = re.sub(r'<[^>]+>', '', l).strip()
+                if clean_l:
+                    text_lines.append(clean_l)
+        if ts_match and text_lines:
+            h, m_val, s, ms_str = int(ts_match.group(1)), int(ts_match.group(2)), int(ts_match.group(3)), ts_match.group(4)
+            ms = int(ms_str.ljust(3, '0')[:3])
+            time_ms = ((h * 3600) + (m_val * 60) + s) * 1000 + ms
+            entries.append((time_ms, " ".join(text_lines)))
+
+    entries.sort(key=lambda x: x[0])
+    return entries
+
+def parse_lrc_content(lrc_text: str) -> List[Tuple[int, str]]:
+    """
+    Analisa texto no formato LRC com tags de tempo [mm:ss.xx] ou [mm:ss:xxx] ou SRT.
+    Retorna lista ordenada de tuplas (tempo_ms, linha_de_letra).
+    """
+    if "-->" in lrc_text:
+        srt_res = parse_srt_content(lrc_text)
+        if srt_res:
+            return srt_res
+
     entries = []
     # Padrão para pegar timestamps como [01:23.45] ou [01:23:450]
     pattern = re.compile(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{2,3}))?\](.*)')
@@ -39,6 +77,7 @@ def parse_lrc_content(lrc_text: str) -> List[Tuple[int, str]]:
 
     entries.sort(key=lambda x: x[0])
     return entries
+
 
 def syllabify_word(word: str) -> List[str]:
     """

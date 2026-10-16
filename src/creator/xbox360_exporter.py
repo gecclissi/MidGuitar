@@ -50,7 +50,14 @@ def export_xbox360_structure(song: ChartSong, output_base_dir: str, total_durati
     save_midi(mid, mid_path)
     shutil.copy2(mid_path, os.path.join(content_dir, f"{clean_shortname}.mid"))
 
-    # 5. Copia áudios
+    # 5. Gera o container oficial .mogg (0x0A) e copia áudios
+    from src.creator.mogg_generator import create_unencrypted_mogg
+    primary_audio = song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
+    if primary_audio and os.path.exists(primary_audio):
+        mogg_dest1 = os.path.join(track_dir, f"{clean_shortname}.mogg")
+        if create_unencrypted_mogg(primary_audio, mogg_dest1):
+            shutil.copy2(mogg_dest1, os.path.join(content_dir, f"{clean_shortname}.mogg"))
+
     if song.audio_stems:
         for stem_p in song.audio_stems:
             if os.path.exists(stem_p):

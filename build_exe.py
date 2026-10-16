@@ -27,6 +27,8 @@ def build():
         "--collect-all=rtmidi",
         "--collect-all=pygame",
         "--collect-all=PIL",
+        "--collect-all=soundfile",
+        "--collect-all=tkinterdnd2",
         "src/main.py"
     ]
 

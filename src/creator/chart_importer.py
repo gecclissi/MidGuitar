@@ -54,11 +54,18 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         except Exception:
             pass
 
-    # 2. Busca arquivos de áudio (Stems individuais ou mixagem geral)
+    # 2. Busca arquivos de áudio (Stems individuais, mixagem geral ou .mogg oficial do RB3)
     for f in os.listdir(folder_path):
         f_lower = f.lower()
-        if f_lower.endswith((".ogg", ".mp3", ".wav", ".flac", ".opus")):
-            full_p = os.path.join(folder_path, f)
+        full_p = os.path.join(folder_path, f)
+        if f_lower.endswith(".mogg"):
+            from src.creator.mogg_generator import extract_ogg_from_mogg
+            extracted_ogg = os.path.join(folder_path, f"{os.path.splitext(f)[0]}_extracted.ogg")
+            if extract_ogg_from_mogg(full_p, extracted_ogg):
+                song.audio_stems.append(extracted_ogg)
+                if not song.audio_path:
+                    song.audio_path = extracted_ogg
+        elif f_lower.endswith((".ogg", ".mp3", ".wav", ".flac", ".opus")):
             song.audio_stems.append(full_p)
             stem_base = os.path.splitext(f_lower)[0]
             if stem_base in ["song", "guitar", "audio"] and not song.audio_path:
@@ -67,10 +74,10 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
     if not song.audio_path and song.audio_stems:
         song.audio_path = song.audio_stems[0]
 
-    # 3. Busca arquivos de letra (.txt / .lrc)
+    # 3. Busca arquivos de letra (.txt / .lrc / .srt)
     for f in os.listdir(folder_path):
         f_lower = f.lower()
-        if f_lower in ["lyrics.txt", "song.lrc", "lyrics.lrc", "letra.txt", "words.txt"]:
+        if f_lower in ["lyrics.txt", "song.lrc", "lyrics.lrc", "letra.txt", "words.txt", "lyrics.srt", "song.srt"] or f_lower.endswith((".lrc", ".srt")):
             try:
                 with open(os.path.join(folder_path, f), "r", encoding="utf-8-sig", errors="ignore") as lf:
                     song.lyrics_raw = lf.read()
@@ -78,12 +85,19 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
             except Exception:
                 pass
 
-    # 4. Busca e analisa notes.mid
+    # 4. Busca e analisa notes.mid ou notes.chart
     mid_file = os.path.join(folder_path, "notes.mid")
     if not os.path.exists(mid_file):
         for f in os.listdir(folder_path):
             if f.lower().endswith(".mid"):
                 mid_file = os.path.join(folder_path, f)
+                break
+
+    chart_file = os.path.join(folder_path, "notes.chart")
+    if not os.path.exists(chart_file):
+        for f in os.listdir(folder_path):
+            if f.lower().endswith(".chart"):
+                chart_file = os.path.join(folder_path, f)
                 break
 
     if os.path.exists(mid_file):
@@ -92,13 +106,99 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
             _parse_midi_into_song(mid, song)
         except Exception as e:
             print(f"[ChartImporter] Erro ao analisar MIDI {mid_file}: {e}")
+    elif os.path.exists(chart_file):
+        try:
+            _parse_chart_file_into_song(chart_file, song)
+        except Exception as e:
+            print(f"[ChartImporter] Erro ao analisar CHART {chart_file}: {e}")
 
     # Se carregou lyrics_raw mas não tinha vocal_notes, aplica alinhamento automático
     if song.lyrics_raw and not song.vocal_notes:
         from src.creator.lyric_processor import align_lyrics_to_song
         align_lyrics_to_song(song, song.lyrics_raw)
 
+    # Garante que todas as 4 dificuldades existam para qualquer instrumento carregado
+    from src.creator.auto_charter import recalculate_track_difficulties
+    for inst_key in ["guitar", "bass", "drum", "keys"]:
+        notes_list = getattr(song, f"{inst_key}_notes", [])
+        if notes_list and not any(n.difficulty in ["Hard", "Medium", "Easy"] for n in notes_list):
+            recalculate_track_difficulties(song, [inst_key])
+
     return song
+
+
+def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
+    """Analisa arquivos notes.chart do Clone Hero / Moonscraper / Feedback."""
+    import re
+    with open(chart_path, "r", encoding="utf-8-sig", errors="ignore") as f:
+        text = f.read()
+
+    resolution = 192
+    bpm = 120.0
+    current_section = ""
+
+    section_map = {
+        "EXPERTSINGLE": ("guitar", "Expert"),
+        "HARDSINGLE": ("guitar", "Hard"),
+        "MEDIUMSINGLE": ("guitar", "Medium"),
+        "EASYSINGLE": ("guitar", "Easy"),
+        "EXPERTDOUBLEBASS": ("bass", "Expert"),
+        "HARDDOUBLEBASS": ("bass", "Hard"),
+        "MEDIUMDOUBLEBASS": ("bass", "Medium"),
+        "EASYDOUBLEBASS": ("bass", "Easy"),
+        "EXPERTDRUMS": ("drum", "Expert"),
+        "HARDDRUMS": ("drum", "Hard"),
+        "MEDIUMDRUMS": ("drum", "Medium"),
+        "EASYDRUMS": ("drum", "Easy"),
+        "EXPERTKEYBOARD": ("keys", "Expert"),
+        "HARDKEYBOARD": ("keys", "Hard"),
+        "MEDIUMKEYBOARD": ("keys", "Medium"),
+        "EASYKEYBOARD": ("keys", "Easy"),
+    }
+    fret_idx_to_lane = {0: "green", 1: "red", 2: "yellow", 3: "blue", 4: "orange"}
+    drum_idx_to_lane = {0: "orange", 1: "red", 2: "yellow", 3: "blue", 4: "green"}
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line in ["{", "}"]:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line[1:-1].strip().upper()
+            continue
+
+        if current_section == "SONG":
+            if "=" in line:
+                k, v = [p.strip().strip('"') for p in line.split("=", 1)]
+                kl = k.lower()
+                if kl == "name" and song.title == "Nova Música":
+                    song.title = v
+                elif kl == "artist" and song.artist == "Artista Desconhecido":
+                    song.artist = v
+                elif kl == "resolution":
+                    try:
+                        resolution = max(1, int(v))
+                    except Exception:
+                        pass
+        elif current_section == "SYNCTRACK":
+            # Ex: 0 = B 120000
+            m = re.match(r'(\d+)\s*=\s*B\s+(\d+)', line)
+            if m and int(m.group(1)) == 0:
+                bpm = int(m.group(2)) / 1000.0
+                song.bpm = round(bpm, 2)
+        elif current_section in section_map:
+            inst, diff = section_map[current_section]
+            # Ex: 768 = N 0 0
+            m = re.match(r'(\d+)\s*=\s*N\s+(\d+)\s+(\d+)', line)
+            if m:
+                tick = int(m.group(1))
+                n_idx = int(m.group(2))
+                sustain_ticks = int(m.group(3))
+                lane_map = drum_idx_to_lane if inst == "drum" else fret_idx_to_lane
+                if n_idx in lane_map:
+                    start_ms = int((tick / resolution) * (60.0 / bpm) * 1000.0)
+                    dur_ms = max(120, int((sustain_ticks / resolution) * (60.0 / bpm) * 1000.0))
+                    song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane_map[n_idx], duration_ms=dur_ms, difficulty=diff))
+
 
 def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
     """Extrai notas e BPM das trilhas do MIDI."""

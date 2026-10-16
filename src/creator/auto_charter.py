@@ -16,7 +16,14 @@ from typing import List, Tuple
 from src.creator.chart_model import ChartSong, NoteEvent, TextEvent, VocalNote
 
 def get_audio_duration_ms(audio_path: str) -> int:
-    """Tenta obter a duração real em milissegundos do arquivo de áudio via pygame."""
+    """Tenta obter a duração real em milissegundos do arquivo de áudio."""
+    try:
+        from src.creator.mogg_generator import analyze_audio_file
+        info = analyze_audio_file(audio_path)
+        if info.get("duration_ms", 0) > 5000:
+            return int(info["duration_ms"])
+    except Exception:
+        pass
     try:
         import pygame
         if not pygame.mixer.get_init():
@@ -38,22 +45,56 @@ def auto_generate_chart(
     clear_existing: bool = True
 ) -> ChartSong:
     """
-    Gera automaticamente notas completas, rítmicas e musicais sincronizadas com o BPM.
+    Gera automaticamente notas completas, rítmicas e musicais sincronizadas com o BPM e energia do áudio.
     Se clear_existing for False, preserva as trilhas que já possuem notas!
+    REGRA DE OURO DO MICROFONE: Se a música NÃO possuir letra (lyrics_raw vazio), NÃO gera vocais falsos!
     """
+    first_sound_ms = 2000
+    last_sound_ms = total_duration_ms - 2000
+    energy_windows = []
+
     if song.audio_path:
-        detected_dur = get_audio_duration_ms(song.audio_path)
-        if detected_dur > 10000:
-            total_duration_ms = detected_dur
+        try:
+            from src.creator.mogg_generator import analyze_audio_file
+            info = analyze_audio_file(song.audio_path)
+            if info.get("duration_ms", 0) > 5000:
+                total_duration_ms = int(info["duration_ms"])
+                first_sound_ms = max(500, int(info.get("first_sound_ms", 2000)))
+                last_sound_ms = min(total_duration_ms - 500, int(info.get("last_sound_ms", total_duration_ms - 2000)))
+                energy_windows = info.get("energy_windows", [])
+                # Se o BPM ainda estava no padrão (120.0), usa o BPM real detectado do áudio!
+                if abs(song.bpm - 120.0) < 0.1 and info.get("bpm"):
+                    song.bpm = float(info["bpm"])
+        except Exception:
+            detected_dur = get_audio_duration_ms(song.audio_path)
+            if detected_dur > 10000:
+                total_duration_ms = detected_dur
+                last_sound_ms = total_duration_ms - 2000
 
     if selected_instruments is None:
         selected_instruments = ["guitar", "bass", "drum", "keys"]
+
+    # Validação estrita do Microfone: Sem letra = Sem microfone!
+    has_real_lyrics = bool(song.lyrics_raw and song.lyrics_raw.strip())
+    if "vocals" in selected_instruments and not has_real_lyrics:
+        selected_instruments = [inst for inst in selected_instruments if inst != "vocals"]
+        if clear_existing:
+            song.vocal_notes.clear()
 
     bpm = max(30.0, song.bpm)
     beat_ms = (60.0 / bpm) * 1000.0          # Tempo de 1 semínima (1 batida)
     measure_ms = beat_ms * 4.0               # Tempo de 1 compasso (4/4)
     eighth_ms = beat_ms / 2.0                # Tempo de 1 colcheia
-    total_measures = int(total_duration_ms / measure_ms)
+    total_measures = max(4, int(total_duration_ms / measure_ms))
+
+    def _is_silent_at(t_ms: int) -> bool:
+        if t_ms < first_sound_ms or t_ms > last_sound_ms:
+            return True
+        if energy_windows:
+            idx = min(len(energy_windows) - 1, max(0, int(t_ms // 500)))
+            if energy_windows[idx] < 0.04:
+                return True
+        return False
 
     # 1. Limpa trilhas que serão geradas (apenas se clear_existing for True)
     for inst in selected_instruments:
@@ -94,6 +135,8 @@ def auto_generate_chart(
         song.clear_track("drum")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
             is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
             is_solo = (m >= m_solo and m < m_chorus2)
             is_fill_measure = (m % 8 == 7)
@@ -116,7 +159,8 @@ def auto_generate_chart(
                 cymbal_lane = "blue" if is_chorus else "yellow"
                 for b8 in range(8):
                     t8 = int(m_start + b8 * eighth_ms)
-                    song.add_note("drum", NoteEvent(time_ms=t8, lane=cymbal_lane, duration_ms=120, difficulty="Expert"))
+                    if not _is_silent_at(t8):
+                        song.add_note("drum", NoteEvent(time_ms=t8, lane=cymbal_lane, duration_ms=120, difficulty="Expert"))
 
                 if m % 16 == 8:
                     od_note = NoteEvent(time_ms=m_start, lane="overdrive", duration_ms=int(2 * measure_ms), difficulty="Expert", is_overdrive=True)
@@ -127,11 +171,15 @@ def auto_generate_chart(
         song.clear_track("bass")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
             root_idx = chord_progression[m % len(chord_progression)]
             root_lane = lanes_5[root_idx]
 
             for b in range(4):
                 t_beat = int(m_start + b * beat_ms)
+                if _is_silent_at(t_beat):
+                    continue
                 active_lane = root_lane if b < 3 else lanes_5[(root_idx + 1) % len(lanes_5)]
                 song.add_note("bass", NoteEvent(time_ms=t_beat, lane=active_lane, duration_ms=int(beat_ms * 0.75), difficulty="Expert"))
 
@@ -140,6 +188,8 @@ def auto_generate_chart(
         song.clear_track("guitar")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
             root_idx = chord_progression[m % len(chord_progression)]
             is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
             is_solo = (m >= m_solo and m < m_chorus2)
@@ -149,6 +199,8 @@ def auto_generate_chart(
                 song.add_note("guitar", solo_marker)
                 for s in range(8):
                     t_solo = int(m_start + s * eighth_ms)
+                    if _is_silent_at(t_solo):
+                        continue
                     note_lane = lanes_5[(s * 2 + root_idx) % 5]
                     is_hopo = (s % 2 != 0)
                     dur = int(eighth_ms * 0.9) if s != 7 else int(beat_ms * 1.5)
@@ -158,6 +210,8 @@ def auto_generate_chart(
                 lane_2 = lanes_5[(root_idx + 1) % 5]
                 for b in range(4):
                     t_beat = int(m_start + b * beat_ms)
+                    if _is_silent_at(t_beat):
+                        continue
                     dur = int(beat_ms * 0.8)
                     song.add_note("guitar", NoteEvent(time_ms=t_beat, lane=lane_1, duration_ms=dur, difficulty="Expert"))
                     song.add_note("guitar", NoteEvent(time_ms=t_beat, lane=lane_2, duration_ms=dur, difficulty="Expert"))
@@ -165,6 +219,8 @@ def auto_generate_chart(
                 lane_1 = lanes_5[root_idx]
                 for b in [0, 1.5, 2.5, 3]:
                     t_note = int(m_start + b * beat_ms)
+                    if _is_silent_at(t_note):
+                        continue
                     song.add_note("guitar", NoteEvent(time_ms=t_note, lane=lane_1, duration_ms=int(beat_ms * 0.7), difficulty="Expert"))
 
             if m % 16 == 4:
@@ -175,6 +231,8 @@ def auto_generate_chart(
         song.clear_track("keys")
         for m in range(total_measures):
             m_start = int(m * measure_ms)
+            if _is_silent_at(m_start):
+                continue
             root_idx = chord_progression[m % len(chord_progression)]
             k_lane1 = lanes_5[(root_idx + 2) % 5]
             k_lane2 = lanes_5[(root_idx + 4) % 5]
@@ -182,49 +240,10 @@ def auto_generate_chart(
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane1, duration_ms=dur, difficulty="Expert"))
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane2, duration_ms=dur, difficulty="Expert"))
 
-    # 7. GERAR VOCAIS (PART VOCALS)
-    if "vocals" in selected_instruments and (clear_existing or not song.vocal_notes):
-        song.vocal_notes.clear()
-        vocal_scale = [60, 62, 64, 65, 67, 69, 72]
-        sample_lyrics = ["Yeah", "Come", "on", "feel", "the", "sound", "to-", "night", "sing", "out", "loud", "let's", "go!"]
-        if song.lyrics_raw:
-            from src.creator.lyric_processor import syllabify_text_lines
-            parsed_syls = []
-            for ls in syllabify_text_lines(song.lyrics_raw):
-                parsed_syls.extend(ls)
-            if parsed_syls:
-                sample_lyrics = parsed_syls
-
-        for m in range(total_measures):
-            is_intro = (m < m_intro)
-            is_solo = (m >= m_solo and m < m_chorus2)
-            if is_intro or is_solo:
-                continue
-
-            m_start = int(m * measure_ms)
-            is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
-            root_idx = chord_progression[m % len(chord_progression)]
-
-            is_phrase_end = (m % 2 == 1)
-            is_vocal_od = is_chorus and (m % 8 == 7)
-
-            for b in range(4):
-                t_vocal = int(m_start + b * beat_ms)
-                pitch = vocal_scale[(root_idx + b) % len(vocal_scale)]
-                if is_chorus:
-                    pitch += 12
-
-                lyr = sample_lyrics[(m * 4 + b) % len(sample_lyrics)]
-                last_in_phrase = is_phrase_end and (b == 3)
-
-                song.add_vocal_note(VocalNote(
-                    time_ms=t_vocal,
-                    duration_ms=int(beat_ms * 0.8),
-                    pitch=pitch,
-                    lyric=lyr,
-                    is_overdrive=is_vocal_od,
-                    is_phrase_end=last_in_phrase
-                ))
+    # 7. GERAR VOCAIS (PART VOCALS) - SOMENTE SE HOUVER LETRA/LEGENDA REAL!
+    if "vocals" in selected_instruments and has_real_lyrics and (clear_existing or not song.vocal_notes):
+        from src.creator.lyric_processor import align_lyrics_to_song
+        align_lyrics_to_song(song, song.lyrics_raw, start_delay_ms=max(3000, first_sound_ms + int(measure_ms)))
 
     # 8. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
     if generate_all_diffs:
@@ -375,9 +394,10 @@ def generate_missing_instruments_only(
         instruments = ["guitar", "bass", "drum", "keys", "vocals"]
 
     missing = []
+    has_real_lyrics = bool(song.lyrics_raw and song.lyrics_raw.strip())
     for inst in instruments:
         if inst == "vocals":
-            if not song.vocal_notes:
+            if not song.vocal_notes and has_real_lyrics:
                 missing.append("vocals")
         else:
             if not getattr(song, f"{inst}_notes", []):

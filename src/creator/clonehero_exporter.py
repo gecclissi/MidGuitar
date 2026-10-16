@@ -27,7 +27,13 @@ def export_clone_hero_song(song: ChartSong, output_base_dir: str, audio_source_p
     midi_path = os.path.join(target_dir, "notes.mid")
     save_midi(mid, midi_path)
 
-    # 2. Gera e salva o song.ini
+    # 2. Gera e salva o song.ini (com -1 para instrumentos inexistentes conforme padrão Clone Hero / YARG)
+    d_guitar = song.diff_guitar if song.guitar_notes else -1
+    d_bass = song.diff_bass if song.bass_notes else -1
+    d_drums = song.diff_drums if song.drum_notes else -1
+    d_keys = song.diff_keys if song.keys_notes else -1
+    d_vocals = song.diff_vocals if song.vocal_notes else -1
+
     ini_content = f"""[song]
 name = {song.title}
 artist = {song.artist}
@@ -37,10 +43,11 @@ year = {song.year}
 charter = {song.charter}
 song_length = {total_duration_ms}
 diff_band = {song.diff_band}
-diff_guitar = {song.diff_guitar}
-diff_bass = {song.diff_bass}
-diff_drums = {song.diff_drums}
-diff_keys = {song.diff_keys}
+diff_guitar = {d_guitar}
+diff_bass = {d_bass}
+diff_drums = {d_drums}
+diff_keys = {d_keys}
+diff_vocals = {d_vocals}
 preview_start_time = {song.preview_start_ms}
 icon = midguitar
 loading_phrase = Criado e gravado com MidGuitar Universal Studio!
@@ -49,7 +56,18 @@ loading_phrase = Criado e gravado com MidGuitar Universal Studio!
     with open(ini_path, "w", encoding="utf-8") as f:
         f.write(ini_content)
 
-    # 3. Copia arquivos de áudio (todos os stems ou faixa mestre)
+    # 3. Copia e converte arquivos de áudio (gera song.ogg oficial para máxima compatibilidade no Clone Hero / YARG)
+    from src.creator.mogg_generator import convert_audio_to_ogg
+    audio_path = audio_source_path or song.audio_path
+    if audio_path and os.path.exists(audio_path):
+        ogg_dest = os.path.join(target_dir, "song.ogg")
+        if not convert_audio_to_ogg(audio_path, ogg_dest):
+            ext = os.path.splitext(audio_path)[1].lower()
+            try:
+                shutil.copy2(audio_path, os.path.join(target_dir, f"song{ext}"))
+            except Exception as e:
+                print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
+
     if song.audio_stems:
         for stem_p in song.audio_stems:
             if os.path.exists(stem_p):
@@ -59,16 +77,6 @@ loading_phrase = Criado e gravado com MidGuitar Universal Studio!
                     shutil.copy2(stem_p, dest_p)
                 except Exception as e:
                     print(f"[CloneHeroExporter] Erro ao copiar stem {fname}: {e}")
-    else:
-        audio_path = audio_source_path or song.audio_path
-        if audio_path and os.path.exists(audio_path):
-            ext = os.path.splitext(audio_path)[1].lower()
-            dest_filename = f"song{ext}"
-            dest_audio = os.path.join(target_dir, dest_filename)
-            try:
-                shutil.copy2(audio_path, dest_audio)
-            except Exception as e:
-                print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
 
     # 4. Copia a arte do álbum se existir
     if song.album_art_path and os.path.exists(song.album_art_path):

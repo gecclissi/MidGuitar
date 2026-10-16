@@ -31,7 +31,7 @@ def scan_folder_for_songs(root_dir: str) -> List[Tuple[str, ChartSong]]:
         return found_songs
 
     # Verifica se a própria pasta raiz é uma música
-    if os.path.exists(os.path.join(root_dir, "song.ini")) or any(f.endswith(".mid") for f in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, f))):
+    if os.path.exists(os.path.join(root_dir, "song.ini")) or any(f.lower().endswith((".mid", ".chart")) for f in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, f))):
         s = import_song_from_folder(root_dir)
         if s.title and s.title != "Nova Música":
             found_songs.append((root_dir, s))
@@ -42,7 +42,7 @@ def scan_folder_for_songs(root_dir: str) -> List[Tuple[str, ChartSong]]:
         if entry.is_dir():
             sub = entry.path
             has_ini = os.path.exists(os.path.join(sub, "song.ini"))
-            has_mid = any(f.lower().endswith(".mid") for f in os.listdir(sub) if os.path.isfile(os.path.join(sub, f)))
+            has_mid = any(f.lower().endswith((".mid", ".chart")) for f in os.listdir(sub) if os.path.isfile(os.path.join(sub, f)))
             if has_ini or has_mid:
                 try:
                     song = import_song_from_folder(sub)
@@ -91,6 +91,7 @@ def compile_ps3_song_pack(
     # 3. Mescla todos os blocos do songs.dta
     dta_blocks = []
     used_shortnames = set()
+    from src.creator.mogg_generator import create_unencrypted_mogg
 
     for idx, song in enumerate(songs):
         raw_shortname = "".join(c for c in f"{song.artist}_{song.title}" if c.isalnum()).lower()[:20] or f"song_{idx+1}"
@@ -114,7 +115,11 @@ def compile_ps3_song_pack(
         mid_path = os.path.join(track_dir, f"{shortname}.mid")
         save_midi(mid, mid_path)
 
-        # Copia áudios (stems ou mix)
+        # Gera o arquivo oficial .mogg (0x0A) e copia áudios (stems ou mix)
+        primary_audio = song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
+        if primary_audio and os.path.exists(primary_audio):
+            create_unencrypted_mogg(primary_audio, os.path.join(track_dir, f"{shortname}.mogg"))
+
         if song.audio_stems:
             for s_path in song.audio_stems:
                 if os.path.exists(s_path):

@@ -16,9 +16,18 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
         hash_val = int(hashlib.md5(f"{song.artist}_{song.title}".encode()).hexdigest()[:7], 16)
         song_id = 1010000000 + (hash_val % 9000000)
 
-    # Converte rank 0-7 para pontuação Harmonix (0 a 500)
-    def rank_to_dta(val: int) -> int:
-        return max(0, min(500, val * 60 + 50))
+    # Converte rank 0-7 para pontuação Harmonix (0 a 500) APENAS se o instrumento tiver notas!
+    def rank_to_dta(val: int, has_notes: bool) -> int:
+        if not has_notes:
+            return 0
+        return max(50, min(500, val * 60 + 50))
+
+    has_vocals = len(song.vocal_notes) > 0
+    has_guitar = len(song.guitar_notes) > 0
+    has_bass = len(song.bass_notes) > 0
+    has_drums = len(song.drum_notes) > 0
+    has_keys = len(song.keys_notes) > 0
+    vocal_parts_count = 1 if has_vocals else 0
 
     has_multistem = len(song.audio_stems) > 1
     if has_multistem:
@@ -53,7 +62,7 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
       (tracks
          {tracks_dta}
       )
-      (vocal_parts 1)
+      (vocal_parts {vocal_parts_count})
       (pans {pans_dta})
       (vols {vols_dta})
       (cores {cores_dta})
@@ -73,15 +82,15 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
    (rating 2)
    (genre "{song.genre.lower()}")
    (rank
-      (drum {rank_to_dta(song.diff_drums)})
-      (guitar {rank_to_dta(song.diff_guitar)})
-      (bass {rank_to_dta(song.diff_bass)})
-      (keys {rank_to_dta(song.diff_keys)})
-      (vocals {rank_to_dta(song.diff_vocals)})
+      (drum {rank_to_dta(song.diff_drums, has_drums)})
+      (guitar {rank_to_dta(song.diff_guitar, has_guitar)})
+      (bass {rank_to_dta(song.diff_bass, has_bass)})
+      (keys {rank_to_dta(song.diff_keys, has_keys)})
+      (vocals {rank_to_dta(song.diff_vocals, has_vocals)})
       (real_guitar 0)
       (real_bass 0)
       (real_keys 0)
-      (band {rank_to_dta(song.diff_band)})
+      (band {rank_to_dta(song.diff_band, any([has_drums, has_guitar, has_bass, has_keys, has_vocals]))})
    )
 )
 """
@@ -91,6 +100,7 @@ def export_rb3_song_package(song: ChartSong, output_base_dir: str, audio_source_
     """
     Exporta a estrutura completa de arquivos para Rock Band 3:
     songs/{shortname}/{shortname}.mid
+    songs/{shortname}/{shortname}.mogg (Container oficial Harmonix 0x0A não-criptografado)
     songs/songs.dta
     Retorna o diretório base criado.
     """
@@ -112,8 +122,14 @@ def export_rb3_song_package(song: ChartSong, output_base_dir: str, audio_source_
     mid_path = os.path.join(song_track_dir, f"{clean_shortname}.mid")
     save_midi(mid, mid_path)
 
-    # 2.1 Copia áudio para dentro da pasta da música
+    # 2.1 Gera o arquivo oficial .mogg (0x0A) e copia áudios para dentro da pasta da música
     import shutil
+    from src.creator.mogg_generator import create_unencrypted_mogg
+    primary_audio = audio_source_path or song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
+    if primary_audio and os.path.exists(primary_audio):
+        mogg_dest = os.path.join(song_track_dir, f"{clean_shortname}.mogg")
+        create_unencrypted_mogg(primary_audio, mogg_dest)
+
     if song.audio_stems:
         for stem_p in song.audio_stems:
             if os.path.exists(stem_p):
@@ -140,7 +156,8 @@ Música: {song.title} - {song.artist}
 
 Estrutura gerada:
 - songs/songs.dta (Definições Harmonix)
-- songs/{clean_shortname}/{clean_shortname}.mid (Trilhas RBN com todas as notas)
+- songs/{clean_shortname}/{clean_shortname}.mid (Trilhas RBN com todas as 4 dificuldades)
+- songs/{clean_shortname}/{clean_shortname}.mogg (Áudio multicanal oficial Harmonix 0x0A)
 
 Como jogar no RPCS3 (Emulador de PS3):
 1. Basta copiar a pasta 'songs' gerada aqui para dentro da pasta do jogo no RPCS3:

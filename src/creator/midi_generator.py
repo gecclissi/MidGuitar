@@ -104,6 +104,15 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         last_tick = target_tick
     events_track.append(MetaMessage('end_of_track', time=0))
 
+    # Garante que todas as 4 dificuldades (Expert, Hard, Medium, Easy) existam nas trilhas
+    from src.creator.auto_charter import recalculate_track_difficulties
+    for inst_key in ["guitar", "bass", "drum", "keys"]:
+        notes_list = getattr(song, f"{inst_key}_notes", [])
+        if notes_list:
+            has_lower = any(n.difficulty in ["Hard", "Medium", "Easy"] for n in notes_list)
+            if not has_lower:
+                recalculate_track_difficulties(song, [inst_key])
+
     # -------------------------------------------------------------
     # PISTA 3: PART GUITAR
     # -------------------------------------------------------------

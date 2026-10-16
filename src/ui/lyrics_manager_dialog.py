@@ -45,7 +45,7 @@ class LyricsManagerDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             header,
-            text="Cole a letra da música ou carregue um arquivo .txt / .lrc. O sistema dividirá as palavras em sílabas e alinhará com o ritmo!",
+            text="Cole a letra/legenda ou carregue um arquivo .txt / .lrc / .srt. O sistema divide em sílabas e libera o microfone na hora!",
             font=ctk.CTkFont(size=11),
             text_color="#94A3B8"
         ).pack(anchor="w", padx=16, pady=(0, 8))
@@ -57,18 +57,18 @@ class LyricsManagerDialog(ctk.CTkToplevel):
         file_bar = ctk.CTkFrame(main_box, fg_color="transparent")
         file_bar.pack(fill="x", padx=12, pady=(10, 4))
 
-        ctk.CTkLabel(file_bar, text="Letra da Canção (Texto ou LRC com minutagem):", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
+        ctk.CTkLabel(file_bar, text="Letra / Legenda da Canção (.txt, .lrc ou .srt):", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
 
         btn_load = ctk.CTkButton(
-            file_bar, text="📁 Carregar Arquivo (.txt / .lrc)...", width=190, height=28,
+            file_bar, text="📁 Carregar Letra (.txt / .lrc / .srt)...", width=215, height=28,
             fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_load_file
         )
         btn_load.pack(side="right", padx=2)
-        set_tooltip(btn_load, "Carrega um arquivo de texto comum (.txt) ou arquivo de letra com tempos (.lrc)")
+        set_tooltip(btn_load, "Carrega um arquivo de texto (.txt), letra sincronizada (.lrc) ou legenda de vídeo (.srt)")
 
         btn_clear = ctk.CTkButton(
-            file_bar, text="🗑️ Limpar", width=80, height=28,
+            file_bar, text="🗑️ Limpar (Sem Mic)", width=120, height=28,
             fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=11),
             command=self._on_clear
         )
@@ -106,7 +106,7 @@ class LyricsManagerDialog(ctk.CTkToplevel):
         self.delay_entry.insert(0, "4000")
         self.delay_entry.pack(side="left", padx=4)
         ctk.CTkLabel(sc_row, text="ms", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 10))
-        set_tooltip(self.delay_entry, "Tempo em milissegundos antes da primeira frase começar (ignorado se o arquivo for .LRC)")
+        set_tooltip(self.delay_entry, "Tempo em milissegundos antes da primeira frase começar (ignorado se o arquivo for .LRC ou .SRT com tempos)")
 
         self.status_lbl = ctk.CTkLabel(
             sc_row,
@@ -118,17 +118,17 @@ class LyricsManagerDialog(ctk.CTkToplevel):
 
         # Botão Principal de Sincronização
         btn_apply = ctk.CTkButton(
-            self, text="✨ SINCRONIZAR E APLICAR LETRA AOS VOCAIS!", height=40,
+            self, text="✨ SINCRONIZAR E HABILITAR MICROFONE (VOCAIS)!", height=40,
             fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=13, weight="bold"),
             command=self._on_apply_lyrics
         )
         btn_apply.pack(fill="x", padx=14, pady=(4, 12))
-        set_tooltip(btn_apply, "Divide o texto em sílabas fonéticas oficiais e sincroniza com a linha do tempo do Rock Band 3 e Clone Hero!")
+        set_tooltip(btn_apply, "Divide o texto em sílabas fonéticas oficiais, habilita o microfone e sincroniza com a linha do tempo do Rock Band 3 e Clone Hero!")
 
     def _on_load_file(self):
         f = filedialog.askopenfilename(
-            title="Selecione o arquivo de letra",
-            filetypes=[("Arquivos de Letra", "*.txt *.lrc"), ("Todos os Arquivos", "*.*")]
+            title="Selecione o arquivo de letra ou legenda (.txt / .lrc / .srt)",
+            filetypes=[("Arquivos de Letra e Legenda", "*.txt *.lrc *.srt"), ("Todos os Arquivos", "*.*")]
         )
         if f:
             try:
@@ -143,12 +143,21 @@ class LyricsManagerDialog(ctk.CTkToplevel):
 
     def _on_clear(self):
         self.txt_lyrics.delete("1.0", "end")
-        self.status_lbl.configure(text="Texto limpo.", text_color="#94A3B8")
+        self.song.lyrics_raw = ""
+        self.song.vocal_notes.clear()
+        self.status_lbl.configure(text="Letra removida (Microfone desativado).", text_color="#F59E0B")
+        if self.on_applied:
+            self.on_applied()
 
     def _on_apply_lyrics(self):
         content = self.txt_lyrics.get("1.0", "end").strip()
         if not content:
-            messagebox.showwarning("Aviso", "Digite ou cole a letra da música antes de sincronizar!")
+            self.song.lyrics_raw = ""
+            self.song.vocal_notes.clear()
+            if self.on_applied:
+                self.on_applied()
+            messagebox.showinfo("Microfone Desativado", "Como nenhuma letra foi informada, a trilha de Microfone (Vocais) foi desativada para esta música.")
+            self.destroy()
             return
 
         try:
@@ -168,10 +177,11 @@ class LyricsManagerDialog(ctk.CTkToplevel):
             self.on_applied()
 
         messagebox.showinfo(
-            "Letra Sincronizada com Sucesso!",
+            "Letra Sincronizada & Microfone Ativado!",
             f"🎉 {total_syls} sílabas divididas e sincronizadas com sucesso!\n\n"
+            f"• O Microfone (🎤 Vocais) foi habilitado automaticamente!\n"
             f"• Divisão silábica oficial Rock Band aplicada (com hífens terminadores).\n"
             f"• Frases vocais (Nota 105) e Overdrives (Nota 106) demarcados.\n"
-            f"• Você pode visualizar as sílabas escritas na trilha '🎤 Vocais' da linha do tempo!"
+            f"• Você pode visualizar e editar as sílabas na trilha '🎤 Vocais' do Mini-REAPER!"
         )
         self.destroy()
