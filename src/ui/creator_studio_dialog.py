@@ -22,6 +22,7 @@ from src.creator.chart_importer import import_song_from_folder
 from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
 from src.creator.ps3_pkg_exporter import export_ps3_pkg_structure
+from src.creator.auto_charter import auto_generate_chart
 from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
 
@@ -297,6 +298,49 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         btn_zoom_in = ctk.CTkButton(bar, text="🔍+", width=36, height=28, fg_color="#334155", command=lambda: self._adjust_zoom(+20))
         btn_zoom_in.pack(side="right", padx=2, pady=6)
         set_tooltip(btn_zoom_in, "Aumentar zoom (ver notas em detalhes para solos rápidos)")
+
+        # Barra Inteligente de Auto-Chart (Geração Automática de Notas)
+        auto_bar = ctk.CTkFrame(tab, fg_color="#1E1B4B", corner_radius=8, border_width=1, border_color="#6366F1")
+        auto_bar.pack(fill="x", padx=10, pady=(2, 4))
+
+        ab_row = ctk.CTkFrame(auto_bar, fg_color="transparent")
+        ab_row.pack(fill="x", padx=10, pady=4)
+
+        ctk.CTkLabel(
+            ab_row, text="✨ Auto-Chart Automático:",
+            font=ctk.CTkFont(size=11, weight="bold"), text_color="#A5B4FC"
+        ).pack(side="left", padx=(0, 6))
+
+        self.chk_gen_guitar = ctk.CTkCheckBox(ab_row, text="🎸 Guitarra", font=ctk.CTkFont(size=11), width=85)
+        self.chk_gen_guitar.select()
+        self.chk_gen_guitar.pack(side="left", padx=2)
+
+        self.chk_gen_bass = ctk.CTkCheckBox(ab_row, text="🎸 Baixo", font=ctk.CTkFont(size=11), width=75)
+        self.chk_gen_bass.select()
+        self.chk_gen_bass.pack(side="left", padx=2)
+
+        self.chk_gen_drums = ctk.CTkCheckBox(ab_row, text="🥁 Bateria", font=ctk.CTkFont(size=11), width=85)
+        self.chk_gen_drums.select()
+        self.chk_gen_drums.pack(side="left", padx=2)
+
+        self.chk_gen_keys = ctk.CTkCheckBox(ab_row, text="🎹 Teclado", font=ctk.CTkFont(size=11), width=85)
+        self.chk_gen_keys.select()
+        self.chk_gen_keys.pack(side="left", padx=2)
+
+        self.intensity_combo = ctk.CTkComboBox(
+            ab_row, width=130, height=28,
+            values=["⚡ Rock Enérgico", "🔥 Metal / Solos", "🎵 Pop Suave"]
+        )
+        self.intensity_combo.set("⚡ Rock Enérgico")
+        self.intensity_combo.pack(side="left", padx=4)
+
+        btn_run_auto = ctk.CTkButton(
+            ab_row, text="✨ GERAR TODAS AS NOTAS!", width=220, height=28,
+            fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._on_auto_generate_clicked
+        )
+        btn_run_auto.pack(side="right", padx=2)
+        set_tooltip(btn_run_auto, "Cria todas as notas musicais, acordes, solos e bateria sincronizados com o BPM em 1 clique!")
 
         # Canvas Interativo (Mini-REAPER)
         canvas_box = ctk.CTkFrame(tab, fg_color="#0B0F17", corner_radius=6)
@@ -923,3 +967,44 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             self._on_convert_to_rb3()
         else:
             self._on_convert_to_rb3()
+
+    def _on_auto_generate_clicked(self):
+        """Gera automaticamente notas completas para todos os instrumentos selecionados."""
+        selected = []
+        if self.chk_gen_guitar.get():
+            selected.append("guitar")
+        if self.chk_gen_bass.get():
+            selected.append("bass")
+        if self.chk_gen_drums.get():
+            selected.append("drum")
+        if self.chk_gen_keys.get():
+            selected.append("keys")
+
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione ao menos um instrumento para gerar as notas!")
+            return
+
+        try:
+            self.song.bpm = float(self.bpm_entry.get())
+        except Exception:
+            self.song.bpm = 120.0
+
+        intensity = self.intensity_combo.get()
+        auto_generate_chart(self.song, selected_instruments=selected, intensity=intensity, generate_all_diffs=True)
+        self.timeline.redraw()
+        self._update_note_counter()
+
+        inst_names = []
+        if "guitar" in selected: inst_names.append("Guitarra")
+        if "bass" in selected: inst_names.append("Baixo")
+        if "drum" in selected: inst_names.append("Bateria")
+        if "keys" in selected: inst_names.append("Teclado")
+
+        messagebox.showinfo(
+            "Auto-Chart Concluído!",
+            f"✨ Notas geradas automaticamente com sucesso!\n\n"
+            f"• Instrumentos: {', '.join(inst_names)}\n"
+            f"• Estilo: {intensity}  |  BPM: {self.song.bpm}\n"
+            f"• Dificuldades: Expert, Hard, Medium e Easy incluídas!\n\n"
+            f"Você já pode ouvir a música com ▶️ Tocar Música, ajustar qualquer nota com o mouse ou ir direto para a aba de Exportação!"
+        )
