@@ -23,6 +23,16 @@ class TextEvent:
     text: str                # ex: "[section intro]", "[section solo]"
 
 @dataclass
+class VocalNote:
+    time_ms: int
+    duration_ms: int = 250
+    pitch: int = 60            # Altura tonal MIDI (ex: 60 = C4)
+    lyric: str = "la"          # Sílaba / palavra cantada
+    is_talkie: bool = False    # Frase falada / rap
+    is_overdrive: bool = False # Frase de Overdrive (Nota 106)
+    is_phrase_end: bool = False # Fim da frase vocal (Nota 105)
+
+@dataclass
 class ChartSong:
     title: str = "Nova Música"
     artist: str = "Artista"
@@ -42,6 +52,7 @@ class ChartSong:
     diff_bass: int = 2
     diff_drums: int = 3
     diff_keys: int = 2
+    diff_vocals: int = 3
     diff_band: int = 3
 
     # Trilhas de notas
@@ -49,7 +60,12 @@ class ChartSong:
     bass_notes: List[NoteEvent] = field(default_factory=list)
     drum_notes: List[NoteEvent] = field(default_factory=list)
     keys_notes: List[NoteEvent] = field(default_factory=list)
+    vocal_notes: List[VocalNote] = field(default_factory=list)
     events: List[TextEvent] = field(default_factory=list)
+
+    def add_vocal_note(self, note: VocalNote):
+        self.vocal_notes.append(note)
+        self.vocal_notes.sort(key=lambda n: n.time_ms)
 
     def add_note(self, track: str, note_event: NoteEvent):
         """Adiciona uma nota à trilha especificada mantendo ordenado por tempo."""

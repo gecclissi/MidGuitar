@@ -13,7 +13,7 @@ Gera automaticamente para todas as dificuldades (Expert, Hard, Medium, Easy).
 
 import math
 from typing import List, Tuple
-from src.creator.chart_model import ChartSong, NoteEvent, TextEvent
+from src.creator.chart_model import ChartSong, NoteEvent, TextEvent, VocalNote
 
 def get_audio_duration_ms(audio_path: str) -> int:
     """Tenta obter a duração real em milissegundos do arquivo de áudio via pygame."""
@@ -182,7 +182,45 @@ def auto_generate_chart(
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane1, duration_ms=dur, difficulty="Expert"))
             song.add_note("keys", NoteEvent(time_ms=m_start, lane=k_lane2, duration_ms=dur, difficulty="Expert"))
 
-    # 7. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
+    # 7. GERAR VOCAIS (PART VOCALS com Pitch, Frases, Letras e Overdrive)
+    if "vocals" in selected_instruments:
+        song.vocal_notes.clear()
+        vocal_scale = [60, 62, 64, 65, 67, 69, 72]
+        sample_lyrics = ["Yeah", "Come", "on", "feel", "the", "sound", "to-", "night", "sing", "out", "loud", "let's", "go!"]
+
+        for m in range(total_measures):
+            # Dá pausa na introdução e no solo de guitarra
+            is_intro = (m < m_intro)
+            is_solo = (m >= m_solo and m < m_chorus2)
+            if is_intro or is_solo:
+                continue
+
+            m_start = int(m * measure_ms)
+            is_chorus = (m >= m_chorus1 and m < m_verse2) or (m >= m_chorus2)
+            root_idx = chord_progression[m % len(chord_progression)]
+
+            is_phrase_end = (m % 2 == 1)
+            is_vocal_od = is_chorus and (m % 8 == 7)
+
+            for b in range(4):
+                t_vocal = int(m_start + b * beat_ms)
+                pitch = vocal_scale[(root_idx + b) % len(vocal_scale)]
+                if is_chorus:
+                    pitch += 12 # Uma oitava acima no refrão
+
+                lyr = sample_lyrics[(m * 4 + b) % len(sample_lyrics)]
+                last_in_phrase = is_phrase_end and (b == 3)
+
+                song.add_vocal_note(VocalNote(
+                    time_ms=t_vocal,
+                    duration_ms=int(beat_ms * 0.8),
+                    pitch=pitch,
+                    lyric=lyr,
+                    is_overdrive=is_vocal_od,
+                    is_phrase_end=last_in_phrase
+                ))
+
+    # 8. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
     if generate_all_diffs:
         _generate_lower_difficulties(song, selected_instruments)
 

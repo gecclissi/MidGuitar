@@ -6,10 +6,11 @@ PART GUITAR, PART BASS, PART DRUMS, PART KEYS, BEAT e EVENTS.
 
 import mido
 from mido import MidiFile, MidiTrack, Message, MetaMessage, bpm2tempo
-from src.creator.chart_model import ChartSong, NoteEvent
+from src.creator.chart_model import ChartSong, NoteEvent, VocalNote
 from src.creator.rbn_specs import (
     FRET_NOTES, DRUM_NOTES, BEAT_BAR_DOWNBEAT, BEAT_OFFBEAT,
-    GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE
+    GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE,
+    VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE, VOCAL_PERCUSSION, VOCAL_TALKIE
 )
 
 TICKS_PER_BEAT = 480
@@ -125,7 +126,88 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         _build_instrument_track(keys_track, song.keys_notes, FRET_NOTES, KEYS_OVERDRIVE, song.bpm)
         keys_track.append(MetaMessage('end_of_track', time=0))
 
+    # -------------------------------------------------------------
+    # PISTA 7: PART VOCALS (Melodias, Letras e Frases)
+    # -------------------------------------------------------------
+    if song.vocal_notes:
+        vocal_track = MidiTrack()
+        mid.tracks.append(vocal_track)
+        vocal_track.append(MetaMessage('track_name', name='PART VOCALS', time=0))
+        _build_vocal_track(vocal_track, song.vocal_notes, song.bpm)
+        vocal_track.append(MetaMessage('end_of_track', time=0))
+
     return mid
+
+def _build_vocal_track(track: MidiTrack, notes: list, bpm: float):
+    """
+    Constrói a trilha PART VOCALS conforme a especificação oficial Rock Band:
+    - Alturas tonais reais (36 a 84)
+    - Letras cantadas sincronizadas (MetaMessage lyrics)
+    - Frases vocais (Nota 105)
+    - Frases de Overdrive (Nota 106)
+    - Pandeiro / Percussão (Nota 116)
+    """
+    events = []
+    
+    # Agrupa notas em frases para demarcar com a nota 105
+    phrase_start_tick = None
+    phrase_end_tick = None
+    is_od_phrase = False
+
+    for n in notes:
+        s_tick = ms_to_ticks(n.time_ms, bpm)
+        dur_ticks = max(80, ms_to_ticks(n.duration_ms, bpm))
+        e_tick = s_tick + dur_ticks
+
+        if phrase_start_tick is None:
+            phrase_start_tick = max(0, s_tick - 40)
+            is_od_phrase = n.is_overdrive
+
+        pitch = VOCAL_TALKIE if n.is_talkie else n.pitch
+
+        # Letra/sílaba anexada no tempo exato
+        if n.lyric:
+            events.append((s_tick, "lyric", n.lyric, 0))
+
+        # Nota cantada
+        events.append((s_tick, "note_on", pitch, 100))
+        events.append((e_tick, "note_off", pitch, 0))
+
+        phrase_end_tick = e_tick + 40
+
+        # Se for fim de frase (ou última nota)
+        if n.is_phrase_end:
+            # Nota 105 demarca a frase vocal completa
+            events.append((phrase_start_tick, "note_on", VOCAL_PHRASE_MARKER, 100))
+            events.append((phrase_end_tick, "note_off", VOCAL_PHRASE_MARKER, 0))
+
+            # Se a frase tem Overdrive (Nota 106)
+            if is_od_phrase or n.is_overdrive:
+                events.append((phrase_start_tick, "note_on", VOCAL_OVERDRIVE, 100))
+                events.append((phrase_end_tick, "note_off", VOCAL_OVERDRIVE, 0))
+
+            phrase_start_tick = None
+            phrase_end_tick = None
+            is_od_phrase = False
+
+    # Fecha frase restante se houver
+    if phrase_start_tick is not None and phrase_end_tick is not None:
+        events.append((phrase_start_tick, "note_on", VOCAL_PHRASE_MARKER, 100))
+        events.append((phrase_end_tick, "note_off", VOCAL_PHRASE_MARKER, 0))
+        if is_od_phrase:
+            events.append((phrase_start_tick, "note_on", VOCAL_OVERDRIVE, 100))
+            events.append((phrase_end_tick, "note_off", VOCAL_OVERDRIVE, 0))
+
+    # Ordena e insere na track
+    events.sort(key=lambda x: (x[0], 0 if x[1] == "note_off" else 1))
+    last_tick = 0
+    for tick, ev_type, val, vel in events:
+        delta = max(0, tick - last_tick)
+        if ev_type == "lyric":
+            track.append(MetaMessage("lyrics", text=val, time=delta))
+        else:
+            track.append(Message(ev_type, note=val, velocity=vel, time=delta))
+        last_tick = tick
 
 def _build_instrument_track(track: MidiTrack, notes: list[NoteEvent], note_map: dict, overdrive_note: int, bpm: float):
     """Converte lista de NoteEvent em mensagens note_on e note_off com deltas corretos."""

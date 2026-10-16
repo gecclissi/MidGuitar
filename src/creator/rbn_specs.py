@@ -129,3 +129,15 @@ PRO_KEYS_MAX_NOTE = 72
 # 6 cordas: Corda 1 (Mi agudo) até Corda 6 (Mi grave)
 PRO_GUITAR_OVERDRIVE = 116
 PRO_GUITAR_SOLO = 103
+
+# -------------------------------------------------------------------------
+# VOCAIS & HARMONIAS (PART VOCALS / HARM1 / HARM2 / HARM3)
+# Mecânicas especiais da Harmonix: Altura tonal (Pitch), Letras (Lyrics),
+# Frases de Pontuação (Note 105), Overdrive (Note 106) e Pandeiro (Note 116).
+# -------------------------------------------------------------------------
+VOCAL_PITCH_MIN = 36          # C2 (Dó 2)
+VOCAL_PITCH_MAX = 84          # C6 (Dó 6)
+VOCAL_PHRASE_MARKER = 105     # Marca o início e fim da frase vocal para rolagem e pontuação
+VOCAL_OVERDRIVE = 106         # Frase de Overdrive (Energia) dos vocais
+VOCAL_PERCUSSION = 116        # Batida no microfone / Pandeiro durante partes instrumentais
+VOCAL_TALKIE = 96             # Nota falada / rap (sem altura tonal obrigatória)

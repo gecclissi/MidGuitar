@@ -327,6 +327,10 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.chk_gen_keys.select()
         self.chk_gen_keys.pack(side="left", padx=2)
 
+        self.chk_gen_vocals = ctk.CTkCheckBox(ab_row, text="🎤 Vocais", font=ctk.CTkFont(size=11), width=85)
+        self.chk_gen_vocals.select()
+        self.chk_gen_vocals.pack(side="left", padx=2)
+
         self.intensity_combo = ctk.CTkComboBox(
             ab_row, width=130, height=28,
             values=["⚡ Rock Enérgico", "🔥 Metal / Solos", "🎵 Pop Suave"]
@@ -979,6 +983,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             selected.append("drum")
         if self.chk_gen_keys.get():
             selected.append("keys")
+        if self.chk_gen_vocals.get():
+            selected.append("vocals")
 
         if not selected:
             messagebox.showwarning("Aviso", "Selecione ao menos um instrumento para gerar as notas!")
@@ -999,6 +1005,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if "bass" in selected: inst_names.append("Baixo")
         if "drum" in selected: inst_names.append("Bateria")
         if "keys" in selected: inst_names.append("Teclado")
+        if "vocals" in selected: inst_names.append("Vocais (Letras & Melodias)")
 
         messagebox.showinfo(
             "Auto-Chart Concluído!",
