@@ -222,7 +222,6 @@ class MiniReaperCanvas(tk.Frame):
                 self.canvas.create_line(x_start + 10, y_mid, x_end, y_mid, fill=color, width=4)
                 self.canvas.create_line(x_end, y_top + 4, x_end, y_bot - 4, fill=color, width=2)
 
-            # Cabeça da nota (botão colorido)
             tag_id = f"note_{id(note)}"
             self.canvas.create_rectangle(
                 x_start, y_top, x_start + min(16, dur_px), y_bot,
@@ -231,6 +230,20 @@ class MiniReaperCanvas(tk.Frame):
                 width=1,
                 tags=("chart_note", tag_id)
             )
+
+        # 3.1 Se for trilha vocal, desenha o texto da letra sincronizada
+        if self.current_track == "vocals":
+            for vn in self.song.vocal_notes:
+                if vn.lyric:
+                    vx = int((vn.time_ms / 1000.0) * self.pixels_per_second)
+                    self.canvas.create_text(
+                        vx + 2, self.header_height + 10,
+                        text=vn.lyric,
+                        fill="#FDF4FF",
+                        font=("Segoe UI", 8, "bold"),
+                        anchor="w",
+                        tags="vocal_lyric_text"
+                    )
 
         # 4. Linha vermelha do Playhead (posição atual)
         self._draw_playhead(total_height)

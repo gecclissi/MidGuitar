@@ -56,7 +56,14 @@ O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100
 3. **🎛️ Editor Visual de Notas (Mini-REAPER, Auto-Chart & Teste ao Vivo)**:
    - Linha do tempo visual estilo DAW com pistas coloridas (Verde, Vermelha, Amarela, Azul, Laranja, Overdrive e Solo) para Guitarra, Baixo, Bateria, Teclado e Vocais.
    - Clique com o botão esquerdo para adicionar/remover notas com encaixe automático na grade (*Grid Snap* em 1/4, 1/8, 1/16 ou livre). Botão direito para apagar notas.
-   - **✨ Botão `GERAR TODAS AS NOTAS!`**: Cria a música inteira automaticamente para os instrumentos selecionados.
+   - **✨ Botão `GERAR NOTAS!`**: Cria a música inteira automaticamente para os instrumentos selecionados.
+   - **🎤 Sincronizador de Letra da Música (.txt / .lrc)**:
+     - Cole a letra da música ou carregue arquivos `.txt` ou `.lrc` (com minutagem).
+     - Divisor silábico automático oficial Rock Band Network (com hífens terminadores de sílaba continuada).
+     - Sincronização automática das sílabas na linha do tempo com marcação de frases (Nota 105) e Overdrive (Nota 106).
+     - Visualização das palavras/sílabas escritas diretamente abaixo das notas na trilha `🎤 Vocais`!
+   - **🎚️ Suporte a Faixas Isoladas (Stems Multi-Track)**:
+     - Aceita tanto áudio único estéreo quanto pastas com stems separados (`guitar.ogg`, `bass.ogg`, `drums.ogg`, `vocals.ogg`, `song.ogg`) para o mixer oficial do Rock Band 3 e Clone Hero!
    - **🎮 Barra de Toque & Teste Interativo**:
      - Botões coloridos interativos: `🟩 Casa 1 (A)`, `🟥 Casa 2 (S)`, `🟨 Casa 3 (J)`, `🟦 Casa 4 (K)`, `🟧 Casa 5 (L)`, `⚡ Palheta (Espaço)` e `🎤 Vocal (V)`.
      - **Toque com o Teclado do Computador**: Toque diretamente com as teclas do teclado do PC enquanto a música toca!
@@ -69,9 +76,10 @@ O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100
 4. **🖼️ Metadados, Capa & Exportação**:
    - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter.
    - Upload de imagem de capa com pré-visualização em miniatura em tempo real.
+   - Botão direto para gerenciar e sincronizar letras.
    - Seletor de Jogo de Destino com cards informativos dinâmicos.
 5. **📖 Guia Passo a Passo (Para Leigos)**:
-   - Tutorial ilustrado passo a passo explicando como criar, converter, gravar e instalar músicas no PC e nos consoles.
+   - Tutorial ilustrado passo a passo com 9 passos cobrindo criação manual, auto-chart, importação, gravação ao vivo, teste no teclado, letras e compilação para RPCS3 e consoles.
 
 ---
 

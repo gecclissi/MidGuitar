@@ -187,6 +187,13 @@ def auto_generate_chart(
         song.vocal_notes.clear()
         vocal_scale = [60, 62, 64, 65, 67, 69, 72]
         sample_lyrics = ["Yeah", "Come", "on", "feel", "the", "sound", "to-", "night", "sing", "out", "loud", "let's", "go!"]
+        if song.lyrics_raw:
+            from src.creator.lyric_processor import syllabify_text_lines
+            parsed_syls = []
+            for ls in syllabify_text_lines(song.lyrics_raw):
+                parsed_syls.extend(ls)
+            if parsed_syls:
+                sample_lyrics = parsed_syls
 
         for m in range(total_measures):
             # Dá pausa na introdução e no solo de guitarra

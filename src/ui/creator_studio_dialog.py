@@ -27,6 +27,7 @@ from src.creator.pack_compiler import scan_folder_for_songs, compile_ps3_song_pa
 from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
 from src.ui.key_strum_config_dialog import KeyStrumConfigDialog, DEFAULT_KEYS, KEY_NAMES_FRIENDLY
+from src.ui.lyrics_manager_dialog import LyricsManagerDialog
 from src.utils.config_manager import save_config
 
 class CreatorStudioDialog(ctk.CTkToplevel):
@@ -245,23 +246,26 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         b_count = len(self.song.bass_notes)
         d_count = len(self.song.drum_notes)
         k_count = len(self.song.keys_notes)
+        v_count = len(self.song.vocal_notes)
 
         # Atualiza tela do timeline e formulários
         self.timeline.song = self.song
         self.timeline.redraw()
         self._sync_song_to_fields()
 
+        stems_info = f" ({len(self.song.audio_stems)} faixas isoladas/stems)" if len(self.song.audio_stems) > 1 else ""
         info_text = (
             f"🎵 Título: {self.song.title}\n"
             f"👤 Artista: {self.song.artist}  |  Álbum: {self.song.album} ({self.song.year})\n"
             f"⚡ BPM: {self.song.bpm}  |  Gênero: {self.song.genre}  |  Charter: {self.song.charter}\n"
-            f"🔊 Áudio detectado: {'Sim (' + os.path.basename(self.song.audio_path) + ')' if self.song.audio_path else 'Não encontrado'}\n"
+            f"🔊 Áudio detectado: {'Sim (' + os.path.basename(self.song.audio_path) + ')' + stems_info if self.song.audio_path else 'Não encontrado'}\n"
             f"🖼️ Imagem da Capa: {'Encontrada' if self.song.album_art_path else 'Não informada'}\n"
             f"--------------------------------------------------\n"
             f"🎸 Guitarra: {g_count} notas mapeadas\n"
             f"🎸 Baixo: {b_count} notas mapeadas\n"
             f"🥁 Bateria: {d_count} notas mapeadas\n"
             f"🎹 Teclado: {k_count} notas mapeadas\n"
+            f"🎤 Vocais & Letra: {v_count} notas/sílabas mapeadas\n"
             f"✨ Seções/Eventos: {len(self.song.events)} marcadores\n"
         )
         self.info_label.configure(text=info_text, justify="left", font=ctk.CTkFont(family="Consolas", size=12), text_color="#F8FAFC")
@@ -565,12 +569,20 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.intensity_combo.pack(side="left", padx=4)
 
         btn_run_auto = ctk.CTkButton(
-            ab_row, text="✨ GERAR TODAS AS NOTAS!", width=220, height=28,
+            ab_row, text="✨ GERAR NOTAS!", width=150, height=28,
             fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_auto_generate_clicked
         )
         btn_run_auto.pack(side="right", padx=2)
         set_tooltip(btn_run_auto, "Cria todas as notas musicais, acordes, solos e bateria sincronizados com o BPM em 1 clique!")
+
+        btn_lyrics = ctk.CTkButton(
+            ab_row, text="🎤 Letra da Música (.txt/.lrc)...", width=190, height=28,
+            fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._open_lyrics_dialog
+        )
+        btn_lyrics.pack(side="right", padx=3)
+        set_tooltip(btn_lyrics, "Cole a letra da música ou carregue arquivo .txt/.lrc para dividir em sílabas e sincronizar com a voz!")
 
         # Barra Interativa de Toque & Teste (Teclado PC / Instrumentos Plugados / Palheta)
         test_bar = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#334155")
@@ -706,8 +718,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(self.audio_entry, "Arquivo de música que vai tocar enquanto você edita ou grava")
 
         btn_browse_audio = ctk.CTkButton(row1, text="Carregar Áudio...", width=120, command=self._on_browse_audio)
-        btn_browse_audio.pack(side="left", padx=4)
-        set_tooltip(btn_browse_audio, "Abre o explorador para escolher a música")
+        btn_browse_audio.pack(side="left", padx=3)
+        set_tooltip(btn_browse_audio, "Abre o explorador para escolher a música (.mp3 / .wav / .ogg)")
+
+        btn_browse_stems = ctk.CTkButton(row1, text="🎚️ Stems...", width=95, fg_color="#334155", hover_color="#475569", command=self._on_browse_stems)
+        btn_browse_stems.pack(side="left", padx=2)
+        set_tooltip(btn_browse_stems, "Carrega pasta com faixas isoladas (guitar.ogg, bass.ogg, drums.ogg, vocals.ogg)")
 
         ctk.CTkLabel(row1, text="BPM:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4))
         self.bpm_entry = ctk.CTkEntry(row1, width=65)
@@ -844,6 +860,15 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.f_genre = add_meta_field("Gênero Musical:", self.song.genre, "Ex: Rock, Metal, Pop, Classic Rock")
         self.f_charter = add_meta_field("Autor do Chart:", self.song.charter, "Seu nome ou apelido como criador do chart")
         self.f_preview = add_meta_field("Início da Prévia (ms):", self.song.preview_start_ms, "Tempo em milissegundos para tocar a amostra no menu (ex: 30000 = 30 seg)")
+
+        # Botão de Letra & Vocais no formulário
+        btn_lyrics_meta = ctk.CTkButton(
+            left_col, text="🎤 Gerenciar Letra da Música (.txt / .lrc)...", width=280, height=32,
+            fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._open_lyrics_dialog
+        )
+        btn_lyrics_meta.pack(padx=14, pady=(8, 12), anchor="w")
+        set_tooltip(btn_lyrics_meta, "Cole ou importe a letra da música para sincronizar automaticamente com a faixa vocal!")
 
         # Coluna da Direita: Capa do Álbum e Pré-visualização
         right_col = ctk.CTkFrame(main_box, fg_color="#0F172A", corner_radius=8, width=320)
@@ -1063,6 +1088,17 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             "• A tecla Vocal (V) emite sons melódicos de teste vocal para checar a harmonia da canção e gravar faixas de canto!"
         )
 
+        add_step(
+            "9", "Como Colocar e Sincronizar a Letra da Música (Vocais & Stems)",
+            "• Clique no botão rosa '🎤 Letra da Música (.txt/.lrc)...' no topo da linha do tempo ou na aba Metadados.\n"
+            "• Cole a letra da música diretamente de qualquer site de letras (ou clique em 'Carregar Arquivo .txt / .lrc').\n"
+            "• Clique em '✨ SINCRONIZAR E APLICAR LETRA AOS VOCAIS':\n"
+            "   - O sistema divide as palavras automaticamente em sílabas fonéticas oficiais do Rock Band (com hífens terminadores).\n"
+            "   - Se você usou um arquivo .lrc, cada frase é posicionada exatamente no tempo em que é cantada!\n"
+            "   - As palavras/sílabas aparecem escritas diretamente na linha do tempo quando você seleciona a trilha '🎤 Vocais'!\n"
+            "• Se tiver faixas isoladas (stems como guitar.ogg, bass.ogg, drums.ogg, vocals.ogg), clique em '🎚️ Stems...' para o mixer multitrack oficial!"
+        )
+
     # -------------------------------------------------------------------------
     # SINCRONIZAÇÃO E CONTROLES
     # -------------------------------------------------------------------------
@@ -1116,6 +1152,40 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             self.audio_entry.delete(0, "end")
             self.audio_entry.insert(0, f)
             self.song.audio_path = f
+
+    def _on_browse_stems(self):
+        f = filedialog.askdirectory(title="Selecione a pasta com as faixas separadas (stems)")
+        if not f:
+            return
+        stems = []
+        for file in os.listdir(f):
+            if file.lower().endswith((".ogg", ".mp3", ".wav", ".flac")):
+                stems.append(os.path.join(f, file))
+        if stems:
+            self.song.audio_stems = stems
+            main_track = stems[0]
+            for s in stems:
+                s_name = os.path.basename(s).lower()
+                if "song" in s_name or "backing" in s_name or "audio" in s_name:
+                    main_track = s
+                    break
+            self.song.audio_path = main_track
+            self.audio_entry.delete(0, "end")
+            self.audio_entry.insert(0, main_track)
+            messagebox.showinfo("Stems Carregados!", f"🎉 {len(stems)} faixas isoladas carregadas com sucesso para o mixer do Rock Band 3 e Clone Hero!")
+        else:
+            messagebox.showwarning("Aviso", "Nenhum arquivo de áudio (.ogg, .mp3, .wav) foi encontrado na pasta.")
+
+    def _open_lyrics_dialog(self):
+        LyricsManagerDialog(
+            self,
+            self.song,
+            on_applied_callback=self._on_lyrics_applied
+        )
+
+    def _on_lyrics_applied(self):
+        self.timeline.redraw()
+        self._update_note_counter()
 
     def _on_tap_bpm(self):
         now = time.time()

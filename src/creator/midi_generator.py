@@ -73,8 +73,26 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
     events_track.append(MetaMessage('track_name', name='EVENTS', time=0))
 
     raw_events = [(0, "[music_start]")]
-    for ev in song.events:
-        raw_events.append((ev.time_ms, ev.text))
+    if song.events:
+        for ev in song.events:
+            raw_events.append((ev.time_ms, ev.text))
+    else:
+        # Gera seções canônicas de treino padrão Rock Band
+        bpm = max(40.0, song.bpm)
+        measure_ms = (60.0 / bpm) * 4000.0
+        canonical_sections = [
+            (0, "[section intro]"),
+            (int(4 * measure_ms), "[section verse_1]"),
+            (int(12 * measure_ms), "[section chorus_1]"),
+            (int(20 * measure_ms), "[section verse_2]"),
+            (int(28 * measure_ms), "[section chorus_2]"),
+            (int(36 * measure_ms), "[section solo]"),
+            (int(44 * measure_ms), "[section outro]"),
+        ]
+        for t_sec, s_text in canonical_sections:
+            if t_sec < total_duration_ms:
+                raw_events.append((t_sec, s_text))
+
     raw_events.append((total_duration_ms, "[end]"))
     raw_events.sort(key=lambda x: x[0])
 

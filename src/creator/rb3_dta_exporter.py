@@ -20,6 +20,29 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
     def rank_to_dta(val: int) -> int:
         return max(0, min(500, val * 60 + 50))
 
+    has_multistem = len(song.audio_stems) > 1
+    if has_multistem:
+        tracks_dta = """((guitar (0 1))
+          (bass 2)
+          (drum (3 4))
+          (keys (5 6))
+          (vocals 7)
+         )"""
+        pans_dta = "(-1.0 1.0 0.0 -1.0 1.0 -1.0 1.0 0.0)"
+        vols_dta = "(-1.0 -1.0 -1.5 -1.0 -1.0 -1.5 -1.5 -1.0)"
+        cores_dta = "(-1 -1 -1 -1 -1 -1 -1 -1)"
+    else:
+        # Padrão oficial Harmonix para faixas estéreo gerais (2 canais)
+        tracks_dta = """((guitar (0 1))
+          (bass (0 1))
+          (drum (0 1))
+          (keys (0 1))
+          (vocals (0 1))
+         )"""
+        pans_dta = "(-1.0 1.0)"
+        vols_dta = "(-1.5 -1.5)"
+        cores_dta = "(-1 -1)"
+
     dta = f"""({shortname}
    (name "{song.title}")
    (artist "{song.artist}")
@@ -28,17 +51,12 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
    (song
       (name "songs/{shortname}/{shortname}")
       (tracks
-         ((guitar (0 1))
-          (bass 2)
-          (drum (3 4))
-          (keys (5 6))
-          (vocals 7)
-         )
+         {tracks_dta}
       )
       (vocal_parts 1)
-      (pans (-1.0 1.0 0.0 -1.0 1.0 -1.0 1.0 0.0))
-      (vols (-1.0 -1.0 -1.5 -1.0 -1.0 -1.5 -1.5 -1.0))
-      (cores (-1 -1 -1 -1 -1 -1 -1 -1))
+      (pans {pans_dta})
+      (vols {vols_dta})
+      (cores {cores_dta})
       (drum_solo (seq 96 97 98 99 100))
       (drum_freestyle (seq 120 121 122 123 124))
    )

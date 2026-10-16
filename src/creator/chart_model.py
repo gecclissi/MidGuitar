@@ -45,6 +45,8 @@ class ChartSong:
     preview_start_ms: int = 30000
     audio_path: Optional[str] = None
     audio_stems: List[str] = field(default_factory=list)
+    audio_offset_ms: int = 0
+    lyrics_raw: str = ""
     album_art_path: Optional[str] = None
     
     # Dificuldades de 0 a 7 (-1 se não tiver)

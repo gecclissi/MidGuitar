@@ -67,7 +67,18 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
     if not song.audio_path and song.audio_stems:
         song.audio_path = song.audio_stems[0]
 
-    # 3. Busca e analisa notes.mid
+    # 3. Busca arquivos de letra (.txt / .lrc)
+    for f in os.listdir(folder_path):
+        f_lower = f.lower()
+        if f_lower in ["lyrics.txt", "song.lrc", "lyrics.lrc", "letra.txt", "words.txt"]:
+            try:
+                with open(os.path.join(folder_path, f), "r", encoding="utf-8-sig", errors="ignore") as lf:
+                    song.lyrics_raw = lf.read()
+                    break
+            except Exception:
+                pass
+
+    # 4. Busca e analisa notes.mid
     mid_file = os.path.join(folder_path, "notes.mid")
     if not os.path.exists(mid_file):
         for f in os.listdir(folder_path):
@@ -81,6 +92,11 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
             _parse_midi_into_song(mid, song)
         except Exception as e:
             print(f"[ChartImporter] Erro ao analisar MIDI {mid_file}: {e}")
+
+    # Se carregou lyrics_raw mas não tinha vocal_notes, aplica alinhamento automático
+    if song.lyrics_raw and not song.vocal_notes:
+        from src.creator.lyric_processor import align_lyrics_to_song
+        align_lyrics_to_song(song, song.lyrics_raw)
 
     return song
 
@@ -111,6 +127,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
         track_name = ""
         current_tick = 0
         active_notes = {} # pitch -> start_tick
+        recent_lyrics = {} # tick -> lyric
 
         for msg in track:
             current_tick += msg.time
@@ -119,6 +136,8 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
             elif msg.type == 'text':
                 ms = int((current_tick / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0)
                 song.events.append(TextEvent(time_ms=ms, text=msg.text))
+            elif msg.type == 'lyrics':
+                recent_lyrics[current_tick] = msg.text
             elif msg.type == 'note_on' and msg.velocity > 0:
                 active_notes[msg.note] = current_tick
             elif (msg.type == 'note_off') or (msg.type == 'note_on' and msg.velocity == 0):
@@ -127,7 +146,20 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                     start_ms = int((start_tick / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0)
                     duration_ms = max(100, int(((current_tick - start_tick) / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0))
 
-                    if "GUITAR" in track_name:
+                    if "VOCAL" in track_name:
+                        from src.creator.chart_model import VocalNote
+                        # Notas cantadas estão entre 36 e 84 (C2 a C6)
+                        if 36 <= msg.note <= 84:
+                            # Acha letra correspondente
+                            syl = recent_lyrics.get(start_tick, "la")
+                            song.vocal_notes.append(VocalNote(
+                                time_ms=start_ms,
+                                duration_ms=duration_ms,
+                                pitch=msg.note,
+                                lyric=syl,
+                                is_phrase_end=False
+                            ))
+                    elif "GUITAR" in track_name:
                         if msg.note in inv_fret_notes:
                             lane, diff = inv_fret_notes[msg.note]
                             song.guitar_notes.append(NoteEvent(time_ms=start_ms, lane=lane, duration_ms=duration_ms, difficulty=diff))
@@ -149,3 +181,4 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
     song.bass_notes.sort(key=lambda n: n.time_ms)
     song.drum_notes.sort(key=lambda n: n.time_ms)
     song.keys_notes.sort(key=lambda n: n.time_ms)
+    song.vocal_notes.sort(key=lambda n: n.time_ms)
