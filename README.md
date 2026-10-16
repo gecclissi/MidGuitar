@@ -28,6 +28,45 @@ O **MidGuitar Studio** é uma central universal de instrumentos MIDI desenvolvid
 
 ---
 
+## 🎵 Estúdio Criador & Conversor de Músicas (Rock Band 3, PS3 PKG & Clone Hero)
+
+O MidGuitar agora conta com um **Estúdio Completo Integrado** que substitui 100% o fluxo fragmentado e complexo de ferramentas legadas da comunidade.
+
+### ⏳ Como era o Processo Antigo vs 🚀 Como é Agora com o MidGuitar
+
+| Etapa | Processo Antigo (Sofrimento com 4 programas) | Como é com o MidGuitar (Tudo em 1 App) |
+| :--- | :--- | :--- |
+| **Criação de Notas** | Tinha que abrir o **REAPER**, configurar templates MIDI cheios de pistas e colocar **nota por nota à mão** durante dias ou semanas. | **✨ Auto-Chart Inteligente:** Crie todas as notas para **Guitarra, Baixo, Bateria, Teclado e Vocais em 1 segundo**, ou edite visualmente no **Mini-REAPER integrado**. |
+| **Mecânica de Vocais** | Tinha que mapear manualmente notas de afinação (Pitch 36-84), marcadores de frase (Nota 105), overdrive (Nota 106) e digitar cada sílaba com hífens. | **🎤 Suporte Total a Vocais:** O Auto-Chart gera frases melódicas, afinações na escala, pontuação de frases (105), overdrive (106) e letras sincronizadas automaticamente! |
+| **Separação de Faixas** | Tinha que usar DAWs pesadas e converter áudios estéreo e multitracks manualmente. | **🔊 Stems e Mix Automáticos:** Copia e mapeia automaticamente trilhas separadas (`guitar.ogg`, `bass.ogg`, `drums.ogg`, `song.ogg`) ou faixas mixadas. |
+| **Conversão e Compilação** | Precisava de programas externos como **Magma v2**, **C3 CON Tools** ou **Onyx** para gerar arquivos `.dta`. | **⚡ Conversor 1 Clique:** Converte charts do Chorus Encore, RhythmVerse, C3 e Clone Hero direto para o Rock Band 3 sem programas adicionais. |
+| **Compilar Várias Músicas (Packs)** | Tinha que mesclar textos de `songs.dta` manualmente ou usar empacotadores com menus confusos em inglês. | **📦 Compilador de Mega Pacotes:** Selecione uma pasta com dezenas de músicas e o app compila tudo em um **único `songs.dta` unificado** e organizado em `USRDIR/songs/`. |
+| **Capa do Álbum** | Tinha que redimensionar manualmente em editores de imagem para tamanhos exatos do console (320x176). | **🖼️ Tratamento Automático:** Suba qualquer JPG/PNG e o app gera o `ICON0.PNG` oficial para a XMB do PS3 e o `album.png` do Clone Hero. |
+| **Instalação no RPCS3 (Emulador)** | Tinha que caçar a pasta oculta `dev_hdd0/game/BLUS30463/USRDIR/songs/` na mão dentro do Windows. | **🚀 Script Automático de 1 Clique:** O app gera o arquivo `INSTALAR_NO_RPCS3_AUTOMATICO.bat` dentro da pasta. Dois cliques nele e a música é instalada sozinha! |
+| **Gravação com Instrumento Real** | Não existia integração direta de tocar e mapear. | **🔴 Gravação ao Vivo:** Conecte sua guitarra USB, teclado ou bateria eletrônica e toque no ritmo da música para registrar notas na linha do tempo em tempo real. |
+
+---
+
+### 🌟 As 5 Abas do Estúdio Criador
+
+1. **⚡ Conversor 1 Clique (Individual)**:
+   - Aponte para qualquer pasta de música baixada da internet e converta instantaneamente para **Rock Band 3 (RPCS3)**, **PlayStation 3 (PKG/SFO)** ou **Clone Hero / YARG**.
+2. **📦 Compilador de Pacotes em Lote (Multi-Músicas PS3/CH)**:
+   - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique para o emulador RPCS3 ou console real.
+3. **🎛️ Editor Visual de Notas (Mini-REAPER & Auto-Chart)**:
+   - Linha do tempo visual estilo DAW com pistas coloridas (Verde, Vermelha, Amarela, Azul, Laranja, Overdrive e Solo).
+   - Clique com o botão esquerdo para adicionar/remover notas com encaixe automático na grade (*Grid Snap* em 1/4, 1/8, 1/16 ou livre).
+   - Botão direito para apagar notas.
+   - **✨ Botão `GERAR TODAS AS NOTAS!`**: Cria a música inteira automaticamente para os instrumentos selecionados.
+4. **🖼️ Metadados, Capa & Exportação**:
+   - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter.
+   - Upload de imagem de capa com pré-visualização em miniatura em tempo real.
+   - Seletor de Jogo de Destino com cards informativos dinâmicos.
+5. **📖 Guia Passo a Passo (Para Leigos)**:
+   - Tutorial ilustrado passo a passo explicando como criar, converter, gravar e instalar músicas no PC e nos consoles.
+
+---
+
 ## ✨ Principais Funcionalidades
 
 - ⚡ **Detecção Automática de Instrumento (Auto Mode)**:
