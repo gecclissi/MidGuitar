@@ -60,6 +60,7 @@ class ChartSong:
     bpm: float = 120.0
     time_signature: tuple = (4, 4)
     preview_start_ms: int = 30000
+    duration_ms: int = 180000
     audio_path: Optional[str] = None
     audio_stems: List[str] = field(default_factory=list)
     audio_offset_ms: int = 0
@@ -87,6 +88,19 @@ class ChartSong:
     pro_bass_notes: List[ProGuitarNote] = field(default_factory=list)
     pro_keys_notes: List[ProKeysNote] = field(default_factory=list)
     events: List[TextEvent] = field(default_factory=list)
+
+    def get_effective_duration_ms(self) -> int:
+        """Retorna a duração total real garantindo que cubra todas as notas e o áudio."""
+        max_ms = max(10000, int(self.duration_ms or 180000))
+        for lst in [
+            self.guitar_notes, self.bass_notes, self.drum_notes, self.keys_notes,
+            self.vocal_notes, self.pro_guitar_notes, self.pro_bass_notes, self.pro_keys_notes
+        ]:
+            for n in lst:
+                end_t = n.time_ms + getattr(n, "duration_ms", 200) + 2000
+                if end_t > max_ms:
+                    max_ms = end_t
+        return max_ms
 
     def add_vocal_note(self, note: VocalNote):
         self.vocal_notes.append(note)

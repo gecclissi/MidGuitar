@@ -63,6 +63,7 @@ def auto_generate_chart(
             info = analyze_audio_file(song.audio_path)
             if info.get("duration_ms", 0) > 5000:
                 total_duration_ms = int(info["duration_ms"])
+                song.duration_ms = total_duration_ms
                 first_sound_ms = max(500, int(info.get("first_sound_ms", 2000)))
                 last_sound_ms = min(total_duration_ms - 500, int(info.get("last_sound_ms", total_duration_ms - 2000)))
                 energy_windows = info.get("energy_windows", [])
@@ -73,6 +74,7 @@ def auto_generate_chart(
             detected_dur = get_audio_duration_ms(song.audio_path)
             if detected_dur > 10000:
                 total_duration_ms = detected_dur
+                song.duration_ms = total_duration_ms
                 last_sound_ms = total_duration_ms - 2000
 
     if selected_instruments is None:
@@ -100,10 +102,12 @@ def auto_generate_chart(
                 return True
         return False
 
-    # 1. Limpa trilhas que serão geradas (apenas se clear_existing for True)
-    for inst in selected_instruments:
-        if clear_existing:
-            song.clear_track(inst)
+    # 1. Limpa trilhas (se clear_existing for True, limpa TODAS as trilhas para respeitar 100% os checkboxes marcados!)
+    if clear_existing:
+        for all_inst in ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys"]:
+            song.clear_track(all_inst)
+        if "vocals" not in selected_instruments:
+            song.vocal_notes.clear()
     if clear_existing or not song.events:
         song.events.clear()
         # 2. Gera Seções Musicais (EVENTS)
@@ -251,7 +255,7 @@ def auto_generate_chart(
 
     # 8. GERAR PRO GUITAR & PRO BASS (PART REAL_GUITAR / PART REAL_BASS - 6 Cordas / 17 Casas)
     pro_root_frets = [0, 3, 5, 7, 2]
-    if ("pro_guitar" in selected_instruments or "guitar" in selected_instruments) and (clear_existing or not song.pro_guitar_notes):
+    if "pro_guitar" in selected_instruments and (clear_existing or not song.pro_guitar_notes):
         song.pro_guitar_notes.clear()
         for m in range(total_measures):
             m_start = int(m * measure_ms)
@@ -290,7 +294,7 @@ def auto_generate_chart(
                 if b == 0:
                     song.add_pro_guitar_note(ProGuitarNote(time_ms=t_beat, string_idx=0, fret=r_fret, duration_ms=int(measure_ms * 0.8), difficulty="Easy"))
 
-    if ("pro_bass" in selected_instruments or "bass" in selected_instruments) and (clear_existing or not song.pro_bass_notes):
+    if "pro_bass" in selected_instruments and (clear_existing or not song.pro_bass_notes):
         song.pro_bass_notes.clear()
         for m in range(total_measures):
             m_start = int(m * measure_ms)
@@ -317,7 +321,7 @@ def auto_generate_chart(
         (57, 60, 64),  # A Minor (Lá - Dó - Mi)
         (53, 57, 60),  # F Major (Fá - Lá - Dó)
     ]
-    if ("pro_keys" in selected_instruments or "keys" in selected_instruments) and (clear_existing or not song.pro_keys_notes):
+    if "pro_keys" in selected_instruments and (clear_existing or not song.pro_keys_notes):
         song.pro_keys_notes.clear()
         for m in range(total_measures):
             m_start = int(m * measure_ms)
@@ -359,6 +363,19 @@ def auto_generate_chart(
     # 10. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
     if generate_all_diffs:
         _generate_lower_difficulties(song, selected_instruments)
+
+    # 11. ATUALIZA RANKING DE DIFICULDADE (0 a 6 estrelas/pontos) AUTOMATICAMENTE
+    base_rank = 5 if "Metal" in intensity else (2 if "Pop" in intensity else 4)
+    song.diff_guitar = base_rank if song.guitar_notes else 0
+    song.diff_bass = max(1, base_rank - 1) if song.bass_notes else 0
+    song.diff_drums = base_rank if song.drum_notes else 0
+    song.diff_keys = max(1, base_rank - 1) if song.keys_notes else 0
+    song.diff_vocals = 3 if song.vocal_notes else 0
+    song.diff_pro_guitar = base_rank if song.pro_guitar_notes else 0
+    song.diff_pro_bass = max(1, base_rank - 1) if song.pro_bass_notes else 0
+    song.diff_pro_keys = base_rank if song.pro_keys_notes else 0
+    active_ranks = [r for r in [song.diff_guitar, song.diff_bass, song.diff_drums, song.diff_keys, song.diff_vocals] if r > 0]
+    song.diff_band = int(round(sum(active_ranks) / len(active_ranks))) if active_ranks else 3
 
     return song
 

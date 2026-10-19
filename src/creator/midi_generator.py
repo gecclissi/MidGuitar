@@ -25,10 +25,18 @@ def ticks_to_ms(ticks: int, bpm: float) -> int:
     beats = ticks / TICKS_PER_BEAT
     return int((beats * 60.0 / bpm) * 1000.0)
 
-def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiFile:
+def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb3_tracks: bool = True) -> MidiFile:
     """
-    Gera um MidiFile (Type 1) 100% compatível com Rock Band 3, Clone Hero e YARG.
+    Gera um MidiFile (Type 1) 100% compatível com Rock Band 3, Rock Band 2, Clone Hero e YARG.
+    Se include_rb3_tracks=False (modo Rock Band 2 / Band Hero), omite trilhas exclusivas do RB3
+    (PART KEYS, PART REAL_GUITAR, PART REAL_BASS, PART REAL_KEYS_X/H/M/E) para evitar incompatibilidades.
     """
+    effective_dur = song.get_effective_duration_ms() if hasattr(song, "get_effective_duration_ms") else 180000
+    if total_duration_ms is None or total_duration_ms == 180000:
+        total_duration_ms = effective_dur
+    else:
+        total_duration_ms = max(total_duration_ms, effective_dur)
+
     mid = MidiFile(type=1, ticks_per_beat=TICKS_PER_BEAT)
 
     # -------------------------------------------------------------
@@ -144,9 +152,9 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         drum_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTA 6: PART KEYS
+    # PISTA 6: PART KEYS (Apenas em jogos compatíveis com RB3/CH)
     # -------------------------------------------------------------
-    if song.keys_notes:
+    if include_rb3_tracks and song.keys_notes:
         keys_track = MidiTrack()
         mid.tracks.append(keys_track)
         keys_track.append(MetaMessage('track_name', name='PART KEYS', time=0))
@@ -164,9 +172,9 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         vocal_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTA 8: PART REAL_GUITAR (Pro Guitar 6 Cordas / 17 Casas)
+    # PISTA 8: PART REAL_GUITAR (Pro Guitar 6 Cordas / 17 Casas - Exclusivo RB3)
     # -------------------------------------------------------------
-    if getattr(song, "pro_guitar_notes", None):
+    if include_rb3_tracks and getattr(song, "pro_guitar_notes", None):
         pg_track = MidiTrack()
         mid.tracks.append(pg_track)
         pg_track.append(MetaMessage('track_name', name='PART REAL_GUITAR', time=0))
@@ -174,9 +182,9 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         pg_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTA 9: PART REAL_BASS (Pro Bass 4/6 Cordas)
+    # PISTA 9: PART REAL_BASS (Pro Bass 4/6 Cordas - Exclusivo RB3)
     # -------------------------------------------------------------
-    if getattr(song, "pro_bass_notes", None):
+    if include_rb3_tracks and getattr(song, "pro_bass_notes", None):
         pb_track = MidiTrack()
         mid.tracks.append(pb_track)
         pb_track.append(MetaMessage('track_name', name='PART REAL_BASS', time=0))
@@ -184,9 +192,9 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = 180000) -> MidiF
         pb_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTAS 10..13: PART REAL_KEYS_X / H / M / E (Pro Keys 25 Teclas Reais)
+    # PISTAS 10..13: PART REAL_KEYS_X / H / M / E (Pro Keys 25 Teclas Reais - Exclusivo RB3)
     # -------------------------------------------------------------
-    if getattr(song, "pro_keys_notes", None):
+    if include_rb3_tracks and getattr(song, "pro_keys_notes", None):
         pk_suffixes = [("Expert", "X"), ("Hard", "H"), ("Medium", "M"), ("Easy", "E")]
         for diff_name, suffix in pk_suffixes:
             diff_pk_notes = [n for n in song.pro_keys_notes if n.difficulty == diff_name]

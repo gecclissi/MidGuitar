@@ -59,19 +59,21 @@ O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fl
 
 ### 🌟 As 5 Abas do Estúdio Criador
 
-1. **⚡ Criação Rápida (MP3 + Letra) & Conversor 1 Clique**:
-   - **Opção A (Criar do Zero):** Arraste seu arquivo `.mp3` e sua letra/legenda opcional (`.txt`, `.lrc`, `.srt`) e clique em **GERAR TUDO AUTOMATICAMENTE**!
+1. **⚡ Criação Rápida (MP3 + Letra) & Conversor 1 Clique (Central de Automação Modular)**:
+   - **Opção A (Criar do Zero):** Arraste seu arquivo `.mp3`, sua letra/legenda opcional (`.txt`, `.lrc`, `.srt`) e capa (`.png`/`.jpg`) e clique em **GERAR TUDO AUTOMATICAMENTE**!
+   - **Modos Solo Individuais e Kits Rápidos:** Selecione `⚡ Banda Completa`, `🎸 Kit RB2/GH` ou gere **APENAS 1 instrumento específico** com 1 clique: `🎸 Só Guitarra`, `🎸 Só Baixo`, `🥁 Só Bateria`, `🎹 Só Teclado`, `🎸 Só Pro Guitar`, `🎸 Só Pro Bass`, `🎹 Só Pro Keys` ou `🎤 Só Vocal`!
    - **Opção B (Importar de Fãs):** Aponte para qualquer pasta de música baixada (Chorus Encore, RhythmVerse, C3) para converter ou **Completar Instrumentos Faltantes** sem apagar as trilhas originais!
-   - Exporte em 1 clique para **Rock Band 3 (RPCS3/PS3)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147` & Xbox 360 `45410869`)**, **Xbox 360 (`45410914`)**, **PlayStation 4 (`CUSA02084`)** ou **Clone Hero / YARG**.
+   - Exporte em 1 clique para **Rock Band 3 (RPCS3/PS3)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147` & Xbox 360 `45410869` — filtrando automaticamente trilhas Pro/Keys para evitar travamentos)**, **Xbox 360 (`45410914`)**, **PlayStation 4 (`CUSA02084`)** ou **Clone Hero / YARG / GHWT:DE**.
 2. **📦 Compilador de Pacotes em Lote (Multi-Músicas PS3/CH)**:
    - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique.
-3. **🎛️ Editor Visual de Notas (Mini-REAPER, Modo PRO, Auto-Chart & Teste ao Vivo)**:
-   - Linha do tempo visual estilo DAW para **Guitarra (5 Casas)**, **Baixo**, **Bateria**, **Teclado**, **Pro Guitar (6 Cordas com número da casa visível)**, **Pro Bass**, **Pro Keys (25 Teclas)** e **Vocais**.
-   - Seletor de **Dificuldade (`Expert`, `Hard`, `Medium`, `Easy`)** para inspecionar e editar qualquer nível individualmente com o mouse.
-   - **🎤 Sincronizador de Letra e Legenda (`.txt` / `.lrc` / `.srt`)**: Divisor silábico automático oficial Rock Band Network e trava inteligente (*Sem Letra = Sem Microfone*).
-   - **🎮 Barra de Toque & Teste Interativo**: Toque junto com a música usando o teclado do PC (`A, S, J, K, L + Espaço`) ou instrumentos USB/MIDI reais plugados!
-4. **🖼️ Metadados, Capa & Exportação**:
-   - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter, upload de capa com preview em tempo real e exportação direta.
+3. **🎛️ Editor Visual de Notas (Mini-REAPER, Modo PRO, Auto-Chart & Simulador de Playtest)**:
+   - Linha do tempo visual estilo DAW para todos os 8 instrumentos: **Guitarra (5 Casas)**, **Baixo**, **Bateria**, **Teclado**, **Pro Guitar (6 Cordas com número da casa `0..17` visível)**, **Pro Bass**, **Pro Keys (25 Teclas com notas `C4`, `E4`, `G4`)** e **Vocais**.
+   - Seletor de **Dificuldade (`Expert`, `Hard`, `Medium`, `Easy`)** para inspecionar, editar ou tocar qualquer nível individualmente.
+   - **🔊 Simulador de Playtest (Estilo Magma / C3 Visualizer):** Ao tocar a música, as notas da dificuldade escolhida piscam nas casas e tocam o som automaticamente em tempo real!
+   - **🎤 Sincronizador de Letra e Legenda (`.txt` / `.lrc` / `.srt`)**: Divisor silábico automático oficial Rock Band Network, download de modelo `.txt` de exemplo e trava inteligente (*Sem Letra = Sem Microfone*).
+   - **🎮 Barra de Toque & Teste Interativo**: Toque junto com a música usando o teclado do PC (`A, S, J, K, L + Espaço`), microfone, controle/joystick ou instrumentos USB/MIDI reais plugados!
+4. **🖼️ Metadados, Capa, Ranking de Dificuldade (0 a 6) & Exportação**:
+   - Cadastro completo de Título, Artista, Álbum, Ano, Gênero e Charter, **seletor de Ranking de Dificuldade (0 a 6 bolinhas no padrão Magma/C3) para cada instrumento** (com cálculo automático), upload/geração automática de capa 512x512 e exportação direta.
 5. **📖 Guia Passo a Passo (Para Leigos)**:
    - Tutorial ilustrado passo a passo cobrindo criação em 1 clique, modo PRO, importação, edição e instalação em todos os jogos e consoles.
 
@@ -82,12 +84,12 @@ O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fl
 - ⚡ **Detecção Automática de Instrumento (Auto Mode)**:
   - O aplicativo escuta as mensagens e comuta automaticamente o visualizador e a resposta sonora para o instrumento que estiver tocando:
     - Bateria no Canal 10 ➔ Ativa visualizador de Bateria e sintetizador de percussão GM.
-    - Notas nos Canais 1 a 6 ➔ Ativa visualizador de Guitarra Pro (6 cordas polifônicas).
+    - Notas nos Canais 1 a 6 ➔ Ativa visualizador de Guitarra Pro (6 cordas polifônicas + Pro Chords).
     - Teclas de C3 a C5 no Canal 1 ➔ Ativa visualizador de Teclado.
     - 5 Casas clássicas / Strum ➔ Ativa visualizador de 5 botões com sistema de acordes.
 
-- 🎛️ **4 Visualizadores Gráficos Especializados em Tempo Real**:
-  - **Guitarra Pro**: Desenho em alta precisão do braço com 6 cordas (E, A, D, G, B, E) e 17 trastes, indicando exatamente a corda tocada, a casa apertada e a nota resultante.
+- 🎛️ **Visualizadores Gráficos Especializados em Tempo Real**:
+  - **Guitarra Pro & Pro Chords**: Desenho em alta precisão do braço com 6 cordas (E, A, D, G, B, E), 17 trastes clicáveis, painel interativo de **Pro Chords (`Em`, `G`, `D`, `A`, `C`, `E`, `Am`, `F`)** e **Palheta PRO**, indicando exatamente a corda tocada, a casa apertada e a nota resultante.
   - **Teclado (25 Teclas)**: Teclas brancas e pretas que acendem dinamicamente e medidor vertical da fita de toque (Touch Strip / Modulação).
   - **Bateria Eletrônica**: 6 pads (Bumbo Kick 36, Caixa Snare 38, Chimbal Hi-Hat 42/46, Tom 1 48, Surdo 41, Pratos Crash/Ride 49/55) com medidor de força (Velocity) e contador de toques.
   - **Guitarra 5 Botões**: Cores clássicas (Verde, Vermelho, Amarelo, Azul, Laranja), feedback de palhetada (Strum Up/Down) e alavanca (Whammy Bar).

@@ -530,7 +530,7 @@ class MidGuitarApp(ctk.CTk):
         if "Auto" in selected_mode_str:
             self.current_instrument_mode = InstrumentMode.AUTO
             self.reader.set_mode(InstrumentMode.AUTO)
-        elif "Guitarra Pro" in selected_mode_str:
+        elif "Pro" in selected_mode_str or "Guitarra Pro" in selected_mode_str:
             self.current_instrument_mode = InstrumentMode.PRO_GUITAR
             self.reader.set_mode(InstrumentMode.PRO_GUITAR)
             self._switch_visual_view(self.pro_fretboard)

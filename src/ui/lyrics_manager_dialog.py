@@ -60,19 +60,27 @@ class LyricsManagerDialog(ctk.CTkToplevel):
         ctk.CTkLabel(file_bar, text="Letra / Legenda da Canção (.txt, .lrc ou .srt):", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left")
 
         btn_load = ctk.CTkButton(
-            file_bar, text="📁 Carregar Letra (.txt / .lrc / .srt)...", width=215, height=28,
+            file_bar, text="📁 Carregar Letra...", width=140, height=28,
             fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_load_file
         )
         btn_load.pack(side="right", padx=2)
-        set_tooltip(btn_load, "Carrega um arquivo de texto (.txt), letra sincronizada (.lrc) ou legenda de vídeo (.srt)")
+        set_tooltip(btn_load, "Carrega um arquivo de texto (.txt), letra sincronizada (.lrc) ou legenda (.srt)")
+
+        btn_sample = ctk.CTkButton(
+            file_bar, text="📄 Baixar TXT Modelo", width=145, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=11),
+            command=self._on_save_sample_txt
+        )
+        btn_sample.pack(side="right", padx=2)
+        set_tooltip(btn_sample, "Salva um arquivo de exemplo mostrando como formatar estrofes e letras para o Rock Band!")
 
         btn_clear = ctk.CTkButton(
-            file_bar, text="🗑️ Limpar (Sem Mic)", width=120, height=28,
+            file_bar, text="🗑️ Limpar", width=90, height=28,
             fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=11),
             command=self._on_clear
         )
-        btn_clear.pack(side="right", padx=4)
+        btn_clear.pack(side="right", padx=2)
 
         # Caixa de Texto da Letra
         self.txt_lyrics = ctk.CTkTextbox(main_box, font=ctk.CTkFont(family="Consolas", size=12), corner_radius=6)
@@ -148,6 +156,42 @@ class LyricsManagerDialog(ctk.CTkToplevel):
         self.status_lbl.configure(text="Letra removida (Microfone desativado).", text_color="#F59E0B")
         if self.on_applied:
             self.on_applied()
+
+    def _on_save_sample_txt(self):
+        f = filedialog.asksaveasfilename(
+            title="Salvar Arquivo Modelo de Letra",
+            defaultextension=".txt",
+            initialfile="exemplo_letra_rockband.txt",
+            filetypes=[("Arquivos de Texto", "*.txt")]
+        )
+        if f:
+            sample_content = (
+                "# ==============================================================\n"
+                "# MODELO DE LETRA / VOCAIS - ROCK BAND & CLONE HERO\n"
+                "# MidGuitar Universal Studio\n"
+                "# ==============================================================\n"
+                "# DICAS IMPORTANTES:\n"
+                "# 1. Cole a letra da música dividida em linhas ou estrofes.\n"
+                "# 2. O MidGuitar divide as sílabas automaticamente!\n"
+                "# 3. Se você separar com hífens (ex: 'ca-sa', 'a-mor'), a divisão fica 100% perfeita!\n"
+                "# 4. Linhas em branco separam as estrofes e criam pausas para respirar no jogo.\n"
+                "# ==============================================================\n\n"
+                "[Estrofe 1]\n"
+                "Eu ve-jo o céu a-zul bri-lhar\n"
+                "E o som do rock a co-me-çar\n"
+                "Com a gui-tar-ra a to-car\n"
+                "E a ba-te-ri-a a a-ce-le-rar\n\n"
+                "[Refrão]\n"
+                "Va-mos can-tar a-té o sol rai-ar\n"
+                "Rock Band e Clone He-ro no ar!\n"
+                "Va-mos to-car sem pa-rar!\n"
+            )
+            try:
+                with open(f, "w", encoding="utf-8") as fp:
+                    fp.write(sample_content)
+                messagebox.showinfo("Modelo Salvo!", f"Arquivo de exemplo salvo com sucesso em:\n{f}\n\nVocê pode abrir no Bloco de Notas para ver e preencher com sua música!")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Não foi possível salvar o arquivo: {e}")
 
     def _on_apply_lyrics(self):
         content = self.txt_lyrics.get("1.0", "end").strip()

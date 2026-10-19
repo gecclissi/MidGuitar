@@ -22,6 +22,9 @@ def export_clone_hero_song(song: ChartSong, output_base_dir: str, audio_source_p
     target_dir = os.path.join(output_base_dir, folder_name)
     os.makedirs(target_dir, exist_ok=True)
 
+    if hasattr(song, "get_effective_duration_ms"):
+        total_duration_ms = max(total_duration_ms or 0, song.get_effective_duration_ms())
+
     # 1. Gera e salva o notes.mid
     mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms)
     midi_path = os.path.join(target_dir, "notes.mid")
@@ -84,14 +87,42 @@ loading_phrase = Criado e gravado com MidGuitar Universal Studio!
                 except Exception as e:
                     print(f"[CloneHeroExporter] Erro ao copiar stem {fname}: {e}")
 
-    # 4. Copia a arte do álbum se existir
+    # 4. Copia a arte do álbum ou gera uma estilizada (512x512) para nunca ficar sem capa
+    dest_art = os.path.join(target_dir, "album.png")
     if song.album_art_path and os.path.exists(song.album_art_path):
         try:
             from PIL import Image
-            dest_art = os.path.join(target_dir, "album.png")
             im = Image.open(song.album_art_path).convert("RGBA")
+            im = im.resize((512, 512), Image.Resampling.LANCZOS)
             im.save(dest_art, "PNG")
         except Exception as e:
             print(f"[CloneHeroExporter] Erro ao salvar arte do álbum: {e}")
+            _create_default_album_art(dest_art, song.title, song.artist)
+    else:
+        _create_default_album_art(dest_art, song.title, song.artist)
 
     return target_dir
+
+
+def _create_default_album_art(path: str, title: str, artist: str):
+    """Cria uma capa padrão bonita 512x512 caso o usuário não tenha selecionado uma imagem."""
+    try:
+        from PIL import Image, ImageDraw
+        im = Image.new("RGBA", (512, 512), color=(15, 23, 42, 255))
+        draw = ImageDraw.Draw(im)
+        # Borda e disco central estilizado
+        draw.rectangle([(8, 8), (503, 503)], outline=(56, 189, 248), width=3)
+        draw.rectangle([(16, 16), (495, 495)], outline=(30, 41, 59), width=2)
+        # Círculo de vinil
+        draw.ellipse([(106, 106), (406, 406)], fill=(24, 32, 47), outline=(51, 65, 85), width=2)
+        draw.ellipse([(206, 206), (306, 306)], fill=(30, 41, 59), outline=(56, 189, 248), width=2)
+        draw.ellipse([(246, 246), (266, 266)], fill=(15, 23, 42))
+
+        # Textos informativos
+        draw.text((40, 40), "CUSTOM TRACK", fill=(56, 189, 248))
+        draw.text((40, 420), title[:28], fill=(255, 255, 255))
+        draw.text((40, 450), artist[:32], fill=(148, 163, 184))
+        draw.text((40, 480), "⚡ MidGuitar Studio", fill=(16, 185, 129))
+        im.save(path, "PNG")
+    except Exception as e:
+        print(f"[CloneHeroExporter] Erro ao criar capa padrão: {e}")

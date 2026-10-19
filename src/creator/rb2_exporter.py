@@ -151,11 +151,25 @@ def export_rb2_song_package(song: ChartSong, output_base_dir: str, audio_source_
     with open(os.path.join(x360_content_dir, "songs.dta"), "w", encoding="utf-8") as f:
         f.write(dta_content)
 
-    # 4. Gera {shortname}.mid (com todas as 4 dificuldades)
-    mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms)
+    # 4. Gera {shortname}.mid estritamente compatível com Rock Band 2 (sem trilhas Pro/Keys do RB3)
+    mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms, include_rb3_tracks=False)
     mid_path = os.path.join(track_dir, f"{clean_shortname}.mid")
     save_midi(mid, mid_path)
     shutil.copy2(mid_path, os.path.join(x360_content_dir, f"{clean_shortname}.mid"))
+
+    # 4.1 Salva capa 512x512 (album.png) na pasta da faixa
+    from src.creator.clonehero_exporter import _create_default_album_art
+    art_dest = os.path.join(track_dir, "album.png")
+    if song.album_art_path and os.path.exists(song.album_art_path):
+        try:
+            im512 = Image.open(song.album_art_path).convert("RGBA").resize((512, 512), Image.Resampling.LANCZOS)
+            im512.save(art_dest, "PNG")
+        except Exception:
+            _create_default_album_art(art_dest, song.title, song.artist)
+    else:
+        _create_default_album_art(art_dest, song.title, song.artist)
+    if os.path.exists(art_dest):
+        shutil.copy2(art_dest, os.path.join(x360_content_dir, "album.png"))
 
     # 5. Gera {shortname}.mogg (Container oficial Harmonix 0x0A)
     primary_audio = audio_source_path or song.audio_path or (song.audio_stems[0] if song.audio_stems else None)

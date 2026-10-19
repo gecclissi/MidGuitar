@@ -46,13 +46,40 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         except Exception:
             pass
         try:
-            song.diff_guitar = int(meta.get("diff_guitar", song.diff_guitar))
-            song.diff_bass = int(meta.get("diff_bass", song.diff_bass))
-            song.diff_drums = int(meta.get("diff_drums", song.diff_drums))
-            song.diff_keys = int(meta.get("diff_keys", song.diff_keys))
-            song.diff_band = int(meta.get("diff_band", song.diff_band))
+            song.diff_guitar = max(0, int(meta.get("diff_guitar", song.diff_guitar)))
+            song.diff_bass = max(0, int(meta.get("diff_bass", song.diff_bass)))
+            song.diff_drums = max(0, int(meta.get("diff_drums", song.diff_drums)))
+            song.diff_keys = max(0, int(meta.get("diff_keys", song.diff_keys)))
+            song.diff_band = max(0, int(meta.get("diff_band", song.diff_band)))
         except Exception:
             pass
+    else:
+        # 1.1 Busca songs.dta caso seja uma pasta de Rock Band 2 / 3
+        dta_candidates = [os.path.join(folder_path, "songs.dta"), os.path.join(os.path.dirname(folder_path), "songs.dta")]
+        for dta_p in dta_candidates:
+            if os.path.exists(dta_p):
+                try:
+                    import re
+                    with open(dta_p, "r", encoding="utf-8", errors="ignore") as df:
+                        dta_txt = df.read()
+                    m_name = re.search(r'\(name\s+"([^"]+)"\)', dta_txt)
+                    m_art = re.search(r'\(artist\s+"([^"]+)"\)', dta_txt)
+                    m_alb = re.search(r'\(album_name\s+"([^"]+)"\)', dta_txt)
+                    m_yr = re.search(r'\(year_released\s+(\d+)\)', dta_txt)
+                    if m_name: song.title = m_name.group(1)
+                    if m_art: song.artist = m_art.group(1)
+                    if m_alb: song.album = m_alb.group(1)
+                    if m_yr: song.year = int(m_yr.group(1))
+                    break
+                except Exception:
+                    pass
+
+    # 1.2 Busca imagem de capa (album.png, cover.png, ICON0.PNG)
+    for f in os.listdir(folder_path):
+        f_lower = f.lower()
+        if f_lower in ["album.png", "album.jpg", "album.jpeg", "cover.png", "cover.jpg", "icon0.png"]:
+            song.album_art_path = os.path.join(folder_path, f)
+            break
 
     # 2. Busca arquivos de áudio (Stems individuais, mixagem geral ou .mogg oficial do RB3)
     for f in os.listdir(folder_path):

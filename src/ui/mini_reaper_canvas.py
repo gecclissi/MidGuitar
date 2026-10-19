@@ -273,12 +273,25 @@ class MiniReaperCanvas(tk.Frame):
                 width=1,
                 tags=("chart_note", tag_id)
             )
-            if hasattr(note, "_pro_fret"):
+            pro_fret = getattr(note, "_pro_fret", getattr(note, "fret", None))
+            if pro_fret is not None:
                 self.canvas.create_text(
                     x_start + 8, (y_top + y_bot) / 2,
-                    text=str(note._pro_fret),
+                    text=str(pro_fret),
                     fill="#0F172A",
                     font=("Segoe UI", 8, "bold"),
+                    tags=("chart_note", tag_id)
+                )
+            pk_pitch = getattr(note, "_pro_pitch", getattr(note, "pitch", None))
+            if pk_pitch is not None and self.current_track in ["pro_keys"]:
+                names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+                octave = (pk_pitch // 12) - 1
+                pitch_name = f"{names[pk_pitch % 12]}{octave}"
+                self.canvas.create_text(
+                    x_start + 14, (y_top + y_bot) / 2,
+                    text=pitch_name,
+                    fill="#0F172A",
+                    font=("Segoe UI", 7, "bold"),
                     tags=("chart_note", tag_id)
                 )
 
@@ -344,12 +357,20 @@ class MiniReaperCanvas(tk.Frame):
                 str_idx = max(0, min(5, lane_idx))
                 for pgn in list(src_list):
                     if pgn.string_idx == str_idx and pgn.difficulty == self.current_difficulty and abs(pgn.time_ms - time_ms) < 40:
-                        src_list.remove(pgn)
+                        fret_cycle = [0, 1, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17]
+                        try:
+                            c_idx = fret_cycle.index(pgn.fret)
+                            if c_idx + 1 < len(fret_cycle):
+                                pgn.fret = fret_cycle[c_idx + 1]
+                            else:
+                                src_list.remove(pgn)
+                        except ValueError:
+                            pgn.fret = (pgn.fret + 1) % 18
                         self.redraw()
                         if self.on_change:
                             self.on_change()
                         return
-                src_list.append(ProGuitarNote(time_ms=time_ms, string_idx=str_idx, fret=3, duration_ms=self.default_sustain_ms, difficulty=self.current_difficulty))
+                src_list.append(ProGuitarNote(time_ms=time_ms, string_idx=str_idx, fret=0, duration_ms=self.default_sustain_ms, difficulty=self.current_difficulty))
                 src_list.sort(key=lambda n: n.time_ms)
                 self.redraw()
                 if self.on_change:
@@ -361,8 +382,11 @@ class MiniReaperCanvas(tk.Frame):
                 pitch_map = {0: 48, 1: 52, 2: 55, 3: 60, 4: 64}
                 pk_pitch = pitch_map.get(lane_idx, 60)
                 for pkn in list(self.song.pro_keys_notes):
-                    if (pkn.pitch - 48) % 5 == (pk_pitch - 48) % 5 and pkn.difficulty == self.current_difficulty and abs(pkn.time_ms - time_ms) < 40:
-                        self.song.pro_keys_notes.remove(pkn)
+                    if pkn.difficulty == self.current_difficulty and abs(pkn.time_ms - time_ms) < 40:
+                        if pkn.pitch + 1 <= 72:
+                            pkn.pitch += 1
+                        else:
+                            self.song.pro_keys_notes.remove(pkn)
                         self.redraw()
                         if self.on_change:
                             self.on_change()
@@ -397,7 +421,7 @@ class MiniReaperCanvas(tk.Frame):
                 pitch_map = {"vocal_high": 71, "vocal_mid": 65, "vocal_low": 60, "overdrive": 60}
                 p = pitch_map.get(lane_key, 65)
                 is_phrase = (lane_key == "overdrive")
-                self.song.vocal_notes.append(VocalNote(time_ms=time_ms, pitch=p, duration_ms=self.default_sustain_ms, lyric="La", is_phrase_marker=is_phrase))
+                self.song.add_vocal_note(VocalNote(time_ms=time_ms, pitch=p, duration_ms=self.default_sustain_ms, lyric="La", is_phrase_end=is_phrase))
                 self.redraw()
                 if self.on_change:
                     self.on_change()

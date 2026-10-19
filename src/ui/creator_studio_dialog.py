@@ -70,7 +70,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.after(150, self.focus_force)
 
         self._build_ui()
-        self._update_target_game_desc("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
+        self._update_target_game_desc("🎸 Rock Band 3 (PS3 HEN/CFW & Emulador RPCS3)")
         self._update_vocal_checkbox_state()
         self._setup_drag_and_drop()
         self._start_playback_poll()
@@ -177,37 +177,155 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             quick_create_box,
-            text="✨ OPÇÃO A - Criar Música Nova em 1 Clique (Arraste seu MP3 e a Letra/Legenda opcional):",
+            text="✨ CENTRAL DE CRIAÇÃO AUTOMÁTICA MODULAR (Arraste seu MP3 e a Letra/Legenda):",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#A5B4FC"
         ).pack(anchor="w", padx=12, pady=(8, 2))
 
+        # Linha 1: Botões de Carregamento e Geração
         qc_row = ctk.CTkFrame(quick_create_box, fg_color="transparent")
-        qc_row.pack(fill="x", padx=12, pady=(2, 8))
+        qc_row.pack(fill="x", padx=12, pady=(2, 4))
 
         btn_qc_mp3 = ctk.CTkButton(
-            qc_row, text="🎵 1. Escolher MP3 / Áudio...", width=210, height=32,
+            qc_row, text="🎵 1. Escolher MP3 / Áudio...", width=180, height=32,
             fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_quick_load_mp3
         )
-        btn_qc_mp3.pack(side="left", padx=(0, 6))
-        set_tooltip(btn_qc_mp3, "Selecione o arquivo MP3/WAV/OGG da música. O app detecta o Nome, Artista, Duração e BPM sozinho!")
+        btn_qc_mp3.pack(side="left", padx=(0, 4))
+        set_tooltip(btn_qc_mp3, "Selecione o arquivo MP3/WAV/OGG. O app detecta Título, Artista, Duração e BPM sozinho!")
 
         btn_qc_lyrics = ctk.CTkButton(
-            qc_row, text="🎤 2. Letra / Legenda (.txt/.lrc/.srt) [Opcional]", width=280, height=32,
+            qc_row, text="🎤 2. Colar Letra (.txt/.lrc)...", width=190, height=32,
             fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._open_lyrics_dialog
         )
         btn_qc_lyrics.pack(side="left", padx=4)
-        set_tooltip(btn_qc_lyrics, "Opcional: Carregue um arquivo .txt, .lrc ou legenda .srt (ou cole a letra) para liberar o Microfone! Se não tiver letra, o microfone fica desativado.")
+        set_tooltip(btn_qc_lyrics, "Cole a letra ou carregue um arquivo .txt / .lrc para habilitar a faixa de microfone/vocais!")
+
+        btn_qc_sample = ctk.CTkButton(
+            qc_row, text="📄 Baixar TXT Modelo", width=150, height=32,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=11),
+            command=self._on_download_sample_lyrics_txt
+        )
+        btn_qc_sample.pack(side="left", padx=4)
+        set_tooltip(btn_qc_sample, "Baixa um modelo .txt pronto mostrando como organizar versos e refrão!")
 
         btn_qc_generate = ctk.CTkButton(
-            qc_row, text="⚡ 3. GERAR TUDO AUTOMATICAMENTE!", width=260, height=32,
+            qc_row, text="⚡ 3. GERAR MÚSICA COMPLETA!", width=220, height=32,
             fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_quick_generate_all
         )
         btn_qc_generate.pack(side="right", padx=2)
-        set_tooltip(btn_qc_generate, "Gera automaticamente Guitarra, Baixo, Bateria, Teclado (e Vocais se tiver letra) em todas as 4 dificuldades (Easy, Medium, Hard, Expert)!")
+        set_tooltip(btn_qc_generate, "Gera as notas para os instrumentos selecionados abaixo em Easy, Medium, Hard e Expert!")
+
+        # Linha 2: Metadados Imediatos (Título, Artista, BPM)
+        meta_row = ctk.CTkFrame(quick_create_box, fg_color="transparent")
+        meta_row.pack(fill="x", padx=12, pady=(2, 4))
+
+        ctk.CTkLabel(meta_row, text="🎵 Título:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#E2E8F0").pack(side="left", padx=(0, 2))
+        self.tab1_title_entry = ctk.CTkEntry(meta_row, width=220, height=28)
+        self.tab1_title_entry.insert(0, self.song.title)
+        self.tab1_title_entry.pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(meta_row, text="👤 Artista:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#E2E8F0").pack(side="left", padx=(0, 2))
+        self.tab1_artist_entry = ctk.CTkEntry(meta_row, width=200, height=28)
+        self.tab1_artist_entry.insert(0, self.song.artist)
+        self.tab1_artist_entry.pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(meta_row, text="⚡ BPM:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#E2E8F0").pack(side="left", padx=(0, 2))
+        self.tab1_bpm_entry = ctk.CTkEntry(meta_row, width=65, height=28)
+        self.tab1_bpm_entry.insert(0, str(self.song.bpm))
+        self.tab1_bpm_entry.pack(side="left", padx=(0, 8))
+
+        btn_pick_cover = ctk.CTkButton(
+            meta_row, text="🖼️ Foto da Capa...", width=140, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._on_browse_album_art
+        )
+        btn_pick_cover.pack(side="right", padx=2)
+        set_tooltip(btn_pick_cover, "Opcional: Escolha a imagem de capa (se não escolher, o MidGuitar gera uma capa padrão em vinil automaticamente!)")
+
+        # Linha 3: Árvore Modular de Instrumentos com Checkboxes
+        inst_row = ctk.CTkFrame(quick_create_box, fg_color="#0F172A", corner_radius=6)
+        inst_row.pack(fill="x", padx=12, pady=(2, 2))
+
+        ctk.CTkLabel(inst_row, text="Instrumentos:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#38BDF8").pack(side="left", padx=(8, 6), pady=4)
+
+        self.chk_tab1_guitar = ctk.CTkCheckBox(inst_row, text="🎸 Guitarra", font=ctk.CTkFont(size=11), width=90)
+        self.chk_tab1_guitar.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_guitar.select()
+
+        self.chk_tab1_bass = ctk.CTkCheckBox(inst_row, text="🎸 Baixo", font=ctk.CTkFont(size=11), width=75)
+        self.chk_tab1_bass.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_bass.select()
+
+        self.chk_tab1_drums = ctk.CTkCheckBox(inst_row, text="🥁 Bateria", font=ctk.CTkFont(size=11), width=85)
+        self.chk_tab1_drums.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_drums.select()
+
+        self.chk_tab1_keys = ctk.CTkCheckBox(inst_row, text="🎹 Teclado", font=ctk.CTkFont(size=11), width=85)
+        self.chk_tab1_keys.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_keys.select()
+
+        self.chk_tab1_pro_guitar = ctk.CTkCheckBox(inst_row, text="🎸 Pro Guitar (6C)", font=ctk.CTkFont(size=11), width=120)
+        self.chk_tab1_pro_guitar.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_pro_guitar.select()
+
+        self.chk_tab1_pro_bass = ctk.CTkCheckBox(inst_row, text="🎸 Pro Bass (4C)", font=ctk.CTkFont(size=11), width=110)
+        self.chk_tab1_pro_bass.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_pro_bass.select()
+
+        self.chk_tab1_pro_keys = ctk.CTkCheckBox(inst_row, text="🎹 Pro Keys (25T)", font=ctk.CTkFont(size=11), width=115)
+        self.chk_tab1_pro_keys.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_pro_keys.select()
+
+        self.chk_tab1_vocals = ctk.CTkCheckBox(inst_row, text="🎤 Vocais / Mic", font=ctk.CTkFont(size=11), width=105)
+        self.chk_tab1_vocals.pack(side="left", padx=3, pady=4)
+        self.chk_tab1_vocals.select()
+
+        # Linha 3B: Botões de Seleção Rápida e Modo "Só [Instrumento]" para TODOS os instrumentos!
+        solo_row = ctk.CTkFrame(quick_create_box, fg_color="#0F172A", corner_radius=6)
+        solo_row.pack(fill="x", padx=12, pady=(0, 4))
+
+        ctk.CTkLabel(solo_row, text="Modo Rápido / Solo:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#FACC15").pack(side="left", padx=(8, 4), pady=3)
+
+        solo_presets = [
+            ("⚡ Banda Completa", "all", "#0284C7", "Marca todos os instrumentos e vocais"),
+            ("🎸 Kit RB2/GH", "classic", "#4F46E5", "Marca apenas Guitarra, Baixo, Bateria e Vocal (ideal para Rock Band 2 / Guitar Hero)"),
+            ("🎸 Só Guitarra", "guitar", "#15803D", "Gera música APENAS com Guitarra (desmarca os outros)"),
+            ("🎸 Só Baixo", "bass", "#1E293B", "Gera música APENAS com Baixo (desmarca os outros)"),
+            ("🥁 Só Bateria", "drum", "#B45309", "Gera música APENAS com Bateria (desmarca os outros)"),
+            ("🎹 Só Teclado", "keys", "#1D4ED8", "Gera música APENAS com Teclado 5 botões (desmarca os outros)"),
+            ("🎸 Só Pro Guitar", "pro_guitar", "#0F766E", "Gera música APENAS com Pro Guitar 6 cordas (desmarca os outros)"),
+            ("🎸 Só Pro Bass", "pro_bass", "#1E293B", "Gera música APENAS com Pro Bass 4 cordas (desmarca os outros)"),
+            ("🎹 Só Pro Keys", "pro_keys", "#6D28D9", "Gera música APENAS com Pro Keys 25 teclas (desmarca os outros)"),
+            ("🎤 Só Vocal", "vocals", "#BE185D", "Gera música APENAS com Vocal / Microfone (desmarca os outros)"),
+            ("❌ Limpar", "none", "#334155", "Desmarca todas as caixas para você escolher manualmente"),
+        ]
+        for lbl_txt, p_mode, col_bg, tip_txt in solo_presets:
+            b_p = ctk.CTkButton(
+                solo_row, text=lbl_txt, width=68, height=22,
+                fg_color=col_bg, hover_color="#475569", font=ctk.CTkFont(size=9, weight="bold"),
+                command=lambda m=p_mode: self._select_preset_instruments(m)
+            )
+            b_p.pack(side="left", padx=2, pady=3)
+            set_tooltip(b_p, tip_txt)
+
+        # Linha 4: Barra de Progresso e Loading Feedback
+        prog_row = ctk.CTkFrame(quick_create_box, fg_color="transparent")
+        prog_row.pack(fill="x", padx=12, pady=(0, 6))
+
+        self.tab1_progress_bar = ctk.CTkProgressBar(prog_row, height=8, corner_radius=4)
+        self.tab1_progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.tab1_progress_bar.set(0.0)
+
+        self.tab1_status_lbl = ctk.CTkLabel(
+            prog_row,
+            text="Pronto para criar! Arraste seu MP3 para começar.",
+            font=ctk.CTkFont(size=11),
+            text_color="#94A3B8"
+        )
+        self.tab1_status_lbl.pack(side="right", padx=2)
 
         # Bloco B: Importar Pasta de Fãs (Chorus Encore / RhythmVerse / Clone Hero)
         top_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
@@ -284,26 +402,26 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             sel_game_row,
-            text="🎯 Escolha o Jogo de Destino:",
+            text="🎯 Escolha o Jogo / Console:",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#38BDF8"
         ).pack(side="left", padx=(0, 8))
 
         self.target_game_combo = ctk.CTkComboBox(
-            sel_game_row, width=370, height=32,
+            sel_game_row, width=420, height=32,
             values=[
-                "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
-                "🎸 Rock Band 2 (PS3 / RPCS3 BLUS30147 & Xbox 360)",
-                "🎮 Clone Hero / YARG (PC / Mac / Linux)",
-                "📦 PlayStation 3 Console (CFW / HEN / PKG)",
-                "🟢 Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)",
-                "🔵 PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)"
+                "🎸 Rock Band 3 (PS3 HEN/CFW & Emulador RPCS3)",
+                "🎸 Rock Band 2 (PS3 HEN/CFW & Emulador RPCS3)",
+                "🟢 Xbox 360 - Rock Band 3 (Console RGH/JTAG & Emulador Xenia)",
+                "🟢 Xbox 360 - Rock Band 2 (Console RGH/JTAG & RB2 Deluxe)",
+                "🔵 PlayStation 4 - Rock Band 4 (Console GoldHEN & FPKG)",
+                "🎮 Clone Hero / YARG / Guitar Hero WT (PC)"
             ],
             command=self._on_target_game_changed
         )
-        self.target_game_combo.set("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
+        self.target_game_combo.set("🎸 Rock Band 3 (PS3 HEN/CFW & Emulador RPCS3)")
         self.target_game_combo.pack(side="left", padx=4)
-        set_tooltip(self.target_game_combo, "Selecione para qual jogo ou videogame você deseja exportar")
+        set_tooltip(self.target_game_combo, "Selecione o videogame (Console Desbloqueado ou Emulador) ou jogo de destino")
 
         self.btn_export_selected = ctk.CTkButton(
             sel_game_row, text="⚡ EXPORTAR AGORA", width=200, height=34,
@@ -329,47 +447,53 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(quick_row, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
-        btn_convert_rb3 = ctk.CTkButton(
-            quick_row, text="🚀 RB3 (RPCS3)", width=110, height=28,
-            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
-            command=self._on_convert_to_rb3
-        )
-        btn_convert_rb3.pack(side="left", padx=2)
-
-        btn_convert_rb2 = ctk.CTkButton(
-            quick_row, text="🎸 RB2 (PS3/X360)", width=115, height=28,
-            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
-            command=self._on_export_rb2
-        )
-        btn_convert_rb2.pack(side="left", padx=2)
-
-        btn_convert_ps3 = ctk.CTkButton(
-            quick_row, text="📦 PS3 (PKG)", width=110, height=28,
+        btn_convert_rb3_ps3 = ctk.CTkButton(
+            quick_row, text="🚀 RB3 (PS3)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_ps3_pkg
         )
-        btn_convert_ps3.pack(side="left", padx=2)
+        btn_convert_rb3_ps3.pack(side="left", padx=2)
+        set_tooltip(btn_convert_rb3_ps3, "Exportar para Rock Band 3 (PS3 HEN/CFW ou Emulador RPCS3)")
 
-        btn_convert_x360 = ctk.CTkButton(
-            quick_row, text="🟢 Xbox 360", width=110, height=28,
+        btn_convert_rb2_ps3 = ctk.CTkButton(
+            quick_row, text="🎸 RB2 (PS3)", width=105, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._on_export_rb2
+        )
+        btn_convert_rb2_ps3.pack(side="left", padx=2)
+        set_tooltip(btn_convert_rb2_ps3, "Exportar para Rock Band 2 (PS3 HEN/CFW ou Emulador RPCS3)")
+
+        btn_convert_rb3_x360 = ctk.CTkButton(
+            quick_row, text="🟢 RB3 (X360)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_xbox360
         )
-        btn_convert_x360.pack(side="left", padx=2)
+        btn_convert_rb3_x360.pack(side="left", padx=2)
+        set_tooltip(btn_convert_rb3_x360, "Exportar para Rock Band 3 (Xbox 360 RGH/JTAG ou Emulador Xenia)")
+
+        btn_convert_rb2_x360 = ctk.CTkButton(
+            quick_row, text="🟢 RB2 (X360)", width=105, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._on_export_rb2
+        )
+        btn_convert_rb2_x360.pack(side="left", padx=2)
+        set_tooltip(btn_convert_rb2_x360, "Exportar para Rock Band 2 (Xbox 360 Horizon ou RB2 Deluxe)")
 
         btn_convert_ps4 = ctk.CTkButton(
-            quick_row, text="🔵 PS4 (RB4)", width=110, height=28,
+            quick_row, text="🔵 RB4 (PS4)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_ps4
         )
         btn_convert_ps4.pack(side="left", padx=2)
+        set_tooltip(btn_convert_ps4, "Exportar para Rock Band 4 (PS4 GoldHEN / FPKG)")
 
         btn_convert_ch = ctk.CTkButton(
-            quick_row, text="🎮 Clone Hero", width=110, height=28,
+            quick_row, text="🎮 Clone Hero", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_convert_to_clone_hero
         )
         btn_convert_ch.pack(side="left", padx=2)
+        set_tooltip(btn_convert_ch, "Exportar para Clone Hero / YARG no PC")
 
     def _on_browse_import_folder(self):
         folder = filedialog.askdirectory(title="Selecione a pasta da música do Clone Hero / Rock Band")
@@ -454,14 +578,154 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             return True
         return False
 
+    def _select_preset_instruments(self, mode: str):
+        """
+        Marca/desmarca instrumentos de acordo com o modo rápido selecionado:
+        - 'all': Banda Completa (Todos os instrumentos + Vocal)
+        - 'classic': Kit Rock Band 2 / Guitar Hero (Guitarra, Baixo, Bateria, Vocal — sem Keys/Pro)
+        - 'guitar', 'bass', 'drum', 'keys', 'pro_guitar', 'pro_bass', 'pro_keys', 'vocals': Modo SOLO para aquele instrumento!
+        - 'none': Limpa todas as caixas para seleção manual
+        """
+        all_keys = ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys", "vocals"]
+        if mode == "all":
+            target_set = set(all_keys)
+            status_msg = "⚡ Modo BANDA COMPLETA ativado! Todos os instrumentos selecionados."
+        elif mode == "classic":
+            target_set = {"guitar", "bass", "drum", "vocals"}
+            status_msg = "🎸 Kit Clássico (RB2 / Guitar Hero) ativado: Guitarra, Baixo, Bateria e Vocal!"
+        elif mode == "none":
+            target_set = set()
+            status_msg = "Caixas desmarcadas! Marque manualmente os instrumentos que deseja gerar."
+        else:
+            target_set = {mode}
+            solo_labels = {
+                "guitar": "🎸 SÓ GUITARRA (5 Botões)",
+                "bass": "🎸 SÓ BAIXO (5 Botões)",
+                "drum": "🥁 SÓ BATERIA",
+                "keys": "🎹 SÓ TECLADO (5 Botões)",
+                "pro_guitar": "🎸 SÓ PRO GUITAR (6 Cordas)",
+                "pro_bass": "🎸 SÓ PRO BASS (4 Cordas)",
+                "pro_keys": "🎹 SÓ PRO KEYS (25 Teclas)",
+                "vocals": "🎤 SÓ VOCAL / MICROFONE (A Cappella)"
+            }
+            status_msg = f"🎯 Modo {solo_labels.get(mode, mode)} ativado! Apenas este instrumento será gerado."
+
+        # Atualiza checkboxes da Aba 1
+        tab1_map = {
+            "guitar": getattr(self, "chk_tab1_guitar", None),
+            "bass": getattr(self, "chk_tab1_bass", None),
+            "drum": getattr(self, "chk_tab1_drums", None),
+            "keys": getattr(self, "chk_tab1_keys", None),
+            "pro_guitar": getattr(self, "chk_tab1_pro_guitar", None),
+            "pro_bass": getattr(self, "chk_tab1_pro_bass", None),
+            "pro_keys": getattr(self, "chk_tab1_pro_keys", None),
+            "vocals": getattr(self, "chk_tab1_vocals", None),
+        }
+        for k, chk in tab1_map.items():
+            if chk is not None:
+                if k in target_set:
+                    chk.select()
+                else:
+                    chk.deselect()
+
+        # Sincroniza também os checkboxes da Aba 3 (Mini-REAPER)
+        tab3_map = {
+            "guitar": getattr(self, "chk_gen_guitar", None),
+            "bass": getattr(self, "chk_gen_bass", None),
+            "drum": getattr(self, "chk_gen_drums", None),
+            "keys": getattr(self, "chk_gen_keys", None),
+            "pro_guitar": getattr(self, "chk_gen_pro_guitar", None),
+            "pro_bass": getattr(self, "chk_gen_pro_bass", None),
+            "pro_keys": getattr(self, "chk_gen_pro_keys", None),
+            "vocals": getattr(self, "chk_gen_vocals", None),
+        }
+        for k, chk in tab3_map.items():
+            if chk is not None:
+                try:
+                    if k in target_set:
+                        chk.select()
+                    else:
+                        chk.deselect()
+                except Exception:
+                    pass
+
+        self._update_progress_ui(0.0, status_msg)
+
+    def _preset_vocals_only(self):
+        self._select_preset_instruments("vocals")
+
+    def _preset_full_band(self):
+        self._select_preset_instruments("all")
+
+    def _on_download_sample_lyrics_txt(self):
+        """Baixa o modelo .txt de exemplo diretamente pela Aba 1."""
+        dlg = LyricsManagerDialog(self, self.song, on_applied_callback=self._on_lyrics_applied)
+        dlg._on_save_sample_txt()
+        dlg.destroy()
+
+    def _update_progress_ui(self, val: float, text: str):
+        """Atualiza a barra de progresso e o rótulo de status de carregamento."""
+        if hasattr(self, "tab1_progress_bar"):
+            self.tab1_progress_bar.set(val)
+        if hasattr(self, "tab1_status_lbl"):
+            self.tab1_status_lbl.configure(text=text)
+
     def _on_quick_generate_all(self):
         if not self._ensure_audio_loaded("Para gerar as notas automaticamente com o BPM e duração corretos:"):
             return
 
+        # Sincroniza título, artista e BPM dos campos rápidos da Aba 1
+        if hasattr(self, "tab1_title_entry") and self.tab1_title_entry.get().strip():
+            self.song.title = self.tab1_title_entry.get().strip()
+        if hasattr(self, "tab1_artist_entry") and self.tab1_artist_entry.get().strip():
+            self.song.artist = self.tab1_artist_entry.get().strip()
+        if hasattr(self, "tab1_bpm_entry") and self.tab1_bpm_entry.get().strip():
+            try:
+                self.song.bpm = float(self.tab1_bpm_entry.get().strip())
+            except Exception:
+                pass
+
         has_lyrics = bool(self.song.lyrics_raw and self.song.lyrics_raw.strip())
-        selected = ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys"]
-        if has_lyrics:
-            selected.append("vocals")
+        selected = []
+        if getattr(self, "chk_tab1_guitar", None) and self.chk_tab1_guitar.get():
+            selected.append("guitar")
+        if getattr(self, "chk_tab1_bass", None) and self.chk_tab1_bass.get():
+            selected.append("bass")
+        if getattr(self, "chk_tab1_drums", None) and self.chk_tab1_drums.get():
+            selected.append("drum")
+        if getattr(self, "chk_tab1_keys", None) and self.chk_tab1_keys.get():
+            selected.append("keys")
+        if getattr(self, "chk_tab1_pro_guitar", None) and self.chk_tab1_pro_guitar.get():
+            selected.append("pro_guitar")
+        if getattr(self, "chk_tab1_pro_bass", None) and self.chk_tab1_pro_bass.get():
+            selected.append("pro_bass")
+        if getattr(self, "chk_tab1_pro_keys", None) and self.chk_tab1_pro_keys.get():
+            selected.append("pro_keys")
+        if getattr(self, "chk_tab1_vocals", None) and self.chk_tab1_vocals.get():
+            if has_lyrics:
+                selected.append("vocals")
+            else:
+                # Se outros instrumentos também estão marcados e não tem letra, gera os instrumentos e avisa que vocal ficou sem letra
+                if not selected:
+                    messagebox.showwarning(
+                        "Letra Necessária para Vocal",
+                        "Para gerar uma música SÓ DE VOCAL (Microfone), você precisa colar a letra ou carregar um arquivo .txt/.lrc!\n\n"
+                        "Clique no botão '🎤 2. Colar Letra' para colar o texto da música."
+                    )
+                    return
+
+        if not selected:
+            messagebox.showwarning("Aviso", "Selecione ao menos um instrumento ou vocais para gerar!")
+            return
+
+        self._update_progress_ui(0.2, "🎵 Analisando áudio e compassos...")
+        self.update_idletasks()
+
+        self._update_progress_ui(0.5, "🎤 Sincronizando melodia e sílabas...")
+        self.update_idletasks()
+
+        self._update_progress_ui(0.8, "⚡ Gerando notas nas 4 dificuldades (Easy, Medium, Hard, Expert)...")
+        self.update_idletasks()
 
         auto_generate_chart(self.song, selected_instruments=selected, intensity="⚡ Rock Enérgico", generate_all_diffs=True)
         self.timeline.redraw()
@@ -470,16 +734,26 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self._sync_song_to_fields()
         self._refresh_info_card_ui()
 
-        mic_msg = "🎤 Microfone / Vocais: HABILITADO e sincronizado com a letra!" if has_lyrics else "🎤 Microfone / Vocais: DESATIVADO (nenhuma letra fornecida)."
+        self._update_progress_ui(1.0, f"✅ Concluído! {len(selected)} trilha(s) gerada(s).")
+
+        names_pt = {
+            "guitar": "Guitarra", "bass": "Baixo", "drum": "Bateria", "keys": "Teclado",
+            "pro_guitar": "Pro Guitar (6C)", "pro_bass": "Pro Bass (4C)", "pro_keys": "Pro Keys (25T)",
+            "vocals": "Vocais (Microfone)"
+        }
+        sel_names = ", ".join(names_pt.get(s, s) for s in selected)
+        mic_msg = "🎤 Microfone / Vocais: HABILITADO e sincronizado com a letra!" if "vocals" in selected else "🎤 Microfone / Vocais: DESATIVADO (sem letra ou desmarcado)."
+        solo_note = f"\n\n🎯 MODO SOLO ATIVO: Gerado exclusivamente para {sel_names}!" if len(selected) == 1 else ""
+
         messagebox.showinfo(
-            "Música Pronta em Todas as Dificuldades (Incluindo Modo PRO)!",
-            f"🎉 Todas as notas foram geradas automaticamente!\n\n"
-            f"• 🎸 Guitarra, 🎸 Baixo, 🥁 Bateria e 🎹 Teclado (5 Casas) gerados!\n"
-            f"• 🎸 Pro Guitar (6 Cordas / 17 Casas), 🎸 Pro Bass e 🎹 Pro Keys (25 Teclas) gerados!\n"
-            f"• 🎯 4 Níveis de Dificuldade criados: Easy, Medium, Hard e Expert!\n"
-            f"• {mic_msg}\n\n"
-            f"👉 Quer apenas exportar (RB3, RB2, PS3, Xbox 360, PS4, Clone Hero)? Clique em '⚡ EXPORTAR AGORA'!\n"
-            f"👉 Quer revisar ou editar o que foi criado? Clique em '🎛️ Abrir no Mini-REAPER para Editar'!"
+            "Música Pronta com Sucesso!",
+            f"🎉 Notas geradas automaticamente para {len(selected)} trilha(s):\n"
+            f"• Trilhas ativas: {sel_names}\n"
+            f"• Música: {self.song.title} - {self.song.artist}\n"
+            f"• Dificuldades: Easy, Medium, Hard e Expert!\n"
+            f"• {mic_msg}{solo_note}\n\n"
+            f"👉 Quer exportar agora? Basta escolher o jogo/console abaixo e clicar em '⚡ EXPORTAR AGORA'!\n"
+            f"👉 Quer ver, ouvir ou editar as notas? Clique na aba '🎛️ Editor Visual de Notas (Mini-REAPER)'!"
         )
 
     # -------------------------------------------------------------------------
@@ -720,13 +994,18 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         # Dificuldade
         ctk.CTkLabel(bar, text="Dificuldade:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
         self.diff_combo = ctk.CTkComboBox(
-            bar, width=110,
-            values=["Expert", "Hard", "Medium", "Easy"],
+            bar, width=180,
+            values=[
+                "🌟 Expert (Expert)",
+                "🔴 Hard (Difícil)",
+                "🟡 Medium (Normal / Médio)",
+                "🟢 Easy (Fácil)"
+            ],
             command=self._on_diff_changed
         )
-        self.diff_combo.set("Expert")
+        self.diff_combo.set("🌟 Expert (Expert)")
         self.diff_combo.pack(side="left", padx=4, pady=6)
-        set_tooltip(self.diff_combo, "Selecione a dificuldade da trilha atual (Expert, Hard, Medium, Easy)")
+        set_tooltip(self.diff_combo, "Escolha a dificuldade (Fácil, Normal, Difícil, Expert) para ver ou tocar as notas!")
 
         # Grid de Encaixe (Snap)
         ctk.CTkLabel(bar, text="Encaixe na Grade:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(10, 4), pady=6)
@@ -760,45 +1039,50 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11, weight="bold"), text_color="#A5B4FC"
         ).pack(side="left", padx=(0, 4))
 
-        self.chk_gen_guitar = ctk.CTkCheckBox(ab_row, text="🎸 Guitar", font=ctk.CTkFont(size=10), width=65)
+        self.chk_gen_guitar = ctk.CTkCheckBox(ab_row, text="🎸 Guitar", font=ctk.CTkFont(size=10), width=62)
         self.chk_gen_guitar.select()
         self.chk_gen_guitar.pack(side="left", padx=2)
 
-        self.chk_gen_bass = ctk.CTkCheckBox(ab_row, text="🎸 Bass", font=ctk.CTkFont(size=10), width=60)
+        self.chk_gen_bass = ctk.CTkCheckBox(ab_row, text="🎸 Bass", font=ctk.CTkFont(size=10), width=56)
         self.chk_gen_bass.select()
         self.chk_gen_bass.pack(side="left", padx=2)
 
-        self.chk_gen_drums = ctk.CTkCheckBox(ab_row, text="🥁 Drums", font=ctk.CTkFont(size=10), width=68)
+        self.chk_gen_drums = ctk.CTkCheckBox(ab_row, text="🥁 Drums", font=ctk.CTkFont(size=10), width=64)
         self.chk_gen_drums.select()
         self.chk_gen_drums.pack(side="left", padx=2)
 
-        self.chk_gen_keys = ctk.CTkCheckBox(ab_row, text="🎹 Keys", font=ctk.CTkFont(size=10), width=62)
+        self.chk_gen_keys = ctk.CTkCheckBox(ab_row, text="🎹 Keys", font=ctk.CTkFont(size=10), width=58)
         self.chk_gen_keys.select()
         self.chk_gen_keys.pack(side="left", padx=2)
 
-        self.chk_gen_pro_guitar = ctk.CTkCheckBox(ab_row, text="🎸 Pro Guitar/Bass", font=ctk.CTkFont(size=10), width=110)
+        self.chk_gen_pro_guitar = ctk.CTkCheckBox(ab_row, text="🎸 Pro Guitar", font=ctk.CTkFont(size=10), width=82)
         self.chk_gen_pro_guitar.select()
         self.chk_gen_pro_guitar.pack(side="left", padx=2)
-        set_tooltip(self.chk_gen_pro_guitar, "Gera trilhas reais de 6 cordas e 17 casas (PART REAL_GUITAR e PART REAL_BASS) do Rock Band 3!")
+        set_tooltip(self.chk_gen_pro_guitar, "Gera trilha real de 6 cordas e 17 casas + Pro Chords (PART REAL_GUITAR) do Rock Band 3!")
 
-        self.chk_gen_pro_keys = ctk.CTkCheckBox(ab_row, text="🎹 Pro Keys", font=ctk.CTkFont(size=10), width=82)
+        self.chk_gen_pro_bass = ctk.CTkCheckBox(ab_row, text="🎸 Pro Bass", font=ctk.CTkFont(size=10), width=76)
+        self.chk_gen_pro_bass.select()
+        self.chk_gen_pro_bass.pack(side="left", padx=2)
+        set_tooltip(self.chk_gen_pro_bass, "Gera trilha real de baixo de 4 cordas e 17 casas (PART REAL_BASS) do Rock Band 3!")
+
+        self.chk_gen_pro_keys = ctk.CTkCheckBox(ab_row, text="🎹 Pro Keys", font=ctk.CTkFont(size=10), width=78)
         self.chk_gen_pro_keys.select()
         self.chk_gen_pro_keys.pack(side="left", padx=2)
         set_tooltip(self.chk_gen_pro_keys, "Gera teclado real de 25 teclas (PART REAL_KEYS_X/H/M/E) para teclados MIDI no Rock Band 3!")
 
-        self.chk_gen_vocals = ctk.CTkCheckBox(ab_row, text="🎤 Vocais (Sem Letra)", font=ctk.CTkFont(size=10), width=125, state="disabled")
+        self.chk_gen_vocals = ctk.CTkCheckBox(ab_row, text="🎤 Vocais (Sem Letra)", font=ctk.CTkFont(size=10), width=118, state="disabled")
         self.chk_gen_vocals.pack(side="left", padx=2)
         set_tooltip(self.chk_gen_vocals, "Para habilitar o Microfone, carregue ou cole uma Letra/Legenda (.txt / .lrc / .srt) no botão rosa ao lado!")
 
         self.intensity_combo = ctk.CTkComboBox(
-            ab_row, width=120, height=28,
+            ab_row, width=115, height=28,
             values=["⚡ Rock Enérgico", "🔥 Metal / Solos", "🎵 Pop Suave"]
         )
         self.intensity_combo.set("⚡ Rock Enérgico")
-        self.intensity_combo.pack(side="left", padx=3)
+        self.intensity_combo.pack(side="left", padx=2)
 
         btn_run_auto = ctk.CTkButton(
-            ab_row, text="✨ GERAR NOTAS!", width=125, height=28,
+            ab_row, text="✨ GERAR NOTAS!", width=118, height=28,
             fg_color="#8B5CF6", hover_color="#7C3AED", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_auto_generate_clicked
         )
@@ -806,21 +1090,42 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(btn_run_auto, "Cria todas as notas musicais, acordes, solos, Pro Guitar, Pro Keys e bateria sincronizados com o BPM em 1 clique!")
 
         btn_lyrics = ctk.CTkButton(
-            ab_row, text="🎤 Letra (.txt/.lrc/.srt)...", width=155, height=28,
+            ab_row, text="🎤 Letra (.txt/.lrc)...", width=135, height=28,
             fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._open_lyrics_dialog
         )
         btn_lyrics.pack(side="right", padx=2)
         set_tooltip(btn_lyrics, "Cole a letra/legenda ou carregue arquivo .txt/.lrc/.srt para habilitar o Microfone e dividir em sílabas!")
 
-        # Linha 2 de Ferramentas: Instrumentos Faltantes e Dificuldades
+        # Linha 2 de Ferramentas: Modo Rápido Solo, Instrumentos Faltantes e Dificuldades
         ab_row2 = ctk.CTkFrame(auto_bar, fg_color="transparent")
         ab_row2.pack(fill="x", padx=10, pady=(0, 4))
 
         ctk.CTkLabel(
-            ab_row2, text="🛠️ Edição & Dificuldades:",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color="#C7D2FE"
-        ).pack(side="left", padx=(0, 6))
+            ab_row2, text="🎯 Modo Rápido / Solo:",
+            font=ctk.CTkFont(size=10, weight="bold"), text_color="#FACC15"
+        ).pack(side="left", padx=(0, 4))
+
+        self.tab3_preset_combo = ctk.CTkComboBox(
+            ab_row2, width=175, height=26,
+            values=[
+                "⚡ Banda Completa (RB3)",
+                "🎸 Kit Clássico (RB2/GH)",
+                "🎸 Só Guitarra",
+                "🎸 Só Baixo",
+                "🥁 Só Bateria",
+                "🎹 Só Teclado",
+                "🎸 Só Pro Guitar",
+                "🎸 Só Pro Bass",
+                "🎹 Só Pro Keys",
+                "🎤 Só Vocal",
+                "❌ Desmarcar Todos"
+            ],
+            command=self._on_tab3_preset_combo_changed
+        )
+        self.tab3_preset_combo.set("⚡ Banda Completa (RB3)")
+        self.tab3_preset_combo.pack(side="left", padx=(0, 8))
+        set_tooltip(self.tab3_preset_combo, "Marca rapidamente Todos os Instrumentos ou SÓ 1 Instrumento específico (Só Guitarra, Só Bateria, Só Vocal, etc.)")
 
         btn_gen_missing = ctk.CTkButton(
             ab_row2, text="⚡ Gerar APENAS Instrumentos Faltantes (Preserva Existentes)",
@@ -831,7 +1136,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(btn_gen_missing, "Gera apenas os instrumentos que não possuem notas, sem apagar ou modificar as trilhas já criadas por fãs!")
 
         btn_recalc_diffs = ctk.CTkButton(
-            ab_row2, text="🎯 Recalcular Dificuldades Canônicas (Hard, Medium, Easy)",
+            ab_row2, text="🎯 Recalcular Dificuldades (Hard/Med/Easy)",
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=11),
             command=self._on_recalculate_diffs_clicked
         )
@@ -994,39 +1299,79 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         row2.pack(fill="x", padx=8, pady=(2, 6))
 
         self.btn_play_toggle = ctk.CTkButton(
-            row2, text="▶️ Tocar Música", width=140, height=34,
+            row2, text="▶️ Tocar Música", width=135, height=34,
             fg_color="#3B82F6", hover_color="#2563EB", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._toggle_playback
         )
-        self.btn_play_toggle.pack(side="left", padx=4)
+        self.btn_play_toggle.pack(side="left", padx=3)
         set_tooltip(self.btn_play_toggle, "Inicia ou pausa a música para você acompanhar as notas no cursor")
 
         self.btn_rec_toggle = ctk.CTkButton(
-            row2, text="🔴 INICIAR GRAVAÇÃO AO VIVO", width=240, height=34,
+            row2, text="🔴 INICIAR GRAVAÇÃO AO VIVO", width=220, height=34,
             fg_color="#DC2626", hover_color="#B91C1C", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._toggle_recording
         )
-        self.btn_rec_toggle.pack(side="left", padx=4)
+        self.btn_rec_toggle.pack(side="left", padx=3)
         set_tooltip(self.btn_rec_toggle, "Grava ao vivo! Cada nota tocada na guitarra/bateria física ou teclado será colocada automaticamente na linha do tempo!")
 
+        self.chk_playtest_notes = ctk.CTkCheckBox(
+            row2, text="🔊 Simular Som das Notas (Playtest)", font=ctk.CTkFont(size=10, weight="bold"), width=190
+        )
+        self.chk_playtest_notes.select()
+        self.chk_playtest_notes.pack(side="left", padx=6)
+        set_tooltip(self.chk_playtest_notes, "Quando ativado, ao tocar a música as notas da dificuldade escolhida (Easy/Medium/Hard/Expert) piscam nas casas e emitem som automaticamente como no C3 / Magma Visualizer!")
+
         # Duração de Sustain Padrão
-        ctk.CTkLabel(row2, text="Duração do Sustain:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(14, 4))
+        ctk.CTkLabel(row2, text="Sustain:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(6, 4))
         self.sustain_combo = ctk.CTkComboBox(
-            row2, width=120,
+            row2, width=115,
             values=["Toque (180ms)", "Curto (500ms)", "Longo (1.0s)", "Solos (2.0s)"],
             command=self._on_sustain_changed
         )
         self.sustain_combo.set("Toque (180ms)")
-        self.sustain_combo.pack(side="left", padx=4)
+        self.sustain_combo.pack(side="left", padx=3)
         set_tooltip(self.sustain_combo, "Escolha o comprimento da cauda da nota (para notas sustentadas/seguradas)")
 
         btn_clear = ctk.CTkButton(
-            row2, text="🗑️ Limpar Trilha Atual", width=160, height=34,
+            row2, text="🗑️ Limpar Trilha", width=130, height=34,
             fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=11),
             command=self._clear_current_track_notes
         )
-        btn_clear.pack(side="right", padx=4)
+        btn_clear.pack(side="right", padx=3)
         set_tooltip(btn_clear, "Apaga todas as notas da trilha do instrumento selecionado")
+
+    def _on_tab3_preset_combo_changed(self, choice: str):
+        """Mapeia o seletor rápido da Aba 3 para _select_preset_instruments."""
+        mapping = {
+            "⚡ Banda Completa (RB3)": "all",
+            "🎸 Kit Clássico (RB2/GH)": "classic",
+            "🎸 Só Guitarra": "guitar",
+            "🎸 Só Baixo": "bass",
+            "🥁 Só Bateria": "drum",
+            "🎹 Só Teclado": "keys",
+            "🎸 Só Pro Guitar": "pro_guitar",
+            "🎸 Só Pro Bass": "pro_bass",
+            "🎹 Só Pro Keys": "pro_keys",
+            "🎤 Só Vocal": "vocals",
+            "❌ Desmarcar Todos": "none",
+        }
+        mode = mapping.get(choice, "all")
+        self._select_preset_instruments(mode)
+
+        # Se escolheu um modo Solo, foca a linha do tempo naquele instrumento
+        track_labels = {
+            "guitar": "🎸 Guitarra (5 Casas)",
+            "bass": "🎸 Baixo",
+            "drum": "🥁 Bateria",
+            "keys": "🎹 Teclado",
+            "pro_guitar": "🎸 Pro Guitar (6 Cordas)",
+            "pro_bass": "🎸 Pro Bass",
+            "pro_keys": "🎹 Pro Keys (25 Teclas)",
+            "vocals": "🎤 Vocais",
+        }
+        if mode in track_labels and hasattr(self, "track_combo"):
+            self.track_combo.set(track_labels[mode])
+            self._on_track_changed(track_labels[mode])
 
     def _on_track_changed(self, choice):
         track_key = "guitar"
@@ -1048,7 +1393,15 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self._update_note_counter()
 
     def _on_diff_changed(self, choice):
-        self.timeline.set_difficulty(choice)
+        if "Easy" in choice or "Fácil" in choice:
+            d = "Easy"
+        elif "Medium" in choice or "Médio" in choice or "Normal" in choice:
+            d = "Medium"
+        elif "Hard" in choice or "Difícil" in choice and "Expert" not in choice:
+            d = "Hard"
+        else:
+            d = "Expert"
+        self.timeline.set_difficulty(d)
         self._update_note_counter()
 
     def _on_snap_changed(self, choice):
@@ -1084,84 +1437,137 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.note_count_lbl.configure(text=f"Notas na Trilha: {count}")
 
     # -------------------------------------------------------------------------
-    # ABA 3: METADADOS, CAPA & EXPORTAÇÃO
+    # ABA 4: METADADOS, CAPA, RANKING DE DIFICULDADE & EXPORTAÇÃO
     # -------------------------------------------------------------------------
     def _build_metadata_tab(self, tab):
         main_box = ctk.CTkFrame(tab, fg_color="transparent")
-        main_box.pack(fill="both", expand=True, padx=10, pady=8)
+        main_box.pack(fill="both", expand=True, padx=10, pady=6)
 
-        # Coluna da Esquerda: Formulário de Metadados
+        # Coluna da Esquerda: Formulário de Metadados + Ranking de Dificuldade (0 a 6)
         left_col = ctk.CTkFrame(main_box, fg_color="#0F172A", corner_radius=8)
         left_col.pack(side="left", fill="both", expand=True, padx=(0, 6))
 
         title_lbl = ctk.CTkLabel(left_col, text="📝 Informações da Música", font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8")
-        title_lbl.pack(anchor="w", padx=14, pady=(10, 4))
+        title_lbl.pack(anchor="w", padx=14, pady=(8, 2))
 
         fields_frame = ctk.CTkFrame(left_col, fg_color="transparent")
-        fields_frame.pack(fill="both", expand=True, padx=14, pady=4)
+        fields_frame.pack(fill="x", padx=14, pady=2)
 
         row = 0
-        def add_meta_field(label_text, default_val, tip=""):
+        def add_meta_field(label_text, default_val, tip="", col_offset=0):
             nonlocal row
             lbl = ctk.CTkLabel(fields_frame, text=label_text, font=ctk.CTkFont(size=11, weight="bold"))
-            lbl.grid(row=row, column=0, padx=6, pady=4, sticky="w")
-            entry = ctk.CTkEntry(fields_frame, width=280)
+            lbl.grid(row=row, column=col_offset, padx=4, pady=3, sticky="w")
+            entry = ctk.CTkEntry(fields_frame, width=210, height=28)
             entry.insert(0, str(default_val))
-            entry.grid(row=row, column=1, padx=6, pady=4, sticky="w")
+            entry.grid(row=row, column=col_offset + 1, padx=4, pady=3, sticky="w")
             if tip:
                 set_tooltip(entry, tip)
-            row += 1
             return entry
 
-        self.f_title = add_meta_field("Título da Música:", self.song.title, "Nome da faixa que aparece no jogo")
-        self.f_artist = add_meta_field("Artista / Banda:", self.song.artist, "Nome do artista ou banda")
-        self.f_album = add_meta_field("Nome do Álbum:", self.song.album, "Álbum ao qual pertence a música")
-        self.f_year = add_meta_field("Ano de Lançamento:", self.song.year, "Ano em 4 dígitos (ex: 2026)")
-        self.f_genre = add_meta_field("Gênero Musical:", self.song.genre, "Ex: Rock, Metal, Pop, Classic Rock")
-        self.f_charter = add_meta_field("Autor do Chart:", self.song.charter, "Seu nome ou apelido como criador do chart")
-        self.f_preview = add_meta_field("Início da Prévia (ms):", self.song.preview_start_ms, "Tempo em milissegundos para tocar a amostra no menu (ex: 30000 = 30 seg)")
+        self.f_title = add_meta_field("Título da Música:", self.song.title, "Nome da faixa que aparece no jogo", 0)
+        self.f_artist = add_meta_field("Artista / Banda:", self.song.artist, "Nome do artista ou banda", 2)
+        row += 1
+        self.f_album = add_meta_field("Nome do Álbum:", self.song.album, "Álbum ao qual pertence a música", 0)
+        self.f_year = add_meta_field("Ano Lançamento:", self.song.year, "Ano em 4 dígitos (ex: 2026)", 2)
+        row += 1
+        self.f_genre = add_meta_field("Gênero Musical:", self.song.genre, "Ex: Rock, Metal, Pop, Classic Rock", 0)
+        self.f_charter = add_meta_field("Autor do Chart:", self.song.charter, "Seu nome ou apelido como criador do chart", 2)
+        row += 1
+        self.f_preview = add_meta_field("Início Prévia (ms):", self.song.preview_start_ms, "Tempo em milissegundos para tocar a amostra no menu (ex: 30000 = 30 seg)", 0)
 
-        # Botão de Letra & Vocais no formulário
         btn_lyrics_meta = ctk.CTkButton(
-            left_col, text="🎤 Gerenciar Letra da Música (.txt / .lrc)...", width=280, height=32,
+            fields_frame, text="🎤 Gerenciar Letra (.txt / .lrc)...", width=210, height=28,
             fg_color="#EC4899", hover_color="#DB2777", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._open_lyrics_dialog
         )
-        btn_lyrics_meta.pack(padx=14, pady=(8, 12), anchor="w")
+        btn_lyrics_meta.grid(row=row, column=2, columnspan=2, padx=4, pady=3, sticky="w")
         set_tooltip(btn_lyrics_meta, "Cole ou importe a letra da música para sincronizar automaticamente com a faixa vocal!")
 
+        # Painel de Ranking de Dificuldade (0 a 6 — Padrão Magma / C3 CON Tools)
+        rank_box = ctk.CTkFrame(left_col, fg_color="#1E293B", corner_radius=6, border_width=1, border_color="#334155")
+        rank_box.pack(fill="x", padx=14, pady=(6, 8))
+
+        rank_hdr = ctk.CTkFrame(rank_box, fg_color="transparent")
+        rank_hdr.pack(fill="x", padx=10, pady=(6, 2))
+        ctk.CTkLabel(
+            rank_hdr,
+            text="⭐ Ranking de Dificuldade no Menu do Jogo (0 = Sem Trilha | 1 = Fácil ... 6 = Pesadelo):",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#FACC15"
+        ).pack(side="left")
+
+        btn_auto_rank = ctk.CTkButton(
+            rank_hdr, text="✨ Calcular Automático", width=145, height=24,
+            fg_color="#6366F1", hover_color="#4F46E5", font=ctk.CTkFont(size=10, weight="bold"),
+            command=self._on_auto_calc_rankings_clicked
+        )
+        btn_auto_rank.pack(side="right")
+        set_tooltip(btn_auto_rank, "Calcula automaticamente as bolinhas de dificuldade (0 a 6) de cada instrumento com base na quantidade de notas!")
+
+        rank_grid = ctk.CTkFrame(rank_box, fg_color="transparent")
+        rank_grid.pack(fill="x", padx=10, pady=(2, 6))
+
+        rank_vals = [
+            "0 (Sem Trilha)",
+            "1 (Aquecimento)",
+            "2 (Aprendiz)",
+            "3 (Sólido)",
+            "4 (Moderado)",
+            "5 (Desafiador)",
+            "6 (Impossível 🔥)"
+        ]
+
+        def make_rank_combo(parent, r, c, label_txt, default_tier):
+            ctk.CTkLabel(parent, text=label_txt, font=ctk.CTkFont(size=10, weight="bold")).grid(row=r, column=c*2, padx=(4, 2), pady=3, sticky="w")
+            cb = ctk.CTkComboBox(parent, width=135, height=26, values=rank_vals, font=ctk.CTkFont(size=10))
+            idx = max(0, min(6, int(default_tier)))
+            cb.set(rank_vals[idx])
+            cb.grid(row=r, column=c*2 + 1, padx=(2, 8), pady=3, sticky="w")
+            return cb
+
+        self.rank_guitar_cb = make_rank_combo(rank_grid, 0, 0, "🎸 Guitarra:", self.song.diff_guitar)
+        self.rank_bass_cb = make_rank_combo(rank_grid, 0, 1, "🎸 Baixo:", self.song.diff_bass)
+        self.rank_drums_cb = make_rank_combo(rank_grid, 0, 2, "🥁 Bateria:", self.song.diff_drums)
+        self.rank_keys_cb = make_rank_combo(rank_grid, 0, 3, "🎹 Teclado:", self.song.diff_keys)
+
+        self.rank_vocals_cb = make_rank_combo(rank_grid, 1, 0, "🎤 Vocais:", self.song.diff_vocals)
+        self.rank_pro_guitar_cb = make_rank_combo(rank_grid, 1, 1, "🎸 Pro Guitar:", self.song.diff_pro_guitar)
+        self.rank_pro_keys_cb = make_rank_combo(rank_grid, 1, 2, "🎹 Pro Keys:", self.song.diff_pro_keys)
+        self.rank_band_cb = make_rank_combo(rank_grid, 1, 3, "⚡ Banda:", self.song.diff_band)
+
         # Coluna da Direita: Capa do Álbum e Pré-visualização
-        right_col = ctk.CTkFrame(main_box, fg_color="#0F172A", corner_radius=8, width=320)
+        right_col = ctk.CTkFrame(main_box, fg_color="#0F172A", corner_radius=8, width=300)
         right_col.pack(side="right", fill="both", padx=(6, 0))
 
         art_title = ctk.CTkLabel(right_col, text="🖼️ Capa do Álbum", font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8")
-        art_title.pack(anchor="w", padx=14, pady=(10, 4))
+        art_title.pack(anchor="w", padx=14, pady=(8, 4))
 
         # Caixa do Thumbnail
-        self.art_preview_frame = ctk.CTkFrame(right_col, fg_color="#1E293B", width=220, height=200, corner_radius=8)
-        self.art_preview_frame.pack(padx=14, pady=8)
+        self.art_preview_frame = ctk.CTkFrame(right_col, fg_color="#1E293B", width=190, height=175, corner_radius=8)
+        self.art_preview_frame.pack(padx=14, pady=6)
         self.art_preview_frame.pack_propagate(False)
 
         self.art_img_label = ctk.CTkLabel(
             self.art_preview_frame,
-            text="Sem Imagem\nCarregada",
-            font=ctk.CTkFont(size=11),
+            text="Sem Imagem\nCarregada\n(Gera capa neon\nautomática se vazio!)",
+            font=ctk.CTkFont(size=10),
             text_color="#94A3B8"
         )
         self.art_img_label.pack(expand=True)
 
         self.art_path_lbl = ctk.CTkLabel(
             right_col, text="Nenhum arquivo selecionado",
-            font=ctk.CTkFont(size=10), text_color="#64748B", wraplength=280
+            font=ctk.CTkFont(size=10), text_color="#64748B", wraplength=260
         )
         self.art_path_lbl.pack(padx=14, pady=2)
 
         btn_browse_art = ctk.CTkButton(
-            right_col, text="🖼️ Carregar Capa (.PNG / .JPG)", width=220, height=32,
+            right_col, text="🖼️ Carregar Capa (.PNG / .JPG)", width=210, height=30,
             fg_color="#0284C7", hover_color="#0369A1", font=ctk.CTkFont(size=11, weight="bold"),
             command=self._on_browse_album_art
         )
-        btn_browse_art.pack(padx=14, pady=(8, 14))
+        btn_browse_art.pack(padx=14, pady=(6, 10))
         set_tooltip(btn_browse_art, "Carrega a arte do álbum que será exibida no menu do jogo e na tela do PS3/RPCS3")
 
         # Seletor de Jogo de Destino (Aba 3)
@@ -1173,24 +1579,24 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             sel_game_row_3,
-            text="🎯 Escolha o Jogo de Destino:",
+            text="🎯 Escolha o Jogo / Console:",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#38BDF8"
         ).pack(side="left", padx=(0, 8))
 
         self.target_game_combo_tab3 = ctk.CTkComboBox(
-            sel_game_row_3, width=370, height=32,
+            sel_game_row_3, width=420, height=32,
             values=[
-                "🎸 Rock Band 3 (Emulador RPCS3 no PC)",
-                "🎸 Rock Band 2 (PS3 / RPCS3 BLUS30147 & Xbox 360)",
-                "🎮 Clone Hero / YARG (PC / Mac / Linux)",
-                "📦 PlayStation 3 Console (CFW / HEN / PKG)",
-                "🟢 Xbox 360 (Rock Band 3 / RGH / Horizon / Xenia)",
-                "🔵 PlayStation 4 (Rock Band 4 / GoldHEN / FPKG)"
+                "🎸 Rock Band 3 (PS3 HEN/CFW & Emulador RPCS3)",
+                "🎸 Rock Band 2 (PS3 HEN/CFW & Emulador RPCS3)",
+                "🟢 Xbox 360 - Rock Band 3 (Console RGH/JTAG & Emulador Xenia)",
+                "🟢 Xbox 360 - Rock Band 2 (Console RGH/JTAG & RB2 Deluxe)",
+                "🔵 PlayStation 4 - Rock Band 4 (Console GoldHEN & FPKG)",
+                "🎮 Clone Hero / YARG / Guitar Hero WT (PC)"
             ],
             command=self._on_target_game_changed
         )
-        self.target_game_combo_tab3.set("🎸 Rock Band 3 (Emulador RPCS3 no PC)")
+        self.target_game_combo_tab3.set("🎸 Rock Band 3 (PS3 HEN/CFW & Emulador RPCS3)")
         self.target_game_combo_tab3.pack(side="left", padx=4)
         set_tooltip(self.target_game_combo_tab3, "Selecione o formato para o qual a música será compilada")
 
@@ -1217,47 +1623,53 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(quick_row_3, text="Atalhos Rápidos:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748B").pack(side="left", padx=(4, 8))
 
-        btn_save_rb3 = ctk.CTkButton(
-            quick_row_3, text="🚀 RB3 (RPCS3)", width=110, height=28,
-            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
-            command=self._save_from_editor_rb3
-        )
-        btn_save_rb3.pack(side="left", padx=2)
-
-        btn_save_rb2 = ctk.CTkButton(
-            quick_row_3, text="🎸 RB2 (PS3/X360)", width=115, height=28,
-            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
-            command=self._save_from_editor_rb2
-        )
-        btn_save_rb2.pack(side="left", padx=2)
-
-        btn_save_ps3 = ctk.CTkButton(
-            quick_row_3, text="📦 PS3 (PKG)", width=110, height=28,
+        btn_save_rb3_ps3 = ctk.CTkButton(
+            quick_row_3, text="🚀 RB3 (PS3)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ps3
         )
-        btn_save_ps3.pack(side="left", padx=2)
+        btn_save_rb3_ps3.pack(side="left", padx=2)
+        set_tooltip(btn_save_rb3_ps3, "Salvar e Exportar para Rock Band 3 (PS3 HEN/CFW ou Emulador RPCS3)")
 
-        btn_save_x360 = ctk.CTkButton(
-            quick_row_3, text="🟢 Xbox 360", width=110, height=28,
+        btn_save_rb2_ps3 = ctk.CTkButton(
+            quick_row_3, text="🎸 RB2 (PS3)", width=105, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._save_from_editor_rb2
+        )
+        btn_save_rb2_ps3.pack(side="left", padx=2)
+        set_tooltip(btn_save_rb2_ps3, "Salvar e Exportar para Rock Band 2 (PS3 HEN/CFW ou Emulador RPCS3)")
+
+        btn_save_rb3_x360 = ctk.CTkButton(
+            quick_row_3, text="🟢 RB3 (X360)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_xbox360
         )
-        btn_save_x360.pack(side="left", padx=2)
+        btn_save_rb3_x360.pack(side="left", padx=2)
+        set_tooltip(btn_save_rb3_x360, "Salvar e Exportar para Rock Band 3 (Xbox 360 RGH/JTAG ou Emulador Xenia)")
+
+        btn_save_rb2_x360 = ctk.CTkButton(
+            quick_row_3, text="🟢 RB2 (X360)", width=105, height=28,
+            fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
+            command=self._save_from_editor_rb2
+        )
+        btn_save_rb2_x360.pack(side="left", padx=2)
+        set_tooltip(btn_save_rb2_x360, "Salvar e Exportar para Rock Band 2 (Xbox 360 Horizon ou RB2 Deluxe)")
 
         btn_save_ps4 = ctk.CTkButton(
-            quick_row_3, text="🔵 PS4 (RB4)", width=110, height=28,
+            quick_row_3, text="🔵 RB4 (PS4)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ps4
         )
         btn_save_ps4.pack(side="left", padx=2)
+        set_tooltip(btn_save_ps4, "Salvar e Exportar para Rock Band 4 (PS4 GoldHEN / FPKG)")
 
         btn_save_ch = ctk.CTkButton(
-            quick_row_3, text="🎮 Clone Hero", width=110, height=28,
+            quick_row_3, text="🎮 Clone Hero", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ch
         )
         btn_save_ch.pack(side="left", padx=2)
+        set_tooltip(btn_save_ch, "Salvar e Exportar para Clone Hero / YARG no PC")
 
     def _on_browse_album_art(self):
         f = filedialog.askopenfilename(
@@ -1403,9 +1815,72 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     # -------------------------------------------------------------------------
     # SINCRONIZAÇÃO E CONTROLES
     # -------------------------------------------------------------------------
+    def _parse_rank_combo(self, cb, default_val: int = 3) -> int:
+        try:
+            txt = cb.get().strip()
+            return max(0, min(6, int(txt[0])))
+        except Exception:
+            return default_val
+
+    def _set_rank_combo(self, cb, tier: int):
+        rank_vals = [
+            "0 (Sem Trilha)",
+            "1 (Aquecimento)",
+            "2 (Aprendiz)",
+            "3 (Sólido)",
+            "4 (Moderado)",
+            "5 (Desafiador)",
+            "6 (Impossível 🔥)"
+        ]
+        idx = max(0, min(6, int(tier)))
+        cb.set(rank_vals[idx])
+
+    def _on_auto_calc_rankings_clicked(self):
+        """Calcula automaticamente os rankings de 0 a 6 para cada instrumento com base nas notas atuais."""
+        def _calc_tier(notes_list):
+            if not notes_list:
+                return 0
+            cnt = len(notes_list)
+            if cnt < 80: return 1
+            if cnt < 180: return 2
+            if cnt < 320: return 3
+            if cnt < 500: return 4
+            if cnt < 750: return 5
+            return 6
+
+        self.song.diff_guitar = _calc_tier(self.song.guitar_notes)
+        self.song.diff_bass = _calc_tier(self.song.bass_notes)
+        self.song.diff_drums = _calc_tier(self.song.drum_notes)
+        self.song.diff_keys = _calc_tier(self.song.keys_notes)
+        self.song.diff_pro_guitar = _calc_tier(self.song.pro_guitar_notes)
+        self.song.diff_pro_bass = _calc_tier(self.song.pro_bass_notes)
+        self.song.diff_pro_keys = _calc_tier(self.song.pro_keys_notes)
+        self.song.diff_vocals = 0 if not self.song.vocal_notes else min(6, max(1, len(self.song.vocal_notes) // 25 + 1))
+
+        active_tiers = [t for t in [
+            self.song.diff_guitar, self.song.diff_bass, self.song.diff_drums,
+            self.song.diff_keys, self.song.diff_vocals
+        ] if t > 0]
+        self.song.diff_band = round(sum(active_tiers) / len(active_tiers)) if active_tiers else 0
+        self._sync_song_to_fields()
+
     def _sync_fields_to_song(self):
-        self.song.title = self.f_title.get()
-        self.song.artist = self.f_artist.get()
+        if hasattr(self, "tab1_title_entry") and self.tab1_title_entry.get().strip():
+            self.song.title = self.tab1_title_entry.get().strip()
+        else:
+            self.song.title = self.f_title.get()
+
+        if hasattr(self, "tab1_artist_entry") and self.tab1_artist_entry.get().strip():
+            self.song.artist = self.tab1_artist_entry.get().strip()
+        else:
+            self.song.artist = self.f_artist.get()
+
+        if hasattr(self, "tab1_bpm_entry") and self.tab1_bpm_entry.get().strip():
+            try:
+                self.song.bpm = float(self.tab1_bpm_entry.get().strip())
+            except Exception:
+                pass
+
         self.song.album = self.f_album.get()
         self.song.genre = self.f_genre.get()
         self.song.charter = self.f_charter.get()
@@ -1417,6 +1892,16 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             self.song.preview_start_ms = int(self.f_preview.get())
         except Exception:
             pass
+
+        if hasattr(self, "rank_guitar_cb"):
+            self.song.diff_guitar = self._parse_rank_combo(self.rank_guitar_cb, self.song.diff_guitar)
+            self.song.diff_bass = self._parse_rank_combo(self.rank_bass_cb, self.song.diff_bass)
+            self.song.diff_drums = self._parse_rank_combo(self.rank_drums_cb, self.song.diff_drums)
+            self.song.diff_keys = self._parse_rank_combo(self.rank_keys_cb, self.song.diff_keys)
+            self.song.diff_vocals = self._parse_rank_combo(self.rank_vocals_cb, self.song.diff_vocals)
+            self.song.diff_pro_guitar = self._parse_rank_combo(self.rank_pro_guitar_cb, self.song.diff_pro_guitar)
+            self.song.diff_pro_keys = self._parse_rank_combo(self.rank_pro_keys_cb, self.song.diff_pro_keys)
+            self.song.diff_band = self._parse_rank_combo(self.rank_band_cb, self.song.diff_band)
 
     def _sync_song_to_fields(self):
         self.f_title.delete(0, "end")
@@ -1442,6 +1927,26 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         self.bpm_entry.delete(0, "end")
         self.bpm_entry.insert(0, str(self.song.bpm))
+
+        if hasattr(self, "rank_guitar_cb"):
+            self._set_rank_combo(self.rank_guitar_cb, self.song.diff_guitar)
+            self._set_rank_combo(self.rank_bass_cb, self.song.diff_bass)
+            self._set_rank_combo(self.rank_drums_cb, self.song.diff_drums)
+            self._set_rank_combo(self.rank_keys_cb, self.song.diff_keys)
+            self._set_rank_combo(self.rank_vocals_cb, self.song.diff_vocals)
+            self._set_rank_combo(self.rank_pro_guitar_cb, self.song.diff_pro_guitar)
+            self._set_rank_combo(self.rank_pro_keys_cb, self.song.diff_pro_keys)
+            self._set_rank_combo(self.rank_band_cb, self.song.diff_band)
+
+        if hasattr(self, "tab1_title_entry"):
+            self.tab1_title_entry.delete(0, "end")
+            self.tab1_title_entry.insert(0, self.song.title)
+        if hasattr(self, "tab1_artist_entry"):
+            self.tab1_artist_entry.delete(0, "end")
+            self.tab1_artist_entry.insert(0, self.song.artist)
+        if hasattr(self, "tab1_bpm_entry"):
+            self.tab1_bpm_entry.delete(0, "end")
+            self.tab1_bpm_entry.insert(0, str(self.song.bpm))
 
         if self.song.audio_path:
             self.audio_entry.delete(0, "end")
@@ -1620,14 +2125,20 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             vocal_pitches = [60, 62, 64, 67, 69, 72]
             pitch = vocal_pitches[self.vocal_pitch_counter % len(vocal_pitches)]
             self.vocal_pitch_counter += 1
-            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_marker=False)
+            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_end=False)
             self.song.vocal_notes.append(v_note)
             self.timeline.redraw()
             self._update_note_counter()
             return
 
         track_key = "guitar"
-        if "Baixo" in sel_track:
+        if "Pro Guitar" in sel_track:
+            track_key = "pro_guitar"
+        elif "Pro Bass" in sel_track:
+            track_key = "pro_bass"
+        elif "Pro Keys" in sel_track:
+            track_key = "pro_keys"
+        elif "Baixo" in sel_track:
             track_key = "bass"
         elif "Bateria" in sel_track:
             track_key = "drum"
@@ -1887,7 +2398,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if self.is_recording and self.is_playing:
             elapsed_ms = int((time.time() - self.playback_start_time) * 1000)
             from src.creator.chart_model import VocalNote
-            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_marker=False)
+            v_note = VocalNote(time_ms=elapsed_ms, pitch=pitch, duration_ms=self.timeline.default_sustain_ms, lyric="La", is_phrase_end=False)
             self.song.vocal_notes.append(v_note)
             self.timeline.redraw()
             self._update_note_counter()
@@ -1934,10 +2445,37 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 self._highlight_fret_button(lane, False)
 
     def _start_playback_poll(self):
-        """Atualiza a posição do playhead vermelho no Canvas enquanto a música toca."""
+        """Atualiza a posição do playhead vermelho no Canvas e simula som/pisca das notas (Playtest) enquanto a música toca."""
         if self.is_playing:
             elapsed_ms = int((time.time() - self.playback_start_time) * 1000)
+            prev_ms = getattr(self, "_last_playtest_ms", elapsed_ms - 55)
+            self._last_playtest_ms = elapsed_ms
             self.timeline.set_playhead_time(elapsed_ms)
+
+            # Simulador de Playtest (estilo Magma / C3 Visualizer) na dificuldade selecionada
+            if hasattr(self, "chk_playtest_notes") and self.chk_playtest_notes.get() and not self.is_recording:
+                if self.timeline.current_track == "vocals":
+                    for vn in self.song.vocal_notes:
+                        if prev_ms < vn.time_ms <= elapsed_ms:
+                            self._flash_vocal_button()
+                            if self.audio and vn.pitch > 0:
+                                self.audio.play_note(vn.pitch, velocity=95, channel=0)
+                                self.after(180, lambda p=vn.pitch: self.audio.stop_note(p, channel=0))
+                            break
+                else:
+                    notes = self.timeline._get_notes()
+                    cur_diff = self.timeline.current_difficulty
+                    triggered_lanes = []
+                    for n in notes:
+                        if n.difficulty == cur_diff and n.lane in ["green", "red", "yellow", "blue", "orange"]:
+                            if prev_ms < n.time_ms <= elapsed_ms:
+                                triggered_lanes.append(n.lane)
+                    for lane in triggered_lanes[:3]:
+                        self._highlight_fret_button(lane, True)
+                        self._play_fret_audio(lane)
+                        self.after(140, lambda l=lane: self._highlight_fret_button(l, False))
+        else:
+            self._last_playtest_ms = -1
         self.after(50, self._start_playback_poll)
 
     # -------------------------------------------------------------------------
@@ -2124,18 +2662,18 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _update_target_game_desc(self, choice):
         """Atualiza o texto descritivo do jogo de destino para que o usuário saiba exatamente o que será criado."""
-        if "Clone Hero" in choice:
-            desc = "🎮 Clone Hero / YARG: Gera pasta com 'song.ini', 'notes.mid', 'album.png' e áudio. Basta colar na pasta 'Songs' do jogo!"
-        elif "Rock Band 2" in choice:
-            desc = "🎸 Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 45410869 & RB2 Deluxe): Gera 'songs.dta' (format 4), '.mogg' e 'INSTALAR_NO_RB2_RPCS3.bat'!"
-        elif "RPCS3" in choice:
-            desc = "🎸 Rock Band 3 (RPCS3): Gera pasta com 'songs.dta', MIDI RBN (com Pro Guitar & Pro Keys) e 'INSTALAR_NO_RPCS3_AUTOMATICO.bat'!"
-        elif "PlayStation 3" in choice:
-            desc = "📦 PS3 Real (CFW / HEN): Gera pacote DLC com 'PARAM.SFO' (BLUS30463), 'ICON0.PNG' e 'USRDIR/songs/' para pendrive ou FTP!"
+        if "Clone Hero" in choice or "Guitar Hero" in choice:
+            desc = "🎮 Clone Hero / YARG / Guitar Hero WT: Gera pasta com 'song.ini', 'notes.mid', 'album.png' e áudio (song.ogg). Compatível direto com pasta Songs do Clone Hero/YARG e pasta DATA/MODS do GHWT Definitive Edition!"
+        elif "Xbox 360" in choice and ("Rock Band 2" in choice or "RB2" in choice):
+            desc = "🟢 Rock Band 2 no Xbox 360: Gera pacote 'Xbox360_Content/.../45410869/' pronto para transferir via Horizon para o Xbox 360 e RB2 Deluxe!"
         elif "Xbox 360" in choice:
-            desc = "🟢 Xbox 360: Gera estrutura 'Content/0000000000000000/45410914/' pronta para pendrive (Horizon/FATX) e pasta 'songs/' para RGH/JTAG/Xenia!"
-        elif "PlayStation 4" in choice or "PS4" in choice:
-            desc = "🔵 PlayStation 4: Gera arquivos para Rock Band 4 (CUSA02084), 'project.gp4' para orbis-pub-gen (FPKG) e suporte a PS4 HEN / YARG!"
+            desc = "🟢 Rock Band 3 no Xbox 360: Gera pacote 'Content/0000000000000000/45410914/' para Horizon/FATXplorer e pasta 'songs/' para RGH/JTAG/Aurora/Xenia!"
+        elif "Rock Band 2" in choice:
+            desc = "🎸 Rock Band 2 no PS3 / RPCS3: Gera DLC BLUS30147 com 'songs.dta' (format 4), '.mogg' e instalador automático para PS3 HEN/CFW e RPCS3!"
+        elif "PlayStation 4" in choice or "Rock Band 4" in choice:
+            desc = "🔵 Rock Band 4 no PS4: Gera DLC CUSA02084 com 'project.gp4' (orbis-pub-gen para FPKG) e suporte a PS4 desbloqueado (GoldHEN/HEN)!"
+        elif "Rock Band 3" in choice:
+            desc = "🎸 Rock Band 3 no PS3 / RPCS3: Gera DLC BLUS30463 com 'PARAM.SFO', 'songs.dta', MIDI RBN (com Pro Guitar & Pro Keys) e instalador automático!"
         else:
             desc = ""
 
@@ -2154,16 +2692,16 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         choice = self.target_game_combo.get() if hasattr(self, "target_game_combo") else ""
         if "Clone Hero" in choice:
             self._on_convert_to_clone_hero()
-        elif "Rock Band 2" in choice:
+        elif "Xbox 360" in choice and ("Rock Band 2" in choice or "RB2" in choice):
             self._on_export_rb2()
-        elif "PlayStation 3" in choice or "RPCS3" in choice:
-            self._on_export_ps3_pkg()
         elif "Xbox 360" in choice:
             self._on_export_xbox360()
-        elif "PlayStation 4" in choice or "PS4" in choice:
+        elif "Rock Band 2" in choice:
+            self._on_export_rb2()
+        elif "PlayStation 4" in choice or "Rock Band 4" in choice:
             self._on_export_ps4()
         else:
-            self._on_convert_to_rb3()
+            self._on_export_ps3_pkg()
 
     def _on_auto_generate_clicked(self):
         """Gera automaticamente notas completas para todos os instrumentos selecionados."""
@@ -2181,6 +2719,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             selected.append("keys")
         if hasattr(self, "chk_gen_pro_guitar") and self.chk_gen_pro_guitar.get():
             selected.append("pro_guitar")
+        if hasattr(self, "chk_gen_pro_bass") and self.chk_gen_pro_bass.get():
             selected.append("pro_bass")
         if hasattr(self, "chk_gen_pro_keys") and self.chk_gen_pro_keys.get():
             selected.append("pro_keys")
@@ -2209,7 +2748,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if "bass" in selected: inst_names.append("Baixo")
         if "drum" in selected: inst_names.append("Bateria")
         if "keys" in selected: inst_names.append("Teclado")
-        if "pro_guitar" in selected: inst_names.append("Pro Guitar & Pro Bass (6 Cordas)")
+        if "pro_guitar" in selected: inst_names.append("Pro Guitar (6 Cordas + Acordes)")
+        if "pro_bass" in selected: inst_names.append("Pro Bass (4 Cordas)")
         if "pro_keys" in selected: inst_names.append("Pro Keys (25 Teclas)")
         if "vocals" in selected: inst_names.append("Vocais (Letras & Melodias)")
 

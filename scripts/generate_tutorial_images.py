@@ -190,38 +190,37 @@ def generate_01_tela_principal(output_path):
 def generate_02_estudio_navegacao_geral(output_path):
     img, draw = create_base_canvas()
     
-    draw.text((40, 20), "TUTORIAL 02 • ESTUDIO DE CRIACAO - AS 6 ETAPAS", font=FONT_TITLE, fill=CYAN_ACCENT)
+    draw.text((40, 20), "TUTORIAL 02 • ESTUDIO DE CRIACAO - AS 5 ABAS", font=FONT_TITLE, fill=CYAN_ACCENT)
     draw.text((40, 52), "O fluxo intuitivo passo a passo projetado para qualquer pessoa leiga criar musicas em minutos", font=FONT_REGULAR, fill=TEXT_MUTED)
     
     wx, wy, ww, wh = 40, 90, 820, 630
-    draw_window_frame(draw, wx, wy, ww, wh, "Estudio de Criacao e Conversor All-In-One")
+    draw_window_frame(draw, wx, wy, ww, wh, "Estudio Universal de Musicas • 5 Abas Integradas")
     
-    # Barra de Abas
+    # Barra de Abas (5 Abas Reais)
     tabs = [
-        ("1. Importar", True),
-        ("2. Mini-Reaper", False),
-        ("3. Auto-Chart", False),
-        ("4. Metadados", False),
-        ("5. Exportar", False),
-        ("6. Ajuda", False)
+        ("1. Criacao 1 Clique", True),
+        ("2. Mega Pack", False),
+        ("3. Mini-REAPER", False),
+        ("4. Metadados & Capa", False),
+        ("5. Guia Passo a Passo", False),
     ]
     tab_x = wx + 15
     for title, is_active in tabs:
-        tw = 125
+        tw = 150
         fill_col = CYAN_ACCENT if is_active else (35, 40, 60, 255)
         text_col = (10, 15, 30, 255) if is_active else TEXT_MUTED
         draw.rounded_rectangle([(tab_x, wy + 55), (tab_x + tw, wy + 90)], radius=6, fill=fill_col)
-        draw.text((tab_x + 15, wy + 65), title, font=FONT_BOLD, fill=text_col)
+        draw.text((tab_x + 10, wy + 65), title, font=FONT_BOLD, fill=text_col)
         tab_x += tw + 8
         
-    # Conteúdo Visual das 6 Etapas
+    # Conteúdo Visual das 5 Abas + Modo PRO
     step_cards = [
-        ("1. Importar Musica / Audio", "Arraste qualquer MP3, WAV, OGG do seu computador, ou adicione Stems de instrumentos.", CYAN_ACCENT),
-        ("2. Mini-Reaper Integrado", "Edite notas na linha do tempo com visual profissional estilo DAW sem complicacao.", AMBER_ACCENT),
-        ("3. Gerador Automatico & Letras", "Gere notas de Guitarra, Baixo, Bateria, Teclado e sincronize letras .txt/.lrc com 1 clique.", GREEN_ACCENT),
-        ("4. Metadados & Capa", "Defina nome da musica, artista, ano, dificuldade e anexe a capa do album.", BLUE_ACCENT),
-        ("5. Exportar para Jogos", "Escolha PS3 PKG, Clone Hero, YARG ou Rock Band 3 e clique em Exportar.", PURPLE_ACCENT),
-        ("6. Aba de Ajuda e Explicacoes", "Guia completo com perguntas frequentes, tutoriais de pendrive e dicas.", ORANGE_ACCENT),
+        ("1. Criacao & Conversao 1 Clique", "Arraste MP3, Letra (.txt/.lrc) e Capa. Escolha Banda Completa ou So Guitarra / So Bateria / So Vocal!", CYAN_ACCENT),
+        ("2. Compilador de Pacotes (Mega Pack)", "Junte dezenas de musicas de uma vez num unico pacote consolidado para PS3/RPCS3 ou Clone Hero.", AMBER_ACCENT),
+        ("3. Editor Visual Mini-REAPER & Playtest", "Edite os 8 instrumentos (incluindo Pro Guitar 6C e Pro Keys 25T), escolha Easy/Med/Hard/Expert e teste!", GREEN_ACCENT),
+        ("4. Metadados, Capa & Ranking (0 a 6)", "Defina nome, artista, capa 512x512, bolinhas de dificuldade (0 a 6) e exporte para PS3, X360, PS4 e PC.", BLUE_ACCENT),
+        ("5. Guia Passo a Passo Ilustrado", "Manual completo integrado dentro do programa explicando cada etapa sem precisar de outros apps.", PURPLE_ACCENT),
+        ("6. Palco Ao Vivo + Pro Chords (6 Cordas)", "Braço de 5 cores + Braço PRO de 6 cordas e 17 casas com acordes reais (Em, G, D, A, C, E, Am, F)!", ORANGE_ACCENT),
     ]
     
     for i, (title, desc, color) in enumerate(step_cards):
