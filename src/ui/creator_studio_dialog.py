@@ -432,15 +432,31 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 f"👉 Ou clique direto em '3. GERAR TUDO AUTOMATICAMENTE!' para criar as notas!"
             )
 
-    def _on_quick_generate_all(self):
-        if not self.song.audio_path or not os.path.exists(self.song.audio_path):
-            f = filedialog.askopenfilename(
-                title="Escolha o arquivo MP3 / Áudio da música primeiro",
-                filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.flac")]
-            )
-            if not f:
-                return
+    def _ensure_audio_loaded(self, reason: str = "Para gerar as notas no tempo e ritmo reais, selecione o arquivo de áudio da música:") -> bool:
+        """Garante que há um arquivo de áudio carregado. Se não houver, abre a caixa de diálogo para carregar."""
+        if self.song.audio_path and os.path.exists(self.song.audio_path):
+            return True
+        if self.song.audio_stems and any(os.path.exists(s) for s in self.song.audio_stems):
+            return True
+
+        messagebox.showinfo(
+            "Áudio Obrigatório",
+            f"🎵 Nenhum arquivo de áudio (MP3/WAV/OGG) foi carregado ainda!\n\n"
+            f"{reason}\n\n"
+            f"Clique em OK para escolher o arquivo de áudio no seu computador."
+        )
+        f = filedialog.askopenfilename(
+            title="Selecione o arquivo de áudio da música",
+            filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.flac *.mogg")]
+        )
+        if f:
             self._load_audio_file_smart(f)
+            return True
+        return False
+
+    def _on_quick_generate_all(self):
+        if not self._ensure_audio_loaded("Para gerar as notas automaticamente com o BPM e duração corretos:"):
+            return
 
         has_lyrics = bool(self.song.lyrics_raw and self.song.lyrics_raw.strip())
         selected = ["guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys"]
@@ -1928,6 +1944,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     # EXPORTAÇÕES FINAIS
     # -------------------------------------------------------------------------
     def _on_convert_to_rb3(self):
+        if not self._ensure_audio_loaded("Para exportar para o Rock Band 3 com áudio compilado (.mogg):"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -1938,6 +1956,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         messagebox.showinfo("Sucesso!", f"Pacote Rock Band 3 gerado com sucesso em:\n{pkg_dir}\n\nVocê já pode copiar para o RPCS3 ou Xbox 360!")
 
     def _on_export_rb2(self):
+        if not self._ensure_audio_loaded("Para exportar para o Rock Band 2 com áudio compilado (.mogg):"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -1954,6 +1974,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
 
     def _on_export_ps3_pkg(self):
+        if not self._ensure_audio_loaded("Para exportar o pacote de PS3 com áudio compilado (.mogg):"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -1969,6 +1991,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
 
     def _on_convert_to_clone_hero(self):
+        if not self._ensure_audio_loaded("Para exportar para o Clone Hero com áudio (song.ogg):"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -1979,6 +2003,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         messagebox.showinfo("Sucesso Clone Hero!", f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!")
 
     def _on_export_xbox360(self):
+        if not self._ensure_audio_loaded("Para exportar para o Xbox 360 com áudio compilado (.mogg):"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -1995,6 +2021,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
 
     def _on_export_ps4(self):
+        if not self._ensure_audio_loaded("Para exportar para o PlayStation 4 com áudio:"):
+            return
         if not self.song.title:
             messagebox.showwarning("Aviso", "Carregue ou digite o nome da música primeiro!")
             return
@@ -2044,6 +2072,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _on_generate_missing_clicked(self):
         """Gera automaticamente apenas os instrumentos que não possuem notas, preservando as trilhas de fãs já existentes."""
+        if not self._ensure_audio_loaded("Para sincronizar os instrumentos faltantes com o tempo real da música:"):
+            return
         intensity = self.intensity_combo.get() if hasattr(self, "intensity_combo") else "⚡ Rock Enérgico"
         missing = generate_missing_instruments_only(self.song, intensity=intensity, generate_all_diffs=True)
         self.timeline.redraw()
@@ -2116,6 +2146,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _on_export_to_selected_game(self, sync_metadata: bool = False):
         """Identifica qual jogo está selecionado no menu e executa a exportação correta imediatamente!"""
+        if not self._ensure_audio_loaded("Para exportar a música com áudio (.mogg / .ogg) e som no jogo:"):
+            return
         if sync_metadata:
             self._sync_fields_to_song()
 
@@ -2135,6 +2167,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _on_auto_generate_clicked(self):
         """Gera automaticamente notas completas para todos os instrumentos selecionados."""
+        if not self._ensure_audio_loaded("Para gerar as notas na linha do tempo sincronizadas com o ritmo da música:"):
+            return
         has_lyrics = bool(self.song.lyrics_raw and self.song.lyrics_raw.strip())
         selected = []
         if self.chk_gen_guitar.get():
