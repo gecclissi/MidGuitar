@@ -1,4 +1,5 @@
 """Parser mínimo de s-expressions do formato DTA do Rock Band."""
+import re
 from typing import Any, List, Union
 
 
@@ -16,15 +17,17 @@ _CLOSE = {")": "(", "}": "{"}
 _DELIMS = set("(){};\"'") | set(" \t\r\n")
 
 
+_INT_RE = re.compile(r"^[+-]?\d+$")
+_FLOAT_RE = re.compile(r"^[+-]?(\d+\.\d*|\.\d+|\d+)([eE][+-]?\d+)?$")
+
+
 def _atom(tok: str) -> Union[int, float, str]:
-    try:
+    """Número só se bater com regex estrita (sem inf, nan nem '_')."""
+    if _INT_RE.match(tok):
         return int(tok)
-    except ValueError:
-        pass
-    try:
+    if _FLOAT_RE.match(tok) and ("." in tok or "e" in tok or "E" in tok):
         return float(tok)
-    except ValueError:
-        return tok
+    return tok
 
 
 def _tokenize(text: str):
@@ -41,10 +44,10 @@ def _tokenize(text: str):
             while i < n and text[i] != "\n":
                 i += 1
         elif ch in _OPEN:
-            yield ("open", ch, line)
+            yield ("open", ch, line, ch)
             i += 1
         elif ch in _CLOSE:
-            yield ("close", ch, line)
+            yield ("close", ch, line, ch)
             i += 1
         elif ch in "\"'":
             start_line, j = line, i + 1
@@ -55,13 +58,13 @@ def _tokenize(text: str):
             if j >= n:
                 raise DtaSyntaxError("Texto entre aspas não foi fechado", start_line)
             body = text[i + 1:j]
-            yield ("str" if ch == '"' else "atom", body, start_line)
+            yield ("str" if ch == '"' else "atom", body, start_line, body)
             i = j + 1
         else:
             j = i
             while j < n and text[j] not in _DELIMS:
                 j += 1
-            yield ("atom", _atom(text[i:j]), line)
+            yield ("atom", _atom(text[i:j]), line, text[i:j])
             i = j
 
 
@@ -74,7 +77,7 @@ def parse_dta(text: str) -> List[Any]:
     root: List[Any] = []
     stack = []  # (lista pai, delimitador de abertura, linha de abertura)
     cur = root
-    for kind, val, line in _tokenize(text):
+    for kind, val, line, raw in _tokenize(text):
         if kind == "open":
             new: List[Any] = []
             cur.append(new)
@@ -88,6 +91,9 @@ def parse_dta(text: str) -> List[Any]:
                 raise DtaSyntaxError("'%s' não fecha '%s'" % (val, opener), line)
             cur = parent
         else:
+            # nome da entrada de topo fica com o texto bruto (ex.: shortname "007")
+            if len(stack) == 1 and not cur and kind == "atom" and str(val) != raw:
+                val = raw
             cur.append(val)
     if stack:
         _, opener, line = stack[-1]

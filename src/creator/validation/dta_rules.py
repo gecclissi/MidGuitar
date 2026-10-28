@@ -54,7 +54,7 @@ def _values(field: list) -> list:
 
 def validate_dta(path: str, profile: TargetProfile,
                  midi_tracks_by_song: Optional[Dict[str, Set[str]]] = None,
-                 mogg_channels_by_song: Optional[Dict[str, int]] = None) -> List[Issue]:
+                 mogg_channels_by_song: Optional[Dict[str, Optional[int]]] = None) -> List[Issue]:
     """Valida cada entrada do songs.dta. Nunca lança exceção."""
     try:
         return _validate(path, midi_tracks_by_song, mogg_channels_by_song)
@@ -87,8 +87,16 @@ def _validate(path, midi_tracks_by_song, mogg_channels_by_song) -> List[Issue]:
                       "%s › linha %d" % (fname, e.line))]
 
     issues: List[Issue] = []
+    after_directive = False
     for entry in tree:
-        if isinstance(entry, list) and entry:
+        if isinstance(entry, str) and entry.startswith("#"):
+            after_directive = True   # #define/#include/#merge: a próxima lista não é música
+            continue
+        if isinstance(entry, list) and after_directive:
+            after_directive = False
+            continue
+        if (isinstance(entry, list) and entry and isinstance(entry[0], str)
+                and not entry[0].startswith(("#", "$"))):
             issues.extend(_validate_entry(fname, entry, midi_tracks_by_song,
                                           mogg_channels_by_song))
     return issues
@@ -134,7 +142,8 @@ def _validate_entry(fname, entry, midi_tracks_by_song, mogg_channels_by_song) ->
                 add("error", "DTA_CHANNEL_MISMATCH",
                     "tracks usa o canal %d, mas há só %d canais em pans/vols/cores"
                     % (max(bad), counts[0]), "song")
-    if pans is not None and mogg_channels_by_song and short in mogg_channels_by_song:
+    if (pans is not None and mogg_channels_by_song
+            and mogg_channels_by_song.get(short) is not None):
         n_pans, n_mogg = len(_values(pans)), mogg_channels_by_song[short]
         if n_pans != n_mogg:
             add("error", "DTA_MOGG_CHANNELS",
@@ -156,6 +165,6 @@ def _validate_entry(fname, entry, midi_tracks_by_song, mogg_channels_by_song) ->
                 add("error", "DTA_VOCAL_PARTS",
                     "vocal_parts é %s, mas o MIDI não tem PART VOCALS" % vp)
             elif vp == 0 and "PART VOCALS" in midi_tracks:
-                add("error", "DTA_VOCAL_PARTS",
+                add("warning", "DTA_VOCAL_PARTS",
                     "O MIDI tem PART VOCALS, mas vocal_parts é 0")
     return out

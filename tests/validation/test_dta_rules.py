@@ -120,4 +120,28 @@ def test_vocal_parts_without_vocals(tmp_path):
     p = _write(tmp_path, _good_dta(vocal="1"))
     assert _codes(validate_dta(p, RB3, {"ta": {"PART GUITAR"}})) == ["DTA_VOCAL_PARTS"]
     p2 = _write(tmp_path, _good_dta(vocal="0"), "b.dta")
-    assert _codes(validate_dta(p2, RB3, {"ta": {"PART GUITAR", "PART VOCALS"}})) == ["DTA_VOCAL_PARTS"]
+    issues = validate_dta(p2, RB3, {"ta": {"PART GUITAR", "PART VOCALS"}})
+    assert [(i.code, i.level) for i in issues] == [("DTA_VOCAL_PARTS", "warning")]
+
+
+def test_numeric_looking_symbols_stay_strings():
+    assert parse_dta('(007 (name "x"))')[0][0] == "007"
+    assert parse_dta("(1e3 x)")[0][0] == "1e3"  # nome de entrada fica bruto
+    assert parse_dta("(a 1e3 inf nan 1_000 1.5 -2)")[0][1:] == [1000.0, "inf", "nan", "1_000", 1.5, -2]
+
+
+def test_numeric_shortname_lookup(tmp_path):
+    p = _write(tmp_path, _good_dta(name="007", vocal="0", rank="(guitar 100)"))
+    issues = validate_dta(p, RB3, {"007": set()}, {"007": 8})
+    assert sorted(_codes(issues)) == ["DTA_MOGG_CHANNELS", "DTA_RANK_WITHOUT_TRACK"]
+
+
+def test_preprocessor_directives_are_not_songs(tmp_path):
+    p = _write(tmp_path, "#define K (1 2)" + chr(10) + "#include other.dta" + chr(10) + "(x y)" + chr(10) + _good_dta())
+    # (x y) após #include é descartado; K (1 2) também
+    assert validate_dta(p, RB3) == []
+
+
+def test_none_mogg_channels_skips_check(tmp_path):
+    p = _write(tmp_path, _good_dta(vols="(-1.5)"))
+    assert _codes(validate_dta(p, RB3, None, {"ta": None})) == ["DTA_CHANNEL_MISMATCH"]
