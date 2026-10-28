@@ -2,28 +2,54 @@
 Gerador de Arquivos MIDI no Padrão Rock Band Network (RBN / C3) e Clone Hero.
 Converte objetos ChartSong em arquivos .mid com trilhas separadas:
 PART GUITAR, PART BASS, PART DRUMS, PART KEYS, BEAT e EVENTS.
+
+Todas as conversões ms <-> tick passam pelo mapa de tempo da música
+(várias mudanças de tempo e de compasso), para o chart ficar em sincronia.
 """
 
-import mido
-from mido import MidiFile, MidiTrack, Message, MetaMessage, bpm2tempo
-from src.creator.chart_model import ChartSong, NoteEvent, VocalNote
+from collections import defaultdict
+
+from mido import MidiFile, MidiTrack, Message, MetaMessage
+from src.creator.chart_model import ChartSong
+from src.creator.tempo_map import TempoMap
 from src.creator.rbn_specs import (
+    TICKS_PER_BEAT,
     FRET_NOTES, DRUM_NOTES, BEAT_BAR_DOWNBEAT, BEAT_OFFBEAT,
     GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE,
-    VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE, VOCAL_PERCUSSION, VOCAL_TALKIE
+    VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE, VOCAL_TALKIE
 )
 
-TICKS_PER_BEAT = 480
+MIN_NOTE_TICKS = 120        # Duração mínima de uma nota de instrumento
+MIN_VOCAL_TICKS = 80        # Duração mínima de uma nota vocal
+BEAT_NOTE_TICKS = 60        # Duração das notas da trilha BEAT
+STRIPPED_MARKERS = ("[music_start]", "[music_end]", "[end]")
+
 
 def ms_to_ticks(ms: int, bpm: float) -> int:
-    """Converte milissegundos em ticks MIDI baseado no BPM."""
-    beats = (ms / 1000.0) * (bpm / 60.0)
-    return int(beats * TICKS_PER_BEAT)
+    """Converte milissegundos em ticks MIDI baseado no BPM (tempo constante, truncado)."""
+    us_per_beat = TempoMap.constant(bpm).tempos[0].us_per_beat
+    return int(ms * 1000.0 * TICKS_PER_BEAT / us_per_beat)
+
 
 def ticks_to_ms(ticks: int, bpm: float) -> int:
-    """Converte ticks MIDI em milissegundos."""
-    beats = ticks / TICKS_PER_BEAT
-    return int((beats * 60.0 / bpm) * 1000.0)
+    """Converte ticks MIDI em milissegundos (tempo constante, truncado)."""
+    return int(TempoMap.constant(bpm).tick_to_ms(ticks))
+
+
+def _song_tempo_map(song: ChartSong) -> TempoMap:
+    """Mapa de tempo da música na resolução de saída (TICKS_PER_BEAT)."""
+    tm = song.get_tempo_map()
+    if tm.ticks_per_beat != TICKS_PER_BEAT:
+        tm = tm.rescaled(TICKS_PER_BEAT)
+    return tm
+
+
+def _note_ticks(tm: TempoMap, time_ms: float, duration_ms: float, min_ticks: int):
+    """(início, fim) em ticks de uma nota, com duração mínima."""
+    start = tm.ms_to_tick(time_ms)
+    end = max(start + min_ticks, tm.ms_to_tick(time_ms + duration_ms))
+    return start, end
+
 
 def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb3_tracks: bool = True) -> MidiFile:
     """
@@ -37,80 +63,42 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb
     else:
         total_duration_ms = max(total_duration_ms, effective_dur)
 
+    tm = _song_tempo_map(song)
+    total_ticks = tm.ms_to_tick(total_duration_ms)
     mid = MidiFile(type=1, ticks_per_beat=TICKS_PER_BEAT)
 
     # -------------------------------------------------------------
-    # PISTA 0: TEMPO & ASSINATURA DE TEMPO
+    # PISTA 0: TEMPO & ASSINATURA DE TEMPO (mapa completo)
     # -------------------------------------------------------------
     tempo_track = MidiTrack()
     mid.tracks.append(tempo_track)
-
-    num, den = song.time_signature
-    tempo_track.append(MetaMessage('time_signature', numerator=num, denominator=den, clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
-    tempo_track.append(MetaMessage('set_tempo', tempo=bpm2tempo(song.bpm), time=0))
+    meta = [(s.tick, 0, MetaMessage('time_signature', numerator=s.numerator, denominator=s.denominator,
+                                    clocks_per_click=24, notated_32nd_notes_per_beat=8))
+            for s in tm.time_sigs]
+    meta += [(t.tick, 1, MetaMessage('set_tempo', tempo=t.us_per_beat)) for t in tm.tempos]
+    _append_meta(tempo_track, meta)
     tempo_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTA 1: BEAT (Compassos fortes e fracos)
+    # PISTA 1: BEAT (12 no primeiro tempo do compasso, 13 nos demais)
     # -------------------------------------------------------------
+    beat_grid = _beat_grid(tm, total_ticks)
     beat_track = MidiTrack()
     mid.tracks.append(beat_track)
     beat_track.append(MetaMessage('track_name', name='BEAT', time=0))
-
-    # Gera batidas a cada semínima (1 beat = TICKS_PER_BEAT)
-    total_ticks = ms_to_ticks(total_duration_ms, song.bpm)
-    current_tick = 0
-    beat_counter = 0
-
-    beat_events = []
-    while current_tick < total_ticks:
-        pitch = BEAT_BAR_DOWNBEAT if (beat_counter % num == 0) else BEAT_OFFBEAT
-        beat_events.append((current_tick, "note_on", pitch, 100))
-        beat_events.append((current_tick + 60, "note_off", pitch, 0))
-        current_tick += TICKS_PER_BEAT
-        beat_counter += 1
-
-    _append_timed_events_to_track(beat_track, beat_events)
+    beat_notes = []
+    for i, (tick, is_downbeat) in enumerate(beat_grid):
+        next_tick = beat_grid[i + 1][0] if i + 1 < len(beat_grid) else tick + BEAT_NOTE_TICKS
+        end = tick + max(1, min(BEAT_NOTE_TICKS, next_tick - tick))
+        beat_notes.append((tick, end, BEAT_BAR_DOWNBEAT if is_downbeat else BEAT_OFFBEAT, 100))
+    _emit_track(beat_track, beat_notes)
     beat_track.append(MetaMessage('end_of_track', time=0))
 
     # -------------------------------------------------------------
-    # PISTA 2: EVENTS (Seções e Marcadores)
+    # PISTA 2: EVENTS (preenchida depois das notas, para achar [music_end])
     # -------------------------------------------------------------
     events_track = MidiTrack()
     mid.tracks.append(events_track)
-    events_track.append(MetaMessage('track_name', name='EVENTS', time=0))
-
-    raw_events = [(0, "[music_start]")]
-    if song.events:
-        for ev in song.events:
-            raw_events.append((ev.time_ms, ev.text))
-    else:
-        # Gera seções canônicas de treino padrão Rock Band
-        bpm = max(40.0, song.bpm)
-        measure_ms = (60.0 / bpm) * 4000.0
-        canonical_sections = [
-            (0, "[section intro]"),
-            (int(4 * measure_ms), "[section verse_1]"),
-            (int(12 * measure_ms), "[section chorus_1]"),
-            (int(20 * measure_ms), "[section verse_2]"),
-            (int(28 * measure_ms), "[section chorus_2]"),
-            (int(36 * measure_ms), "[section solo]"),
-            (int(44 * measure_ms), "[section outro]"),
-        ]
-        for t_sec, s_text in canonical_sections:
-            if t_sec < total_duration_ms:
-                raw_events.append((t_sec, s_text))
-
-    raw_events.append((total_duration_ms, "[end]"))
-    raw_events.sort(key=lambda x: x[0])
-
-    last_tick = 0
-    for ms, text in raw_events:
-        target_tick = ms_to_ticks(ms, song.bpm)
-        delta = max(0, target_tick - last_tick)
-        events_track.append(MetaMessage('text', text=text, time=delta))
-        last_tick = target_tick
-    events_track.append(MetaMessage('end_of_track', time=0))
 
     # Garante que todas as 4 dificuldades (Expert, Hard, Medium, Easy) existam nas trilhas
     from src.creator.auto_charter import recalculate_track_difficulties
@@ -121,242 +109,287 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb
             if not has_lower:
                 recalculate_track_difficulties(song, [inst_key])
 
-    # -------------------------------------------------------------
-    # PISTA 3: PART GUITAR
-    # -------------------------------------------------------------
+    last_note_tick = None
+
+    def add_track(name, build, *args):
+        nonlocal last_note_tick
+        track = MidiTrack()
+        mid.tracks.append(track)
+        track.append(MetaMessage('track_name', name=name, time=0))
+        last = build(track, *args)
+        track.append(MetaMessage('end_of_track', time=0))
+        if last is not None:
+            last_note_tick = last if last_note_tick is None else max(last_note_tick, last)
+
+    # PISTAS 3..6: instrumentos de 5 lanes / bateria
     if song.guitar_notes:
-        guitar_track = MidiTrack()
-        mid.tracks.append(guitar_track)
-        guitar_track.append(MetaMessage('track_name', name='PART GUITAR', time=0))
-        _build_instrument_track(guitar_track, song.guitar_notes, FRET_NOTES, GUITAR_OVERDRIVE, song.bpm)
-        guitar_track.append(MetaMessage('end_of_track', time=0))
-
-    # -------------------------------------------------------------
-    # PISTA 4: PART BASS
-    # -------------------------------------------------------------
+        add_track('PART GUITAR', _build_instrument_track, song.guitar_notes, FRET_NOTES, GUITAR_OVERDRIVE, tm)
     if song.bass_notes:
-        bass_track = MidiTrack()
-        mid.tracks.append(bass_track)
-        bass_track.append(MetaMessage('track_name', name='PART BASS', time=0))
-        _build_instrument_track(bass_track, song.bass_notes, FRET_NOTES, GUITAR_OVERDRIVE, song.bpm)
-        bass_track.append(MetaMessage('end_of_track', time=0))
-
-    # -------------------------------------------------------------
-    # PISTA 5: PART DRUMS
-    # -------------------------------------------------------------
+        add_track('PART BASS', _build_instrument_track, song.bass_notes, FRET_NOTES, GUITAR_OVERDRIVE, tm)
     if song.drum_notes:
-        drum_track = MidiTrack()
-        mid.tracks.append(drum_track)
-        drum_track.append(MetaMessage('track_name', name='PART DRUMS', time=0))
-        _build_instrument_track(drum_track, song.drum_notes, DRUM_NOTES, DRUM_OVERDRIVE, song.bpm)
-        drum_track.append(MetaMessage('end_of_track', time=0))
-
-    # -------------------------------------------------------------
-    # PISTA 6: PART KEYS (Apenas em jogos compatíveis com RB3/CH)
-    # -------------------------------------------------------------
+        add_track('PART DRUMS', _build_instrument_track, song.drum_notes, DRUM_NOTES, DRUM_OVERDRIVE, tm)
     if include_rb3_tracks and song.keys_notes:
-        keys_track = MidiTrack()
-        mid.tracks.append(keys_track)
-        keys_track.append(MetaMessage('track_name', name='PART KEYS', time=0))
-        _build_instrument_track(keys_track, song.keys_notes, FRET_NOTES, KEYS_OVERDRIVE, song.bpm)
-        keys_track.append(MetaMessage('end_of_track', time=0))
+        add_track('PART KEYS', _build_instrument_track, song.keys_notes, FRET_NOTES, KEYS_OVERDRIVE, tm)
 
-    # -------------------------------------------------------------
     # PISTA 7: PART VOCALS (Melodias, Letras e Frases)
-    # -------------------------------------------------------------
     if song.vocal_notes:
-        vocal_track = MidiTrack()
-        mid.tracks.append(vocal_track)
-        vocal_track.append(MetaMessage('track_name', name='PART VOCALS', time=0))
-        _build_vocal_track(vocal_track, song.vocal_notes, song.bpm)
-        vocal_track.append(MetaMessage('end_of_track', time=0))
+        add_track('PART VOCALS', _build_vocal_track, song.vocal_notes, tm)
 
-    # -------------------------------------------------------------
-    # PISTA 8: PART REAL_GUITAR (Pro Guitar 6 Cordas / 17 Casas - Exclusivo RB3)
-    # -------------------------------------------------------------
+    # PISTAS 8/9: PART REAL_GUITAR / PART REAL_BASS (Exclusivo RB3)
     if include_rb3_tracks and getattr(song, "pro_guitar_notes", None):
-        pg_track = MidiTrack()
-        mid.tracks.append(pg_track)
-        pg_track.append(MetaMessage('track_name', name='PART REAL_GUITAR', time=0))
-        _build_pro_guitar_track(pg_track, song.pro_guitar_notes, song.bpm)
-        pg_track.append(MetaMessage('end_of_track', time=0))
-
-    # -------------------------------------------------------------
-    # PISTA 9: PART REAL_BASS (Pro Bass 4/6 Cordas - Exclusivo RB3)
-    # -------------------------------------------------------------
+        add_track('PART REAL_GUITAR', _build_pro_guitar_track, song.pro_guitar_notes, tm)
     if include_rb3_tracks and getattr(song, "pro_bass_notes", None):
-        pb_track = MidiTrack()
-        mid.tracks.append(pb_track)
-        pb_track.append(MetaMessage('track_name', name='PART REAL_BASS', time=0))
-        _build_pro_guitar_track(pb_track, song.pro_bass_notes, song.bpm)
-        pb_track.append(MetaMessage('end_of_track', time=0))
+        add_track('PART REAL_BASS', _build_pro_guitar_track, song.pro_bass_notes, tm)
 
-    # -------------------------------------------------------------
     # PISTAS 10..13: PART REAL_KEYS_X / H / M / E (Pro Keys 25 Teclas Reais - Exclusivo RB3)
-    # -------------------------------------------------------------
     if include_rb3_tracks and getattr(song, "pro_keys_notes", None):
-        pk_suffixes = [("Expert", "X"), ("Hard", "H"), ("Medium", "M"), ("Easy", "E")]
-        for diff_name, suffix in pk_suffixes:
+        for diff_name, suffix in [("Expert", "X"), ("Hard", "H"), ("Medium", "M"), ("Easy", "E")]:
             diff_pk_notes = [n for n in song.pro_keys_notes if n.difficulty == diff_name]
             if not diff_pk_notes:
                 diff_pk_notes = [n for n in song.pro_keys_notes if n.difficulty == "Expert"]
             if diff_pk_notes:
-                pk_track = MidiTrack()
-                mid.tracks.append(pk_track)
-                pk_track.append(MetaMessage('track_name', name=f'PART REAL_KEYS_{suffix}', time=0))
-                _build_pro_keys_track(pk_track, diff_pk_notes, song.bpm)
-                pk_track.append(MetaMessage('end_of_track', time=0))
+                add_track(f'PART REAL_KEYS_{suffix}', _build_pro_keys_track, diff_pk_notes, tm)
 
+    _build_events_track(events_track, song, tm, beat_grid, total_duration_ms, total_ticks, last_note_tick)
     return mid
 
-def _build_vocal_track(track: MidiTrack, notes: list, bpm: float):
+
+def _beat_grid(tm: TempoMap, total_ticks: int) -> list:
+    """Batidas (tick, é_primeiro_tempo) até total_ticks, seguindo os compassos do mapa.
+
+    Cada batida dura ticks_per_beat * 4 / denominador; cada mudança de compasso
+    começa um compasso novo.
+    """
+    grid = []
+    sigs = tm.time_sigs
+    for i, sig in enumerate(sigs):
+        seg_end = min(sigs[i + 1].tick if i + 1 < len(sigs) else total_ticks, total_ticks)
+        beat_len = tm.ticks_per_beat * 4 / sig.denominator
+        num = max(1, sig.numerator)
+        k = 0
+        tick = sig.tick
+        while tick < seg_end:
+            grid.append((tick, k % num == 0))
+            k += 1
+            tick = sig.tick + int(round(k * beat_len))
+    return grid
+
+
+def _build_events_track(track: MidiTrack, song: ChartSong, tm: TempoMap, beat_grid: list,
+                        total_duration_ms: int, total_ticks: int, last_note_tick):
+    """Seções e marcadores: um único [music_start], [music_end] e [end], nessa ordem."""
+    track.append(MetaMessage('track_name', name='EVENTS', time=0))
+    texts = []  # (tick, ordem, texto)
+    if song.events:
+        for ev in song.events:
+            if ev.text.strip() in STRIPPED_MARKERS:
+                continue
+            texts.append((tm.ms_to_tick(ev.time_ms), 1, ev.text))
+    else:
+        # Seções canônicas de treino padrão Rock Band, no início dos compassos do mapa
+        downbeats = [t for t, is_down in beat_grid if is_down]
+        canonical_sections = [
+            (0, "[section intro]"), (4, "[section verse_1]"), (12, "[section chorus_1]"),
+            (20, "[section verse_2]"), (28, "[section chorus_2]"), (36, "[section solo]"),
+            (44, "[section outro]"),
+        ]
+        for measure, s_text in canonical_sections:
+            if measure < len(downbeats) and downbeats[measure] < total_ticks:
+                texts.append((downbeats[measure], 1, s_text))
+
+    if last_note_tick is None:
+        music_end_tick = tm.ms_to_tick(max(0, total_duration_ms - 1000))
+    else:
+        music_end_tick = last_note_tick
+    end_tick = max(total_ticks, music_end_tick + 1)
+
+    texts.append((0, 0, "[music_start]"))
+    texts.append((music_end_tick, 2, "[music_end]"))
+    texts.append((end_tick, 3, "[end]"))
+    _append_meta(track, [(t, order, MetaMessage('text', text=txt)) for t, order, txt in texts])
+    track.append(MetaMessage('end_of_track', time=0))
+
+
+def _append_meta(track: MidiTrack, items: list):
+    """Insere (tick, ordem, MetaMessage) ordenados, convertendo para delta-times."""
+    last_tick = 0
+    for tick, _order, msg in sorted(items, key=lambda x: (x[0], x[1])):
+        msg.time = tick - last_tick
+        track.append(msg)
+        last_tick = tick
+
+
+def _merge_intervals(intervals: list) -> list:
+    """Une intervalos (início, fim) que se sobrepõem ou se tocam em frases contínuas."""
+    merged = []
+    for s, e in sorted(iv for iv in intervals if iv[1] > iv[0]):
+        if merged and s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    return [(s, e) for s, e in merged]
+
+
+def _resolve_overlaps(notes: list) -> list:
+    """Remove sobreposições por altura.
+
+    notes: (início, fim, altura, velocity, é_marcador). Duplicatas no mesmo
+    tick e altura são descartadas (fica a mais longa); se o fim de uma nota
+    passa do próximo note_on da mesma altura, é recortado para esse tick
+    (o recorte vence a duração mínima). Notas de duração zero não saem.
+    """
+    by_pitch = defaultdict(list)
+    for s, e, p, v, mk in notes:
+        by_pitch[p].append((s, e, v, mk))
+    out = []
+    for p, items in by_pitch.items():
+        items.sort(key=lambda x: (x[0], -x[1]))
+        uniq = []
+        for item in items:
+            if uniq and uniq[-1][0] == item[0]:
+                continue
+            uniq.append(item)
+        for i, (s, e, v, mk) in enumerate(uniq):
+            if i + 1 < len(uniq):
+                e = min(e, uniq[i + 1][0])
+            if e > s:
+                out.append((s, e, p, v, mk))
+    return out
+
+
+def _emit_track(track: MidiTrack, notes: list, markers: dict = None, lyrics: list = None):
+    """Grava notas, frases marcadoras e letras na trilha, sem notas sobrepostas.
+
+    notes: (início, fim, altura, velocity) tocáveis; markers: {altura: [(início, fim)]},
+    unidos em frases contínuas e gravados uma vez cada; lyrics: [(tick, texto)].
+    Retorna o tick do fim da última nota tocável (ou None).
+    """
+    all_notes = [(s, e, p, v, False) for s, e, p, v in notes]
+    for pitch, intervals in (markers or {}).items():
+        all_notes += [(s, e, pitch, 100, True) for s, e in _merge_intervals(intervals)]
+    resolved = _resolve_overlaps(all_notes)
+
+    # Ordem no mesmo tick: note_off, letra, note_on
+    events = []
+    for s, e, p, v, _mk in resolved:
+        events.append((s, 2, Message('note_on', note=p, velocity=v)))
+        events.append((e, 0, Message('note_off', note=p, velocity=0)))
+    for tick, text in (lyrics or []):
+        events.append((tick, 1, MetaMessage('lyrics', text=text)))
+    events.sort(key=lambda x: (x[0], x[1]))
+    last_tick = 0
+    for tick, _order, msg in events:
+        msg.time = tick - last_tick
+        track.append(msg)
+        last_tick = tick
+
+    ends = [e for _s, e, _p, _v, mk in resolved if not mk]
+    return max(ends) if ends else None
+
+
+def _build_vocal_track(track: MidiTrack, notes: list, tm: TempoMap):
     """
     Constrói a trilha PART VOCALS conforme a especificação oficial Rock Band:
     - Alturas tonais reais (36 a 84)
     - Letras cantadas sincronizadas (MetaMessage lyrics)
     - Frases vocais (Nota 105)
     - Frases de Overdrive (Nota 106)
-    - Pandeiro / Percussão (Nota 116)
     """
-    events = []
-    
+    sung, lyrics = [], []
+    markers = {VOCAL_PHRASE_MARKER: [], VOCAL_OVERDRIVE: []}
+
     # Agrupa notas em frases para demarcar com a nota 105
     phrase_start_tick = None
     phrase_end_tick = None
     is_od_phrase = False
 
+    def close_phrase(od: bool):
+        markers[VOCAL_PHRASE_MARKER].append((phrase_start_tick, phrase_end_tick))
+        if od:
+            markers[VOCAL_OVERDRIVE].append((phrase_start_tick, phrase_end_tick))
+
     for n in notes:
-        s_tick = ms_to_ticks(n.time_ms, bpm)
-        dur_ticks = max(80, ms_to_ticks(n.duration_ms, bpm))
-        e_tick = s_tick + dur_ticks
+        s_tick, e_tick = _note_ticks(tm, n.time_ms, n.duration_ms, MIN_VOCAL_TICKS)
 
         if phrase_start_tick is None:
             phrase_start_tick = max(0, s_tick - 40)
             is_od_phrase = n.is_overdrive
 
         pitch = VOCAL_TALKIE if n.is_talkie else n.pitch
-
-        # Letra/sílaba anexada no tempo exato
         if n.lyric:
-            events.append((s_tick, "lyric", n.lyric, 0))
-
-        # Nota cantada
-        events.append((s_tick, "note_on", pitch, 100))
-        events.append((e_tick, "note_off", pitch, 0))
-
+            lyrics.append((s_tick, n.lyric))
+        sung.append((s_tick, e_tick, pitch, 100))
         phrase_end_tick = e_tick + 40
 
-        # Se for fim de frase (ou última nota)
         if n.is_phrase_end:
-            # Nota 105 demarca a frase vocal completa
-            events.append((phrase_start_tick, "note_on", VOCAL_PHRASE_MARKER, 100))
-            events.append((phrase_end_tick, "note_off", VOCAL_PHRASE_MARKER, 0))
-
-            # Se a frase tem Overdrive (Nota 106)
-            if is_od_phrase or n.is_overdrive:
-                events.append((phrase_start_tick, "note_on", VOCAL_OVERDRIVE, 100))
-                events.append((phrase_end_tick, "note_off", VOCAL_OVERDRIVE, 0))
-
+            close_phrase(is_od_phrase or n.is_overdrive)
             phrase_start_tick = None
             phrase_end_tick = None
             is_od_phrase = False
 
     # Fecha frase restante se houver
     if phrase_start_tick is not None and phrase_end_tick is not None:
-        events.append((phrase_start_tick, "note_on", VOCAL_PHRASE_MARKER, 100))
-        events.append((phrase_end_tick, "note_off", VOCAL_PHRASE_MARKER, 0))
-        if is_od_phrase:
-            events.append((phrase_start_tick, "note_on", VOCAL_OVERDRIVE, 100))
-            events.append((phrase_end_tick, "note_off", VOCAL_OVERDRIVE, 0))
+        close_phrase(is_od_phrase)
 
-    # Ordena e insere na track
-    events.sort(key=lambda x: (x[0], 0 if x[1] == "note_off" else 1))
-    last_tick = 0
-    for tick, ev_type, val, vel in events:
-        delta = max(0, tick - last_tick)
-        if ev_type == "lyric":
-            track.append(MetaMessage("lyrics", text=val, time=delta))
-        else:
-            track.append(Message(ev_type, note=val, velocity=vel, time=delta))
-        last_tick = tick
+    return _emit_track(track, sung, markers, lyrics)
 
-def _build_instrument_track(track: MidiTrack, notes: list[NoteEvent], note_map: dict, overdrive_note: int, bpm: float):
-    """Converte lista de NoteEvent em mensagens note_on e note_off com deltas corretos."""
-    timed_events = []
+
+def _build_instrument_track(track: MidiTrack, notes: list, note_map: dict, overdrive_note: int, tm: TempoMap):
+    """Converte lista de NoteEvent em note_on/note_off, com frases de Overdrive unidas.
+
+    NoteEvent com lane "overdrive" (Star Power do auto_charter) vira uma frase
+    de overdrive cobrindo time_ms .. time_ms + duration_ms.
+    """
+    playable, od = [], []
     for n in notes:
+        if n.lane == "overdrive":
+            od.append(_note_ticks(tm, n.time_ms, n.duration_ms, 1))
+            continue
         diff_map = note_map.get(n.difficulty, note_map.get("Expert", {}))
         pitch = diff_map.get(n.lane)
-        if pitch is not None:
-            start_tick = ms_to_ticks(n.time_ms, bpm)
-            duration_ticks = max(120, ms_to_ticks(n.duration_ms, bpm))
-            end_tick = start_tick + duration_ticks
+        if pitch is None:
+            continue
+        start, end = _note_ticks(tm, n.time_ms, n.duration_ms, MIN_NOTE_TICKS)
+        playable.append((start, end, pitch, 100))
+        if n.is_overdrive:
+            od.append((start, end))
+    return _emit_track(track, playable, {overdrive_note: od})
 
-            timed_events.append((start_tick, "note_on", pitch, 100))
-            timed_events.append((end_tick, "note_off", pitch, 0))
 
-            # Se for overdrive
-            if n.is_overdrive:
-                timed_events.append((start_tick, "note_on", overdrive_note, 100))
-                timed_events.append((end_tick, "note_off", overdrive_note, 0))
-
-    _append_timed_events_to_track(track, timed_events)
-
-def _append_timed_events_to_track(track: MidiTrack, timed_events: list):
-    """Ordena eventos por tick absoluto e insere na track com delta-times."""
-    timed_events.sort(key=lambda x: (x[0], 0 if x[1] == "note_off" else 1))
-    last_tick = 0
-    for tick, ev_type, pitch, vel in timed_events:
-        delta = max(0, tick - last_tick)
-        track.append(Message(ev_type, note=pitch, velocity=vel, time=delta))
-        last_tick = tick
-
-def _build_pro_guitar_track(track: MidiTrack, notes: list, bpm: float):
+def _build_pro_guitar_track(track: MidiTrack, notes: list, tm: TempoMap):
     """
     Constrói a trilha PART REAL_GUITAR / PART REAL_BASS conforme a especificação RBN2:
     - Pitch = Base da Dificuldade (Easy=24, Medium=48, Hard=72, Expert=96) + índice da corda (0 a 5)
     - Velocity = 100 + número da casa/traste (0 a 17, logo velocity 100 a 117)
     """
     from src.creator.rbn_specs import PRO_GUITAR_STRING_BASE, PRO_GUITAR_OVERDRIVE
-    timed_events = []
+    playable, od = [], []
     for n in notes:
         base_pitch = PRO_GUITAR_STRING_BASE.get(n.difficulty, 96)
         pitch = base_pitch + max(0, min(5, int(n.string_idx)))
         vel = 100 + max(0, min(17, int(n.fret)))
-        start_tick = ms_to_ticks(n.time_ms, bpm)
-        duration_ticks = max(120, ms_to_ticks(n.duration_ms, bpm))
-        end_tick = start_tick + duration_ticks
-
-        timed_events.append((start_tick, "note_on", pitch, vel))
-        timed_events.append((end_tick, "note_off", pitch, 0))
+        start, end = _note_ticks(tm, n.time_ms, n.duration_ms, MIN_NOTE_TICKS)
+        playable.append((start, end, pitch, vel))
         if getattr(n, "is_overdrive", False):
-            timed_events.append((start_tick, "note_on", PRO_GUITAR_OVERDRIVE, 100))
-            timed_events.append((end_tick, "note_off", PRO_GUITAR_OVERDRIVE, 0))
+            od.append((start, end))
+    return _emit_track(track, playable, {PRO_GUITAR_OVERDRIVE: od})
 
-    _append_timed_events_to_track(track, timed_events)
 
-def _build_pro_keys_track(track: MidiTrack, notes: list, bpm: float):
+def _build_pro_keys_track(track: MidiTrack, notes: list, tm: TempoMap):
     """
     Constrói as trilhas PART REAL_KEYS_X / H / M / E (Teclado Real de 25 Teclas C3=48 a C5=72).
     Inclui também a nota âncora de Range Shift (Nota 0 = C3..C5) no início da trilha.
     """
-    from src.creator.rbn_specs import KEYS_OVERDRIVE
-    timed_events = [
-        (0, "note_on", 0, 100),
-        (120, "note_off", 0, 0),
-    ]
+    playable = [(0, 120, 0, 100)]
+    od = []
     for n in notes:
         pitch = max(48, min(72, int(n.pitch)))
-        start_tick = ms_to_ticks(n.time_ms, bpm)
-        duration_ticks = max(120, ms_to_ticks(n.duration_ms, bpm))
-        end_tick = start_tick + duration_ticks
-
-        timed_events.append((start_tick, "note_on", pitch, 100))
-        timed_events.append((end_tick, "note_off", pitch, 0))
+        start, end = _note_ticks(tm, n.time_ms, n.duration_ms, MIN_NOTE_TICKS)
+        playable.append((start, end, pitch, 100))
         if getattr(n, "is_overdrive", False):
-            timed_events.append((start_tick, "note_on", KEYS_OVERDRIVE, 100))
-            timed_events.append((end_tick, "note_off", KEYS_OVERDRIVE, 0))
+            od.append((start, end))
+    return _emit_track(track, playable, {KEYS_OVERDRIVE: od})
 
-    _append_timed_events_to_track(track, timed_events)
 
 def save_midi(mid: MidiFile, filepath: str):
     """Salva o arquivo MIDI no caminho especificado."""
