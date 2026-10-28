@@ -67,3 +67,10 @@ Os dois exportadores produzem o mesmo conjunto de problemas.
 
 - O diálogo de exportação da interface não foi aberto em uma tela real.
 - A calibração contra os customs de referência (Task 8, step 4) está pendente: a pasta `MIDGUITAR_REFS` ainda não existe, então os testes `refs` ficam `skipped`.
+
+## Itens da spec ainda não implementados (Fase 2+)
+
+- Verificação de alinhamento das letras vocais com as notas.
+- Verificação de canal MIDI válido para Pro Guitar/Bass.
+- Verificação de coerência da tabela de seek do `.mogg`.
+- Aviso no log do importador quando um tempo inválido (0 ou negativo) é ignorado.

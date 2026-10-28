@@ -124,3 +124,28 @@ def test_constant_bpm_helpers_keep_behavior():
     assert ms_to_ticks(1000, 120.0) == 960
     assert ticks_to_ms(960, 120.0) == 1000
     assert ms_to_ticks(333, 150.0) == int((0.333 * 2.5) * 480)
+
+
+def test_negative_times_are_clamped_and_midi_saves(tmp_path):
+    s = ChartSong(bpm=120.0)
+    s.guitar_notes = [NoteEvent(time_ms=-30, lane="green", difficulty="Expert"),
+                      NoteEvent(time_ms=1000, lane="red", difficulty="Expert")]
+    s.events = [TextEvent(-10, "[section intro]")]
+    mid = generate_rbn_midi(s)
+    mid.save(str(tmp_path / "neg.mid"))
+    for track in mid.tracks:
+        assert all(m.time >= 0 for m in track)
+    assert "[section intro]" in _event_texts(mid)
+
+
+def test_user_event_after_total_ticks_stays_before_end():
+    s = ChartSong(bpm=120.0)
+    s.guitar_notes = [NoteEvent(time_ms=1000, lane="green", difficulty="Expert")]
+    s.events = [TextEvent(10_000_000, "[section late]")]
+    ev = _track(generate_rbn_midi(s), "EVENTS")
+    texts = [(t, m.text) for t, m in _abs(ev) if m.type == "text"]
+    names = [x[1] for x in texts]
+    assert names.index("[music_end]") < names.index("[end]")
+    assert names[-1] == "[end]"
+    late = dict((n, t) for t, n in texts)
+    assert late["[end]"] > late["[section late]"]

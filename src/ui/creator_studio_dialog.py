@@ -1985,7 +1985,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         try:
             from src.creator.mogg_generator import analyze_audio_file
             info = analyze_audio_file(f)
-            if info.get("bpm"):
+            # Só aplica o BPM detectado se não houver mapa de tempos importado;
+            # senão sobrescreveria (get_tempo_map) um mapa com várias mudanças de tempo.
+            if info.get("bpm") and self.song.tempo_map is None:
                 self.song.bpm = float(info["bpm"])
         except Exception:
             pass
@@ -2483,8 +2485,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     # -------------------------------------------------------------------------
     def _show_export_result(self, title: str, message: str, pkg_dir: str, target: str):
         """Mostra o resultado da exportação junto com a verificação de compatibilidade."""
-        from src.creator.validation import has_errors, validate_export, format_issues_for_dialog
         try:
+            # Import dentro do try: a exportação já foi gravada e nunca falha por causa do validador
+            from src.creator.validation import has_errors, validate_export, format_issues_for_dialog
             issues = validate_export(pkg_dir, target)
             extra = format_issues_for_dialog(issues)
             failed = has_errors(issues)

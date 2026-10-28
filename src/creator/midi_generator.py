@@ -46,7 +46,7 @@ def _song_tempo_map(song: ChartSong) -> TempoMap:
 
 def _note_ticks(tm: TempoMap, time_ms: float, duration_ms: float, min_ticks: int):
     """(início, fim) em ticks de uma nota, com duração mínima."""
-    start = tm.ms_to_tick(time_ms)
+    start = max(0, tm.ms_to_tick(time_ms))  # tempo negativo vira 0 (deltas nunca negativos)
     end = max(start + min_ticks, tm.ms_to_tick(time_ms + duration_ms))
     return start, end
 
@@ -184,7 +184,7 @@ def _build_events_track(track: MidiTrack, song: ChartSong, tm: TempoMap, beat_gr
         for ev in song.events:
             if ev.text.strip() in STRIPPED_MARKERS:
                 continue
-            texts.append((tm.ms_to_tick(ev.time_ms), 1, ev.text))
+            texts.append((max(0, tm.ms_to_tick(ev.time_ms)), 1, ev.text))
     else:
         # Seções canônicas de treino padrão Rock Band, no início dos compassos do mapa
         downbeats = [t for t, is_down in beat_grid if is_down]
@@ -202,6 +202,9 @@ def _build_events_track(track: MidiTrack, song: ChartSong, tm: TempoMap, beat_gr
     else:
         music_end_tick = last_note_tick
     end_tick = max(total_ticks, music_end_tick + 1)
+    if texts:
+        # Eventos do usuário depois do fim previsto: [end] sempre vem por último
+        end_tick = max(end_tick, max(t for t, _o, _x in texts) + 1)
 
     texts.append((0, 0, "[music_start]"))
     texts.append((music_end_tick, 2, "[music_end]"))
