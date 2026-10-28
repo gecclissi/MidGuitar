@@ -185,3 +185,29 @@ def test_not_type1_is_error(tmp_path):
 def test_has_errors():
     assert has_errors([Issue("warning", "X", "m"), Issue("error", "Y", "m")])
     assert not has_errors([Issue("warning", "X", "m")])
+
+
+def test_missing_markers_grouped_in_one_issue(tmp_path):
+    p = _write_mid(tmp_path, _full(events_texts=[]))
+    out = [i for i in validate_midi(p, PROFILES["rb3_ps3"]) if i.code == "MIDI_MISSING_MARKER"]
+    assert len(out) == 1
+    assert all(m in out[0].message for m in ("[music_start]", "[music_end]", "[end]"))
+
+
+def test_animation_and_extra_notes_not_flagged(tmp_path):
+    cases = {"PART GUITAR": [104, 126, 40, 59], "PART BASS": [104, 126, 40, 59],
+             "PART KEYS": [104, 126], "PART DRUMS": [104, 126, 24, 51]}
+    for name, pitches in cases.items():
+        notes = [(i * 20, i * 20 + 10, p, 100) for i, p in enumerate(pitches)]
+        p = _write_mid(tmp_path, _full([_trk(name, notes)]))
+        assert "MIDI_NOTE_OUT_OF_RANGE" not in _plain(validate_midi(p, PROFILES["rb3_ps3"])), name
+
+
+def test_note_on_before_note_off_at_same_tick_is_not_overlap(tmp_path):
+    t = mido.MidiTrack([mido.MetaMessage("track_name", name="PART GUITAR"),
+                        mido.Message("note_on", note=96, velocity=100, time=0),
+                        mido.Message("note_on", note=96, velocity=100, time=480),
+                        mido.Message("note_off", note=96, velocity=0, time=0),
+                        mido.Message("note_off", note=96, velocity=0, time=480)])
+    p = _write_mid(tmp_path, _full([t]))
+    assert "MIDI_OVERLAPPING_NOTE" not in _plain(validate_midi(p, PROFILES["rb3_ps3"]))

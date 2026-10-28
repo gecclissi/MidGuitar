@@ -30,6 +30,12 @@ _ACCEPTED_NOTES.update([95, 103, 116, 127])
 _ACCEPTED_NOTES.update(range(105, 113))
 _ACCEPTED_NOTES.update(range(120, 125))
 _ACCEPTED_NOTES.update(range(12, 16))   # animação
+_ACCEPTED_NOTES.update([104, 126])      # tap e faixa de tremolo/trill/roll
+_EXTRA_ACCEPTED = {
+    "PART DRUMS": set(range(24, 52)),    # animação / hi-hat aberto
+    "PART GUITAR": set(range(40, 60)),   # animação da mão do braço
+    "PART BASS": set(range(40, 60)),
+}
 
 
 def _track_name(track) -> str:
@@ -152,11 +158,11 @@ def _validate(path: str, profile: TargetProfile) -> List[Issue]:
             tick += m.time
             if m.type in ("text", "marker", "lyrics"):
                 markers.setdefault(m.text.strip(), tick)
-        for mk in _MARKERS:
-            if mk not in markers:
-                c.add("error" if profile.require_end_markers else "warning",
-                      "MIDI_MISSING_MARKER",
-                      "Faltando o marcador %s na trilha EVENTS" % mk, "EVENTS")
+        missing = [mk for mk in _MARKERS if mk not in markers]
+        if missing:
+            c.add("error" if profile.require_end_markers else "warning",
+                  "MIDI_MISSING_MARKER",
+                  "Faltando marcadores em EVENTS: %s" % ", ".join(missing), "EVENTS")
 
     last_off = 0   # último note_off de qualquer PART
     last_on = 0    # última nota tocável
@@ -196,6 +202,8 @@ def _scan_track(c: _Collector, name: str, track) -> None:
         tick += m.time
         if _is_note_on(m) or _is_note_off(m):
             events.append((tick, m))
+    # no mesmo tick, os note_off vêm antes dos note_on (ordem estável)
+    events.sort(key=lambda e: (e[0], 0 if _is_note_off(e[1]) else 1))
 
     check_range = name in _RANGE_TRACKS
     pro_max = _PRO_STRING_TRACKS.get(name)
@@ -207,7 +215,8 @@ def _scan_track(c: _Collector, name: str, track) -> None:
                         "Nota sobreposta (altura %d já ativa)" % m.note,
                         "{n} notas sobrepostas (altura já ativa)")
             active[m.note] = tk
-            if check_range and m.note not in _ACCEPTED_NOTES and not (
+            if check_range and m.note not in _ACCEPTED_NOTES and (
+                    m.note not in _EXTRA_ACCEPTED.get(name, ())) and not (
                     name == "PART KEYS" and 0 <= m.note <= 12):
                 c.group("warning", "MIDI_NOTE_OUT_OF_RANGE", name, tk,
                         "1 nota fora da faixa (altura %d)" % m.note,
