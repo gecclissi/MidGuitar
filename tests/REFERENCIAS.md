@@ -5,7 +5,7 @@
 - Sem a variável, os testes `refs` são pulados. Para rodar:
 
 ```
-set MIDGUITAR_REFS=D:\RefCustoms
+set "MIDGUITAR_REFS=D:\RefCustoms"
 venv\Scripts\python -m pytest -m refs -v
 ```
 

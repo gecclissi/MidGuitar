@@ -16,11 +16,25 @@ DIFFS = ["Expert", "Hard", "Medium", "Easy"]
 TOLERANCE_MS = 2
 
 
+_INVALID_ROOT = "<MIDGUITAR_REFS-invalida>"
+
+
+@pytest.fixture(autouse=True)
+def _fail_on_invalid_refs(request):
+    """MIDGUITAR_REFS definida mas inexistente é erro de configuração, não motivo para pular."""
+    if "ref_folder" in request.fixturenames and request.getfixturevalue("ref_folder") == _INVALID_ROOT:
+        pytest.fail("MIDGUITAR_REFS aponta para algo que não é uma pasta existente: %r"
+                    % os.environ.get("MIDGUITAR_REFS"))
+
+
 def pytest_generate_tests(metafunc):
     if "ref_folder" not in metafunc.fixturenames:
         return
     root = os.environ.get("MIDGUITAR_REFS")
     folders = []
+    if root and not os.path.isdir(root):
+        metafunc.parametrize("ref_folder", [_INVALID_ROOT], ids=["refs-invalida"])
+        return
     if root and os.path.isdir(root):
         folders = sorted(
             (os.path.join(root, n) for n in os.listdir(root)
@@ -96,7 +110,6 @@ def test_reference_roundtrip_keeps_note_times(ref_folder, tmp_path):
         before = _snapshot(original)
         if not _has_any_notes(before):
             continue
-        checked += 1
         label = os.path.basename(folder)
 
         out_dir = tmp_path / str(idx)
@@ -111,6 +124,9 @@ def test_reference_roundtrip_keeps_note_times(ref_folder, tmp_path):
         after = _snapshot(again)
 
         for (track, diff), a in before.items():
+            if not a:
+                continue  # a geração acrescenta dificuldades que o original não tinha
+            checked += 1
             b = after[(track, diff)]
             if len(a) != len(b):
                 problems.append(f"{label} {track}/{diff}: {len(a)} -> {len(b)} notas")
