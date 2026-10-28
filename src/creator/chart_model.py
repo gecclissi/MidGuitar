@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 import json
 
+from src.creator.tempo_map import TempoMap
+
 @dataclass
 class NoteEvent:
     time_ms: int             # Tempo de início em milissegundos
@@ -88,6 +90,20 @@ class ChartSong:
     pro_bass_notes: List[ProGuitarNote] = field(default_factory=list)
     pro_keys_notes: List[ProKeysNote] = field(default_factory=list)
     events: List[TextEvent] = field(default_factory=list)
+    # Mapa de tempo importado de um MIDI (None = tempo constante definido por bpm)
+    tempo_map: Optional[TempoMap] = None
+
+    def get_tempo_map(self) -> TempoMap:
+        """Devolve o mapa de tempo efetivo da música.
+
+        O mapa importado só vale enquanto o BPM inicial dele coincide com
+        self.bpm. A UI atribui song.bpm diretamente em vários lugares; se o
+        usuário muda o BPM, o mapa importado é descartado e usamos tempo
+        constante, sem precisar alterar a UI.
+        """
+        if self.tempo_map is not None and round(self.tempo_map.initial_bpm(), 2) == round(self.bpm, 2):
+            return self.tempo_map
+        return TempoMap.constant(self.bpm, *self.time_signature)
 
     def get_effective_duration_ms(self) -> int:
         """Retorna a duração total real garantindo que cubra todas as notas e o áudio."""
@@ -143,7 +159,7 @@ class ChartSong:
         return getattr(self, f"{track}_notes", [])
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
@@ -172,6 +188,9 @@ class ChartSong:
             "pro_keys_notes": [n.__dict__ for n in self.pro_keys_notes],
             "events": [e.__dict__ for e in self.events],
         }
+        if self.tempo_map is not None:
+            data["tempo_map"] = self.tempo_map.to_dict()
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChartSong":
@@ -204,4 +223,6 @@ class ChartSong:
         song.pro_bass_notes = [ProGuitarNote(**n) for n in data.get("pro_bass_notes", [])]
         song.pro_keys_notes = [ProKeysNote(**n) for n in data.get("pro_keys_notes", [])]
         song.events = [TextEvent(**e) for e in data.get("events", [])]
+        tm = data.get("tempo_map")
+        song.tempo_map = TempoMap.from_dict(tm) if tm else None
         return song

@@ -11,6 +11,7 @@ import mido
 from mido import MidiFile
 from src.creator.chart_model import ChartSong, NoteEvent, TextEvent
 from src.creator.rbn_specs import FRET_NOTES, DRUM_NOTES, TICKS_PER_BEAT
+from src.creator.tempo_map import TempoMap, TempoChange, TimeSigChange
 
 def parse_song_ini(ini_path: str) -> dict:
     """Lê os metadados do song.ini."""
@@ -161,8 +162,10 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
         text = f.read()
 
     resolution = 192
-    bpm = 120.0
     current_section = ""
+    tempo_changes = []   # TempoChange em ticks do .chart
+    sig_changes = []     # TimeSigChange em ticks do .chart
+    pending_notes = []   # (inst, diff, lane, tick, sustain_ticks), convertidos no fim
 
     section_map = {
         "EXPERTSINGLE": ("guitar", "Expert"),
@@ -207,11 +210,17 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
                     except Exception:
                         pass
         elif current_section == "SYNCTRACK":
-            # Ex: 0 = B 120000
+            # Ex: 0 = B 120000  /  0 = TS 4  /  1536 = TS 6 3
             m = re.match(r'(\d+)\s*=\s*B\s+(\d+)', line)
-            if m and int(m.group(1)) == 0:
-                bpm = int(m.group(2)) / 1000.0
-                song.bpm = round(bpm, 2)
+            if m and int(m.group(2)) > 0:
+                bpm_milli = int(m.group(2))
+                us = int(round(60_000_000 / (bpm_milli / 1000.0)))
+                tempo_changes.append(TempoChange(int(m.group(1)), us))
+                continue
+            m = re.match(r'(\d+)\s*=\s*TS\s+(\d+)(?:\s+(\d+))?', line)
+            if m:
+                den_exp = int(m.group(3)) if m.group(3) is not None else 2
+                sig_changes.append(TimeSigChange(int(m.group(1)), int(m.group(2)), 2 ** den_exp))
         elif current_section in section_map:
             inst, diff = section_map[current_section]
             # Ex: 768 = N 0 0
@@ -222,21 +231,34 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
                 sustain_ticks = int(m.group(3))
                 lane_map = drum_idx_to_lane if inst == "drum" else fret_idx_to_lane
                 if n_idx in lane_map:
-                    start_ms = int((tick / resolution) * (60.0 / bpm) * 1000.0)
-                    dur_ms = max(120, int((sustain_ticks / resolution) * (60.0 / bpm) * 1000.0))
-                    song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane_map[n_idx], duration_ms=dur_ms, difficulty=diff))
+                    pending_notes.append((inst, diff, lane_map[n_idx], tick, sustain_ticks))
+
+    # Monta o mapa de tempo com o arquivo inteiro lido (as seções de notas podem vir antes do SyncTrack)
+    tm = TempoMap(resolution, tempo_changes, sig_changes)
+    for inst, diff, lane, tick, sustain_ticks in pending_notes:
+        start_ms = int(round(tm.tick_to_ms(tick)))
+        dur_ms = max(120, int(round(tm.tick_to_ms(tick + sustain_ticks) - tm.tick_to_ms(tick))))
+        song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane, duration_ms=dur_ms, difficulty=diff))
+    song.tempo_map = tm.rescaled(TICKS_PER_BEAT)
+    song.bpm = round(song.tempo_map.initial_bpm(), 2)
 
 
 def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
     """Extrai notas e BPM das trilhas do MIDI."""
-    # Descobre o BPM
-    bpm = 120.0
+    # Primeira passada: coleta tempos e fórmulas de compasso de TODAS as trilhas
+    tempo_changes = []
+    sig_changes = []
     for track in mid.tracks:
+        abs_tick = 0
         for msg in track:
+            abs_tick += msg.time
             if msg.type == 'set_tempo':
-                bpm = mido.tempo2bpm(msg.tempo)
-                break
-    song.bpm = round(bpm, 2)
+                tempo_changes.append(TempoChange(abs_tick, msg.tempo))
+            elif msg.type == 'time_signature':
+                sig_changes.append(TimeSigChange(abs_tick, msg.numerator, msg.denominator))
+    tm = TempoMap(mid.ticks_per_beat, tempo_changes, sig_changes)
+    song.tempo_map = tm.rescaled(TICKS_PER_BEAT)
+    song.bpm = round(song.tempo_map.initial_bpm(), 2)
 
     # Inverte os mapas de notas (número MIDI -> lane)
     inv_fret_notes = {}
@@ -261,7 +283,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
             if msg.type == 'track_name':
                 track_name = msg.name.strip().upper()
             elif msg.type == 'text':
-                ms = int((current_tick / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0)
+                ms = int(round(tm.tick_to_ms(current_tick)))
                 song.events.append(TextEvent(time_ms=ms, text=msg.text))
             elif msg.type == 'lyrics':
                 recent_lyrics[current_tick] = msg.text
@@ -270,8 +292,8 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
             elif (msg.type == 'note_off') or (msg.type == 'note_on' and msg.velocity == 0):
                 if msg.note in active_notes:
                     start_tick, on_vel = active_notes.pop(msg.note)
-                    start_ms = int((start_tick / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0)
-                    duration_ms = max(100, int(((current_tick - start_tick) / mid.ticks_per_beat) * (60.0 / song.bpm) * 1000.0))
+                    start_ms = int(round(tm.tick_to_ms(start_tick)))
+                    duration_ms = max(100, int(round(tm.tick_to_ms(current_tick) - tm.tick_to_ms(start_tick))))
 
                     if "VOCAL" in track_name:
                         from src.creator.chart_model import VocalNote
