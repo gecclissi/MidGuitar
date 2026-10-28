@@ -2481,6 +2481,21 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     # -------------------------------------------------------------------------
     # EXPORTAÇÕES FINAIS
     # -------------------------------------------------------------------------
+    def _show_export_result(self, title: str, message: str, pkg_dir: str, target: str):
+        """Mostra o resultado da exportação junto com a verificação de compatibilidade."""
+        from src.creator.validation import has_errors, validate_export, format_issues_for_dialog
+        try:
+            issues = validate_export(pkg_dir, target)
+            extra = format_issues_for_dialog(issues)
+            failed = has_errors(issues)
+        except Exception as exc:
+            extra = f"\n\n⚠️ Não foi possível verificar a compatibilidade: {exc}"
+            failed = False
+        if failed:
+            messagebox.showwarning(title, message + extra)
+        else:
+            messagebox.showinfo(title, message + extra)
+
     def _on_convert_to_rb3(self):
         if not self._ensure_audio_loaded("Para exportar para o Rock Band 3 com áudio compilado (.mogg):"):
             return
@@ -2491,7 +2506,10 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_rb3_song_package(self.song, out_dir)
-        messagebox.showinfo("Sucesso!", f"Pacote Rock Band 3 gerado com sucesso em:\n{pkg_dir}\n\nVocê já pode copiar para o RPCS3 ou Xbox 360!")
+        self._show_export_result(
+            "Sucesso!",
+            f"Pacote Rock Band 3 gerado com sucesso em:\n{pkg_dir}\n\nVocê já pode copiar para o RPCS3 ou Xbox 360!",
+            pkg_dir, "rb3_ps3")
 
     def _on_export_rb2(self):
         if not self._ensure_audio_loaded("Para exportar para o Rock Band 2 com áudio compilado (.mogg):"):
@@ -2503,12 +2521,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_rb2_song_package(self.song, out_dir)
-        messagebox.showinfo(
+        self._show_export_result(
             "Sucesso Rock Band 2!",
             f"🎸 Pacote para Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 & RB2 Deluxe) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• No RPCS3 (PC): Dê 2 cliques em 'INSTALAR_NO_RB2_RPCS3.bat' dentro da pasta!\n"
             f"• No PS3 Real: Copie USRDIR/songs para /dev_hdd0/game/BLUS30147/USRDIR/songs/\n"
-            f"• No Xbox 360: Use a pasta 'Xbox360_Content/0000000000000000/45410869/'"
+            f"• No Xbox 360: Use a pasta 'Xbox360_Content/0000000000000000/45410869/'",
+            pkg_dir, "rb2"
         )
 
     def _on_export_ps3_pkg(self):
@@ -2521,11 +2540,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_ps3_pkg_structure(self.song, out_dir)
-        messagebox.showinfo(
+        self._show_export_result(
             "Sucesso PS3 / RPCS3!",
             f"Estrutura PS3 / RPCS3 gerada com sucesso em:\n{pkg_dir}\n\n"
             f"• Para instalar no RPCS3: Execute o arquivo 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' dentro da pasta!\n"
-            f"• Para PS3 Real: Copie a pasta USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/"
+            f"• Para PS3 Real: Copie a pasta USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/",
+            pkg_dir, "rb3_ps3"
         )
 
     def _on_convert_to_clone_hero(self):
@@ -2538,7 +2558,10 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_clone_hero_song(self.song, out_dir)
-        messagebox.showinfo("Sucesso Clone Hero!", f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!")
+        self._show_export_result(
+            "Sucesso Clone Hero!",
+            f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!",
+            pkg_dir, "clonehero")
 
     def _on_export_xbox360(self):
         if not self._ensure_audio_loaded("Para exportar para o Xbox 360 com áudio compilado (.mogg):"):
@@ -2550,12 +2573,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_xbox360_structure(self.song, out_dir)
-        messagebox.showinfo(
+        self._show_export_result(
             "Sucesso Xbox 360!",
             f"Pacote para Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• Pasta 'Content/0000000000000000/45410914/' pronta para pendrive (Horizon/FATXplorer) ou RGH/JTAG!\n"
             f"• Pasta 'songs/' pronta para Aurora, Freestyle ou emulador Xenia no PC.\n"
-            f"• Veja o arquivo 'COMO_INSTALAR_NO_XBOX360.txt' dentro da pasta!"
+            f"• Veja o arquivo 'COMO_INSTALAR_NO_XBOX360.txt' dentro da pasta!",
+            pkg_dir, "xbox360"
         )
 
     def _on_export_ps4(self):
@@ -2568,12 +2592,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_ps4_structure(self.song, out_dir)
-        messagebox.showinfo(
+        self._show_export_result(
             "Sucesso PlayStation 4!",
             f"Pacote para PlayStation 4 (Rock Band 4) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• Arquivos DTA, MIDI e Áudio prontos para /user/appmeta/CUSA02084/ ou YARG no PS4 (GoldHEN/HEN)!\n"
             f"• Arquivo 'project.gp4' pronto para compilar em .pkg pelo orbis-pub-gen (FPKG)!\n"
-            f"• Veja o arquivo 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta!"
+            f"• Veja o arquivo 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta!",
+            pkg_dir, "ps4"
         )
 
     def _save_from_editor_rb3(self):
