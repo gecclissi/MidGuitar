@@ -1,5 +1,6 @@
 """Validação por destino: combina regras de MIDI/DTA/MOGG com o layout de pastas
 que cada JOGO exige (não o que os exportadores atuais geram)."""
+import codecs
 import configparser
 import os
 from typing import Dict, List, Optional, Set
@@ -56,7 +57,7 @@ def detect_target(folder: str) -> Optional[str]:
     try:
         if not os.path.isdir(folder):
             return None
-        names = set(os.listdir(folder))
+        names = {n.lower() for n in os.listdir(folder)}
         if "song.ini" in names or "notes.mid" in names or "notes.chart" in names:
             return "clonehero"
         if _find_songs_dtas(folder):
@@ -102,6 +103,39 @@ def _guard(fn, *args) -> List[Issue]:
         return [Issue("error", "VALIDATOR_CRASH", "Falha interna no validador: %s" % e)]
 
 
+def _decode_ini(raw: bytes) -> str:
+    if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return raw.decode("utf-16", errors="replace")
+    return raw.decode("utf-8-sig", errors="replace")
+
+
+def _parse_song_ini(text: str):
+    """Campos da seção [song] (chaves em minúsculas), ou False se não há a seção.
+
+    Tolerante como o Clone Hero: ignora linhas inválidas e comentários."""
+    cp = configparser.ConfigParser(interpolation=None, strict=False, allow_no_value=True)
+    cp.optionxform = str.lower
+    try:
+        cp.read_string(text)
+        section = next((s for s in cp.sections() if s.lower() == "song"), None)
+        if section is None:
+            return False
+        return {k: (v or "") for k, v in cp.items(section)}
+    except configparser.Error:
+        pass
+    fields: dict = {}
+    in_song = found = False
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("[") and line.endswith("]"):
+            in_song = line[1:-1].strip().lower() == "song"
+            found = found or in_song
+        elif in_song and "=" in line and not line.startswith(("//", ";", "#")):
+            k, _, v = line.partition("=")
+            fields.setdefault(k.strip().lower(), v.strip())
+    return fields if found else False
+
+
 def _validate_clonehero(folder: str, profile) -> List[Issue]:
     issues: List[Issue] = []
     if not os.path.isdir(folder):
@@ -118,24 +152,21 @@ def _validate_clonehero(folder: str, profile) -> List[Issue]:
     if not ini:
         issues.append(Issue("error", "CH_INI_MISSING", "Faltando song.ini", "song.ini"))
     else:
-        cp = configparser.ConfigParser(interpolation=None, strict=False)
-        cp.optionxform = str.lower
         try:
             with open(os.path.join(folder, ini), "rb") as f:
-                text = f.read().decode("utf-8-sig", errors="replace")
-            cp.read_string(text)
+                raw = f.read()
+            fields = _parse_song_ini(_decode_ini(raw))
         except Exception as e:
             issues.append(Issue("error", "CH_INI_MISSING",
                                 "song.ini ilegível: %s" % e, ini))
-            cp = None
-        if cp is not None:
-            section = next((s for s in cp.sections() if s.lower() == "song"), None)
-            if section is None:
+            fields = None
+        if fields is not None:
+            if fields is False:
                 issues.append(Issue("error", "CH_INI_MISSING",
                                     "song.ini sem a seção [song]", ini))
             else:
                 for key in ("name", "artist"):
-                    if not cp.get(section, key, fallback="").strip():
+                    if not fields.get(key, "").strip():
                         issues.append(Issue("warning", "CH_INI_FIELD",
                                             "song.ini sem a chave '%s'" % key, ini))
 
@@ -191,13 +222,28 @@ def _validate_one_songs_dir(folder: str, dta: str, profile) -> List[Issue]:
     return issues
 
 
+def _song_paths(songs_dir: str, entry: list):
+    """(base, pasta) do `song/name` ("songs/<dir>/<base>"); cai no nome da entrada."""
+    key = str(entry[0])
+    for item in entry:
+        if isinstance(item, list) and item and item[0] == "song":
+            for sub in item[1:]:
+                if (isinstance(sub, list) and len(sub) > 1 and sub[0] == "name"
+                        and isinstance(sub[1], str) and sub[1].strip()):
+                    parts = [p for p in sub[1].replace("\\", "/").split("/") if p]
+                    if len(parts) >= 2:
+                        parent = os.path.dirname(songs_dir)
+                        return parts[-1], os.path.join(parent, *parts[:-1])
+    return key, os.path.join(songs_dir, key)
+
+
 def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_channels):
-    s = str(entry[0])
-    sdir = os.path.join(songs_dir, s)
+    key = str(entry[0])
+    s, sdir = _song_paths(songs_dir, entry)
     issues: List[Issue] = []
     if not os.path.isdir(sdir):
         return [Issue("error", "LAYOUT_MISSING_SONG_DIR",
-                      "Faltando a pasta songs/%s/" % s, _rel(folder, sdir))]
+                      "Faltando a pasta %s/" % _rel(folder, sdir), _rel(folder, sdir))]
     edat = os.path.join(sdir, s + ".mid.edat")
     mid = os.path.join(sdir, s + ".mid")
     if os.path.isfile(edat):
@@ -224,7 +270,7 @@ def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_ch
             issues.append(Issue(i.level, i.code, i.message, loc))
         tracks = midi_track_names(mid)
         if tracks:
-            midi_tracks[s] = tracks
+            midi_tracks[key] = tracks
 
     mogg = os.path.join(sdir, s + ".mogg")
     if not os.path.isfile(mogg):
@@ -232,7 +278,7 @@ def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_ch
                             "Faltando %s.mogg" % s, _rel(folder, mogg)))
     else:
         info = read_mogg_info(mogg)
-        mogg_channels[s] = info.channels if info else None
+        mogg_channels[key] = info.channels if info else None
         for i in _guard(validate_mogg, mogg):
             issues.append(Issue(i.level, i.code, i.message, _rel(folder, mogg)))
 

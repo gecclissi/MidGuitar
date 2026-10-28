@@ -74,3 +74,57 @@ def test_empty_folder_and_unknown_target_do_not_raise(tmp_path):
     assert validate_export(str(tmp_path), "nintendo")[0].code == "TARGET_UNKNOWN"
     assert detect_target(str(tmp_path)) is None
     assert validate_export(str(tmp_path / "nao_existe"), "rb3_ps3")[0].level == "error"
+
+
+def _ch_dir(tmp_path, ini_bytes, mid="notes.mid", ini="song.ini"):
+    d = tmp_path / "ch"
+    d.mkdir()
+    (d / ini).write_bytes(ini_bytes)
+    (d / mid).write_bytes(b"")
+    _write_ogg(d / "song.ogg")
+    return str(d)
+
+
+def _ch_codes(d):
+    return {i.code for i in validate_export(d, "clonehero")}
+
+
+def test_ini_with_comment_and_bare_key_is_tolerated(tmp_path):
+    d = _ch_dir(tmp_path, b"[song]\n//comentario\nbarekey\nname = A\nartist = B\n")
+    codes = _ch_codes(d)
+    assert not codes & {"CH_INI_MISSING", "CH_INI_FIELD"}
+
+
+def test_ini_lenient_fallback_still_checks_fields(tmp_path):
+    d = _ch_dir(tmp_path, b"[song]\n[[lixo\nname = A\n")
+    codes = _ch_codes(d)
+    assert "CH_INI_FIELD" in codes and "CH_INI_MISSING" not in codes
+
+
+def test_utf16_ini_is_read(tmp_path):
+    raw = "[song]\nname = A\nartist = B\n".encode("utf-16")  # com BOM
+    d = _ch_dir(tmp_path, raw)
+    assert not _ch_codes(d) & {"CH_INI_MISSING", "CH_INI_FIELD"}
+
+
+def test_detect_target_is_case_insensitive(tmp_path):
+    d = _ch_dir(tmp_path, b"[song]\nname=A\nartist=B\n", mid="Notes.mid", ini="Song.ini")
+    assert detect_target(d) == "clonehero"
+
+
+def test_dta_song_name_path_differs_from_key(tmp_path):
+    root = tmp_path / "r" / "songs"
+    sdir = root / "OtherDir"
+    (sdir / "gen").mkdir(parents=True)
+    (root / "songs.dta").write_text(
+        '(mykey (name "T") (artist "A") (song_id 1) (game_origin "ugc_plus")\n'
+        ' (rank (guitar 1)) (vocal_parts 0)\n'
+        ' (song (name "songs/OtherDir/otherbase") (tracks ((guitar (0 1)))) '
+        '(pans (-1 1)) (vols (0 0)) (cores (-1 -1))) (album_art FALSE))', encoding="utf-8")
+    (sdir / "otherbase.mid.edat").write_bytes(b"NPD\x00")
+    (sdir / "otherbase.mogg").write_bytes(b"")
+    (sdir / "gen" / "otherbase.milo_ps3").write_bytes(b"")
+    codes = {i.code for i in validate_export(str(tmp_path / "r"), "rb3_ps3")}
+    assert not codes & {"LAYOUT_MISSING_SONG_DIR", "PS3_MISSING_EDAT",
+                        "PS3_MISSING_MILO", "PS3_PLAIN_MID"}
+    assert "LAYOUT_MISSING_MOGG" not in codes
