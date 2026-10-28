@@ -87,6 +87,15 @@ def _validate(path, midi_tracks_by_song, mogg_channels_by_song) -> List[Issue]:
                       "%s › linha %d" % (fname, e.line))]
 
     issues: List[Issue] = []
+    for entry in _song_entries(tree):
+        issues.extend(_validate_entry(fname, entry, midi_tracks_by_song,
+                                      mogg_channels_by_song))
+    return issues
+
+
+def _song_entries(tree: list) -> List[list]:
+    """Listas de primeiro nível que são músicas (ignora diretivas e a lista que as segue)."""
+    out: List[list] = []
     after_directive = False
     for entry in tree:
         if isinstance(entry, str) and entry.startswith("#"):
@@ -97,9 +106,20 @@ def _validate(path, midi_tracks_by_song, mogg_channels_by_song) -> List[Issue]:
             continue
         if (isinstance(entry, list) and entry and isinstance(entry[0], str)
                 and not entry[0].startswith(("#", "$"))):
-            issues.extend(_validate_entry(fname, entry, midi_tracks_by_song,
-                                          mogg_channels_by_song))
-    return issues
+            out.append(entry)
+    return out
+
+
+def dta_song_entries(path: str) -> List[list]:
+    """Entradas de música do songs.dta (lista vazia se ilegível ou inválido)."""
+    try:
+        return _song_entries(parse_dta(_read_text(path)))
+    except Exception:
+        return []
+
+
+def dta_song_shortnames(path: str) -> List[str]:
+    return [str(e[0]) for e in dta_song_entries(path)]
 
 
 def _validate_entry(fname, entry, midi_tracks_by_song, mogg_channels_by_song) -> List[Issue]:
