@@ -22,3 +22,6 @@ dist/
 *.rar
 CriarMusicasRockBand/
 CriarMusicasRockBand.rar
+
+# Customs de referência locais (não versionar)
+music/

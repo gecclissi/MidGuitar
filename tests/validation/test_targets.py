@@ -128,3 +128,18 @@ def test_dta_song_name_path_differs_from_key(tmp_path):
     assert not codes & {"LAYOUT_MISSING_SONG_DIR", "PS3_MISSING_EDAT",
                         "PS3_MISSING_MILO", "PS3_PLAIN_MID"}
     assert "LAYOUT_MISSING_MOGG" not in codes
+
+
+def test_ghwt_definitive_edition_mod_is_not_clone_hero(tmp_path):
+    # mod do GHWT:DE: song.ini com [ModInfo]/[SongInfo], sem notes.mid e sem [song]
+    d = tmp_path / "PAVLO - Mediterranean Eyes"
+    (d / "Content").mkdir(parents=True)
+    (d / "song.ini").write_text("[ModInfo]\nName=X\n\n[SongInfo]\nTitle=X\nArtist=Y\n", encoding="utf-8")
+    assert detect_target(str(d)) is None
+
+
+def test_song_ini_with_song_section_is_clone_hero(tmp_path):
+    d = tmp_path / "ch"
+    d.mkdir()
+    (d / "song.ini").write_text("[Song]\nname = X\nartist = Y\n", encoding="utf-8")
+    assert detect_target(str(d)) == "clonehero"

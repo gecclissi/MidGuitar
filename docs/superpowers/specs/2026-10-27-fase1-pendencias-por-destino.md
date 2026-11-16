@@ -74,3 +74,20 @@ Os dois exportadores produzem o mesmo conjunto de problemas.
 - Verificação de canal MIDI válido para Pro Guitar/Bass.
 - Verificação de coerência da tabela de seek do `.mogg`.
 - Aviso no log do importador quando um tempo inválido (0 ou negativo) é ignorado.
+
+## Calibração com customs reais (2026-11-16)
+
+| Custom | Formato | Validador | Ida e volta (±2 ms) |
+|---|---|---|---|
+| Joe Dassin – Salut les amoureux | Clone Hero/YARG (`notes.mid` + `.opus`, 154 mudanças de tempo) | passa | passa |
+| Joe Dassin – Salut les amoureux | Xbox 360 CON (`_rb3con`) | passa (só cabeçalho CON) | n/a |
+| 5 Seconds Of Summer – Ghost Of You | PKG debug RB3 PS3 (`.mid.edat`, `.mogg` criptografado, milo, png_ps3) | passa (aviso `MOGG_ENCRYPTED`) | n/a (`.mid.edat`) |
+| Gorillaz – Andromeda | PKG debug RB3 PS3 (Magma C3 Roks) | passa (aviso `MOGG_ENCRYPTED`) | n/a (`.mid.edat`) |
+| PAVLO – Mediterranean Eyes | mod GHWT:DE (`.pak.xen`/`.fsb.xen`) | formato sem perfil — não detectado | n/a |
+
+Correções que a calibração exigiu:
+- importador misturava `PART GUITAR GHL`, `PART BASS GHL`, `PART ELITE_DRUMS`, `PART REAL_GUITAR_22` e `PART KEYS_ANIM_RH` nas trilhas editáveis (perdia/duplicava notas) e trazia textos de `VENUE` para `EVENTS`;
+- validador: nota repetida no mesmo tick vira aviso (`MIDI_DUPLICATE_NOTE`); trilhas GHL/Elite Drums conhecidas no perfil Clone Hero; notas abertas 71/83 aceitas;
+- `detect_target` confundia mod do GHWT:DE (song.ini com `[ModInfo]`) com Clone Hero.
+
+Ainda sem referência real: RB2, PS4 e um Clone Hero só com `notes.chart`. Suporte a GHWT:DE e importação direta de `.pkg` ficam para fases futuras.

@@ -57,9 +57,15 @@ def detect_target(folder: str) -> Optional[str]:
     try:
         if not os.path.isdir(folder):
             return None
-        names = {n.lower() for n in os.listdir(folder)}
-        if "song.ini" in names or "notes.mid" in names or "notes.chart" in names:
+        names = {n.lower(): n for n in os.listdir(folder)}
+        if "notes.mid" in names or "notes.chart" in names:
             return "clonehero"
+        # song.ini sozinho só é Clone Hero com a seção [song]: mods do GHWT:DE
+        # também usam song.ini, mas com [ModInfo]/[SongInfo]
+        if "song.ini" in names:
+            with open(os.path.join(folder, names["song.ini"]), "rb") as f:
+                if _parse_song_ini(_decode_ini(f.read())) is not False:
+                    return "clonehero"
         if _find_songs_dtas(folder):
             return "rb3_ps3"
         if any(p.lower().endswith(".songdta_ps4") for p in _walk_files(folder)):
