@@ -153,16 +153,16 @@ def auto_generate_chart(
                 song.add_note("drum", NoteEvent(time_ms=m_start, lane="green", duration_ms=160, difficulty="Expert"))
 
             if is_fill_measure:
-                song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="red", duration_ms=120, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="snare", duration_ms=120, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 2.5 * beat_ms), lane="yellow", duration_ms=120, difficulty="Expert"))
                 song.add_note("drum", NoteEvent(time_ms=int(m_start + 3 * beat_ms), lane="blue", duration_ms=120, difficulty="Expert"))
-                song.add_note("drum", NoteEvent(time_ms=int(m_start + 3.5 * beat_ms), lane="red", duration_ms=120, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=int(m_start + 3.5 * beat_ms), lane="snare", duration_ms=120, difficulty="Expert"))
             else:
-                song.add_note("drum", NoteEvent(time_ms=m_start, lane="orange", duration_ms=160, difficulty="Expert"))
-                song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="orange", duration_ms=160, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=m_start, lane="kick", duration_ms=160, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=int(m_start + 2 * beat_ms), lane="kick", duration_ms=160, difficulty="Expert"))
 
-                song.add_note("drum", NoteEvent(time_ms=int(m_start + 1 * beat_ms), lane="red", duration_ms=160, difficulty="Expert"))
-                song.add_note("drum", NoteEvent(time_ms=int(m_start + 3 * beat_ms), lane="red", duration_ms=160, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=int(m_start + 1 * beat_ms), lane="snare", duration_ms=160, difficulty="Expert"))
+                song.add_note("drum", NoteEvent(time_ms=int(m_start + 3 * beat_ms), lane="snare", duration_ms=160, difficulty="Expert"))
 
                 cymbal_lane = "blue" if is_chorus else "yellow"
                 for b8 in range(8):
@@ -391,11 +391,14 @@ def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
     - Easy: 3 pistas principais (Verde, Vermelha, Amarela). Quase NENHUM azul (apenas Verde, Vermelho, Amarelo).
             ESTRITAMENTE NOTAS INDIVIDUAIS (sem nenhum acorde). Ritmo lento e espaçado (mínimo 350ms).
     """
-    lanes_order = ["green", "red", "yellow", "blue", "orange"]
-
     for inst in instruments:
         if inst in ["vocals", "pro_guitar", "pro_bass", "pro_keys"]:
             continue
+        is_drum = inst == "drum"
+        # Bateria: bumbo e caixa primeiro; a lane "mais alta" (reduzida no Medium/Easy) é o verde
+        lanes_order = ["kick", "snare", "yellow", "blue", "green"] if is_drum else ["green", "red", "yellow", "blue", "orange"]
+        top_lane = lanes_order[-1]
+        second_lane = "snare" if is_drum else "red"
 
         track_notes = getattr(song, f"{inst}_notes", [])
         # Mantém apenas as notas Expert (e marcadores especiais de solo/overdrive)
@@ -448,7 +451,7 @@ def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
             simul_notes = notes_by_time[t]
             first_note = simul_notes[0]
             # Transpõe laranja para azul no Medium
-            m_lane = "blue" if first_note.lane == "orange" else first_note.lane
+            m_lane = "blue" if first_note.lane == top_lane else first_note.lane
             song.add_note(inst, NoteEvent(
                 time_ms=first_note.time_ms,
                 lane=m_lane,
@@ -458,7 +461,7 @@ def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
 
             # Acorde duplo simples apenas em tempos fortes
             if len(simul_notes) > 1 and i % 4 == 0:
-                sec_lane = "blue" if simul_notes[1].lane == "orange" else simul_notes[1].lane
+                sec_lane = "blue" if simul_notes[1].lane == top_lane else simul_notes[1].lane
                 if sec_lane != m_lane:
                     song.add_note(inst, NoteEvent(
                         time_ms=simul_notes[1].time_ms,
@@ -482,10 +485,10 @@ def _generate_lower_difficulties(song: ChartSong, instruments: List[str]):
             primary_note = simul_notes[0]
 
             # No Easy: apenas Verde, Vermelho e Amarelo! Quase nenhum azul, zero laranja!
-            if primary_note.lane == "orange":
+            if primary_note.lane == top_lane:
                 easy_lane = "yellow"
             elif primary_note.lane == "blue":
-                easy_lane = "yellow" if i % 2 == 0 else "red"
+                easy_lane = "yellow" if i % 2 == 0 else second_lane
             else:
                 easy_lane = primary_note.lane
 

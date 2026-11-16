@@ -156,16 +156,26 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
 
 
 def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
-    """Analisa arquivos notes.chart do Clone Hero / Moonscraper / Feedback."""
+    """Analisa arquivos notes.chart do Clone Hero / Moonscraper / Feedback.
+
+    Lê metadados de [Song] (quando não há song.ini), mapa de tempo, [Events]
+    (seções), notas, star power (S 2 -> overdrive), forçadas (N 5), tap (N 6)
+    e open (N 7). Bateria usa as lanes de rbn_specs.DRUM_NOTES.
+    """
     import re
+    from src.creator import passthrough as pt
     with open(chart_path, "r", encoding="utf-8-sig", errors="ignore") as f:
         text = f.read()
 
+    defaults = ChartSong()
     resolution = 192
     current_section = ""
     tempo_changes = []   # TempoChange em ticks do .chart
     sig_changes = []     # TimeSigChange em ticks do .chart
     pending_notes = []   # (inst, diff, lane, tick, sustain_ticks), convertidos no fim
+    flags = {}           # (inst, diff, tick) -> {"forced", "tap"}
+    star_power = []      # (inst, tick, length)
+    chart_events = []    # (tick, texto)
 
     section_map = {
         "EXPERTSINGLE": ("guitar", "Expert"),
@@ -185,8 +195,10 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
         "MEDIUMKEYBOARD": ("keys", "Medium"),
         "EASYKEYBOARD": ("keys", "Easy"),
     }
-    fret_idx_to_lane = {0: "green", 1: "red", 2: "yellow", 3: "blue", 4: "orange"}
-    drum_idx_to_lane = {0: "orange", 1: "red", 2: "yellow", 3: "blue", 4: "green"}
+    fret_idx_to_lane = {0: "green", 1: "red", 2: "yellow", 3: "blue", 4: "orange", 7: "open"}
+    # Bateria .chart: 0 bumbo, 1 vermelho, 2 amarelo, 3 azul, 4 verde (4 lanes) /
+    # laranja (5 lanes), 5 verde (5 lanes), 32 pedal duplo
+    drum_idx_to_lane = {0: "kick", 1: "snare", 2: "yellow", 3: "blue", 4: "green", 5: "green", 32: "double_kick"}
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -198,12 +210,23 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
 
         if current_section == "SONG":
             if "=" in line:
-                k, v = [p.strip().strip('"') for p in line.split("=", 1)]
+                k, v = [p.strip().strip('"').strip() for p in line.split("=", 1)]
                 kl = k.lower()
-                if kl == "name" and song.title == "Nova Música":
+                # Valores do .chart só preenchem o que o song.ini não definiu
+                if kl == "name" and song.title == defaults.title:
                     song.title = v
-                elif kl == "artist" and song.artist == "Artista Desconhecido":
+                elif kl == "artist" and song.artist == defaults.artist:
                     song.artist = v
+                elif kl == "album" and song.album == defaults.album:
+                    song.album = v
+                elif kl == "genre" and song.genre == defaults.genre:
+                    song.genre = v
+                elif kl == "charter" and song.charter == defaults.charter:
+                    song.charter = v
+                elif kl == "year" and song.year == defaults.year:
+                    m = re.search(r"\d{4}", v)
+                    if m:
+                        song.year = int(m.group(0))
                 elif kl == "resolution":
                     try:
                         resolution = max(1, int(v))
@@ -221,24 +244,85 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
             if m:
                 den_exp = int(m.group(3)) if m.group(3) is not None else 2
                 sig_changes.append(TimeSigChange(int(m.group(1)), int(m.group(2)), 2 ** den_exp))
+        elif current_section == "EVENTS":
+            # Ex: 768 = E "section Verse 1"  (letras e frases vocais não são seções)
+            m = re.match(r'(\d+)\s*=\s*E\s+(.*)$', line)
+            if m:
+                ev = m.group(2).strip().strip('"').strip()
+                if ev and not ev.lower().startswith(("lyric", "phrase_start", "phrase_end")):
+                    chart_events.append((int(m.group(1)), ev if ev.startswith("[") else "[%s]" % ev))
         elif current_section in section_map:
             inst, diff = section_map[current_section]
-            # Ex: 768 = N 0 0
-            m = re.match(r'(\d+)\s*=\s*N\s+(\d+)\s+(\d+)', line)
-            if m:
-                tick = int(m.group(1))
-                n_idx = int(m.group(2))
-                sustain_ticks = int(m.group(3))
-                lane_map = drum_idx_to_lane if inst == "drum" else fret_idx_to_lane
-                if n_idx in lane_map:
-                    pending_notes.append((inst, diff, lane_map[n_idx], tick, sustain_ticks))
+            # Ex: 768 = N 0 0  /  768 = S 2 384
+            m = re.match(r'(\d+)\s*=\s*([NS])\s+(\d+)\s+(\d+)', line)
+            if not m:
+                continue
+            tick, kind, idx, length = int(m.group(1)), m.group(2), int(m.group(3)), int(m.group(4))
+            if kind == "S":
+                if idx == 2:
+                    star_power.append((inst, tick, length))
+                continue
+            lane_map = drum_idx_to_lane if inst == "drum" else fret_idx_to_lane
+            if idx in lane_map:
+                pending_notes.append((inst, diff, lane_map[idx], tick, length))
+            elif inst != "drum" and idx in (5, 6):
+                flags.setdefault((inst, diff, tick), set()).add("forced" if idx == 5 else "tap")
 
     # Monta o mapa de tempo com o arquivo inteiro lido (as seções de notas podem vir antes do SyncTrack)
     tm = TempoMap(resolution, tempo_changes, sig_changes)
-    for inst, diff, lane, tick, sustain_ticks in pending_notes:
+    track_names = {"guitar": "PART GUITAR", "bass": "PART BASS", "drum": "PART DRUMS", "keys": "PART KEYS"}
+
+    def extras_for(inst):
+        return song.track_extras.setdefault(track_names[inst], pt.new_extras())
+
+    def span_ms(tick, length):
         start_ms = int(round(tm.tick_to_ms(tick)))
-        dur_ms = max(120, int(round(tm.tick_to_ms(tick + sustain_ticks) - tm.tick_to_ms(tick))))
-        song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane, duration_ms=dur_ms, difficulty=diff))
+        return start_ms, max(0, int(round(tm.tick_to_ms(tick + length))) - start_ms)
+
+    open_insts = set()
+    for inst, diff, lane, tick, sustain_ticks in pending_notes:
+        if lane == "open":
+            # Open (N 7): nota abaixo do verde, com [ENHANCED_OPENS] na trilha
+            pitch = FRET_NOTES[diff]["green"] - 1
+            pt.add_extra_note(extras_for(inst), tm, tick, tick + max(1, sustain_ticks), pitch, 100, 0)
+            open_insts.add(inst)
+            continue
+        start_ms, dur_ms = span_ms(tick, sustain_ticks)
+        song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane, duration_ms=max(120, dur_ms), difficulty=diff))
+    for inst in sorted(open_insts):
+        pt.add_extra_event(extras_for(inst), tm, 0, mido.MetaMessage("text", text="[ENHANCED_OPENS]"))
+
+    # Forçadas (N 5 inverte o HOPO natural) e tap (N 6, marcador 104)
+    hopo_threshold = resolution * 65 / 192
+    groups = {}
+    for inst, diff, lane, tick, sustain_ticks in pending_notes:
+        groups.setdefault((inst, diff), {}).setdefault(tick, []).append((lane, sustain_ticks))
+    taps_done = set()
+    for (inst, diff), by_tick in groups.items():
+        prev_tick, prev_lanes = None, set()
+        for tick in sorted(by_tick):
+            lanes = {lane for lane, _s in by_tick[tick]}
+            length = max(1, max(s for _l, s in by_tick[tick]))
+            natural = (prev_tick is not None and len(lanes) == 1 and tick - prev_tick <= hopo_threshold
+                       and not lanes <= prev_lanes)
+            f = flags.get((inst, diff, tick), set())
+            if "forced" in f:
+                marker = FRET_NOTES[diff]["force_strum" if natural else "force_hopo"]
+                pt.add_extra_note(extras_for(inst), tm, tick, tick + length, marker, 100, 0)
+            if "tap" in f and (inst, tick) not in taps_done:
+                taps_done.add((inst, tick))
+                pt.add_extra_note(extras_for(inst), tm, tick, tick + length, 104, 100, 0)
+            prev_tick, prev_lanes = tick, lanes
+
+    # Star power (S 2) -> frase de overdrive (uma por trilha, mesmo repetida em cada dificuldade)
+    for inst, tick, length in sorted(set(star_power)):
+        start_ms, dur_ms = span_ms(tick, length)
+        song.add_note(inst, NoteEvent(time_ms=start_ms, lane="overdrive", duration_ms=dur_ms,
+                                      difficulty="Expert", is_overdrive=True))
+
+    for tick, ev in chart_events:
+        song.events.append(TextEvent(time_ms=int(round(tm.tick_to_ms(tick))), text=ev))
+
     song.tempo_map = tm.rescaled(TICKS_PER_BEAT)
     song.bpm = round(song.tempo_map.initial_bpm(), 2)
 

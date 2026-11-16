@@ -169,17 +169,14 @@ def test_chart_import_notes_and_tempo(tmp_path):
     assert [t.us_per_beat for t in s.tempo_map.tempos] == [500000, 400000]
 
 
-@pytest.mark.xfail(strict=True, reason=".chart: artista não é lido (compara com 'Artista Desconhecido', o padrão é 'Artista')")
 def test_chart_import_reads_artist(tmp_path):
     assert _chart_song(tmp_path).artist == "Diag"
 
 
-@pytest.mark.xfail(strict=True, reason=".chart: seção [Events] não é lida")
 def test_chart_import_reads_events(tmp_path):
     assert _chart_song(tmp_path).events
 
 
-@pytest.mark.xfail(strict=True, reason="bateria do .chart usa lanes orange/red, que não existem em DRUM_NOTES: bumbo/caixa somem")
 def test_chart_drums_export_kick_and_snare(tmp_path):
     mid = generate_rbn_midi(_chart_song(tmp_path))
     notes = {m.note for m in _ons(_track(mid, "PART DRUMS"))}
@@ -189,7 +186,6 @@ def test_chart_drums_export_kick_and_snare(tmp_path):
 # ---------------------------------------------------------------------------
 # Bateria do auto-charter / editor — quebrado
 # ---------------------------------------------------------------------------
-@pytest.mark.xfail(strict=True, reason="auto-charter e Mini-REAPER usam lanes orange/red para bumbo/caixa; o gerador MIDI só conhece kick/snare")
 def test_drum_kick_snare_lanes_are_exported():
     from src.creator.auto_charter import auto_generate_chart
     s = ChartSong()

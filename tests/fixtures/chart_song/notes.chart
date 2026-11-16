@@ -1,0 +1,48 @@
+[Song]
+{
+  Name = "Chart Fixture"
+  Artist = "Banda Teste"
+  Album = "Disco"
+  Year = ", 1999"
+  Charter = "Fulano"
+  Resolution = 192
+}
+[SyncTrack]
+{
+  0 = TS 4
+  0 = B 120000
+}
+[Events]
+{
+  0 = E "section Intro"
+  768 = E "section Verse 1"
+  800 = E "lyric la"
+  1536 = E "end"
+}
+[ExpertSingle]
+{
+  0 = N 0 0
+  192 = N 1 0
+  192 = N 5 0
+  256 = N 2 0
+  256 = N 5 0
+  384 = N 3 0
+  384 = N 6 0
+  576 = N 7 0
+  768 = N 0 96
+  768 = S 2 384
+}
+[HardSingle]
+{
+  0 = N 0 0
+  768 = S 2 384
+}
+[ExpertDrums]
+{
+  0 = N 0 0
+  0 = N 32 0
+  192 = N 1 0
+  384 = N 2 0
+  576 = N 3 0
+  768 = N 4 0
+}

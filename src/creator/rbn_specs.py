@@ -101,6 +101,14 @@ DRUM_NOTES = {
     }
 }
 
+# Vocabulário único das lanes de bateria = chaves de DRUM_NOTES (kick, snare,
+# yellow, blue, green). Os botões coloridos do estúdio (5 casas) e projetos
+# antigos usam cores: laranja = bumbo, vermelho = caixa.
+DRUM_PAD_TO_LANE = {"orange": "kick", "red": "snare", "open": "kick",
+                    "yellow": "yellow", "blue": "blue", "green": "green"}
+DRUM_LANE_TO_PAD = {"kick": "orange", "double_kick": "orange", "snare": "red",
+                    "yellow": "yellow", "blue": "blue", "green": "green"}
+
 # Marcadores Pro Drums (Pratos vs Tons)
 DRUM_CYMBAL_MARKERS = {
     "yellow_cymbal": 110,   # Marca o tom amarelo como Prato Chimbal

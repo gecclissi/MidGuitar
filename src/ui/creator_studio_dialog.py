@@ -2148,8 +2148,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             track_key = "keys"
 
         target_lane = lane
-        if lane == "open":
-            target_lane = "orange" if track_key == "drum" else "green"
+        if track_key == "drum":
+            # Botões coloridos -> lanes da bateria (laranja/aberto = bumbo, vermelho = caixa)
+            from src.creator.rbn_specs import DRUM_PAD_TO_LANE
+            target_lane = DRUM_PAD_TO_LANE.get(lane, lane)
+        elif lane == "open":
+            target_lane = "green"
 
         note = NoteEvent(time_ms=elapsed_ms, lane=target_lane, duration_ms=self.timeline.default_sustain_ms, difficulty=self.timeline.current_difficulty)
         self.song.add_note(track_key, note)
@@ -2353,7 +2357,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             return
         track = self.track_combo.get()
         if "Bateria" in track:
-            drum_map = {"green": 49, "red": 38, "yellow": 42, "blue": 47, "orange": 36, "open": 36}
+            drum_map = {"green": 49, "red": 38, "yellow": 42, "blue": 47, "orange": 36, "open": 36,
+                        "kick": 36, "snare": 38}
             note = drum_map.get(lane, 38)
             self.audio.play_note(note, velocity=115, channel=9)
             self.after(200, lambda n=note: self.audio.stop_note(n, channel=9))
@@ -2468,10 +2473,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                     notes = self.timeline._get_notes()
                     cur_diff = self.timeline.current_difficulty
                     triggered_lanes = []
+                    from src.creator.rbn_specs import DRUM_LANE_TO_PAD
+                    is_drum = self.timeline.current_track == "drum"
                     for n in notes:
-                        if n.difficulty == cur_diff and n.lane in ["green", "red", "yellow", "blue", "orange"]:
+                        pad = DRUM_LANE_TO_PAD.get(n.lane) if is_drum else n.lane
+                        if n.difficulty == cur_diff and pad in ["green", "red", "yellow", "blue", "orange"]:
                             if prev_ms < n.time_ms <= elapsed_ms:
-                                triggered_lanes.append(n.lane)
+                                triggered_lanes.append(pad)
                     for lane in triggered_lanes[:3]:
                         self._highlight_fret_button(lane, True)
                         self._play_fret_audio(lane)

@@ -14,6 +14,8 @@ LANE_COLORS = {
     "yellow": "#FACC15",
     "blue": "#38BDF8",
     "orange": "#FB923C",
+    "kick": "#FB923C",
+    "snare": "#EF4444",
     "purple": "#C084FC",
     "overdrive": "#A855F7",
     "solo": "#F59E0B",
@@ -52,8 +54,8 @@ LANE_NAMES_PRO_KEYS = [
 ]
 
 LANE_NAMES_DRUMS = [
-    ("orange", "Bumbo (Pedal Laranja)"),
-    ("red", "Caixa (Pad Vermelho)"),
+    ("kick", "Bumbo (Pedal Laranja)"),
+    ("snare", "Caixa (Pad Vermelho)"),
     ("yellow", "Chimbal (Amarelo)"),
     ("blue", "Tom / Condução (Azul)"),
     ("green", "Prato Ataque (Verde)"),
