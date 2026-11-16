@@ -1,0 +1,171 @@
+# Diagnóstico completo de funcionalidades (2026-11-16)
+
+Passo 1 do programa de testes. Só diagnóstico: nenhum código do produto foi alterado.
+Testes de aceitação novos em `tests/acceptance/test_diagnostico.py` (13 passam, 24 `xfail(strict=True)`
+descrevem os bugs abaixo; quando um bug for corrigido o teste vira XPASS e acusa: tire o xfail).
+`pytest -q`: **115 passed, 2 skipped, 24 xfailed**.
+
+Legenda: ✅ funciona · ⚠️ parcial · ❌ quebrado/inexistente · 🖐 manual (precisa de hardware, jogo ou olho humano).
+Severidade: **C** crítica (resultado inutilizável no jogo) · **A** alta · **M** média · **B** baixa.
+
+Referências usadas (cópias em scratch, originais intocados): Joe Dassin (pasta Clone Hero, 154 mudanças de
+tempo), CON do Xbox (Joe Dassin), PS3 extraídos (Gorillaz `.mogg` v13, 5SOS `.mogg` v11, `.mid.edat` NPD),
+`Gorillaz - Andromeda.pkg`, mod GHWT:DE (PAVLO). Não existe `.chart` real: usei um `.chart` sintético.
+
+## 1. Importação
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| Pasta Clone Hero (`notes.mid`) | ⚠️ | Notas por trilha/dificuldade batem 100% com a fonte (ex.: guitarra X/H/M/E 1468/1266/1262/528; Pro Guitar 3037/2030/636/159; Pro Keys 727/610/463/347), 154 tempos, 14 eventos, 409 sílabas. **Perde**: overdrive 116 (15→0), marcadores de tom 110-112 (15→0), fills 120-124 (190→0), frases vocais 105 (35→1 ao exportar), canais de Pro Guitar (ghost/abafada), HARM1-3, PART RHYTHM/GHL/ELITE_DRUMS/REAL_GUITAR_22/VENUE. HOPO forçado (101) vira "nota" com lane `force_hopo`. | `chart_importer._parse_midi_into_song` | A |
+| `song.ini` | ⚠️ | Lê nome/artista/álbum/ano/gênero/charter/diff_guitar/bass/drums/keys/band. Ignora `preview_start_time` (72497→30000), `diff_vocals`, `diff_*_real`, `pro_drums`, `delay`, `song_length`, `hopo_frequency`. | `chart_importer.import_song_from_folder` | M |
+| Pasta com `notes.chart` | ⚠️ | Notas, sustain e mapa de tempo/compasso corretos. Ignora artista (compara com "Artista Desconhecido", padrão real é "Artista"), `[Events]`, star power `S 2`, forçadas/open `N 5/6/7`. Bateria vira lanes `orange`/`red` (ver bateria abaixo). | `_parse_chart_file_into_song` | M |
+| Pasta RB3 solta (`songs/<x>/x.mid`) | ⚠️ | Só funciona apontando para `songs/<x>/`. Na raiz do pacote ou em `songs/` carrega 0 notas. `songs.dta` só é lido no formato de 1 linha que o próprio app gera. | `import_song_from_folder` | M |
+| Pasta PS3 extraída (`.mid.edat` + `.mogg` criptografado) | ❌ | 0 notas (`.mid.edat` não é lido), título "Nova Música" (`songs.dta` real com chaves entre aspas e quebras de linha não casa a regex), `audio_path` aponta para `*_extracted.ogg` **que não existe**: exportações saem sem áudio, sem aviso. | `import_song_from_folder` | A |
+| Pacote CON do Xbox 360 (arquivo) | ❌ | `NotADirectoryError`; a UI só aceita pastas. Não há leitor STFS. | — | A |
+| `.pkg` do PS3 direto | ❌ | `NotADirectoryError`; não há leitor de PKG (só o script descartável `music/_tools/pkg_debug_extract.py`). | — | A |
+| Mod GHWT:DE (`.pak.xen`/`.fsb.xen`) | ❌ | Lê só o título ([ModInfo]/[SongInfo] por acaso); 0 notas, sem áudio. | — | M |
+| `.mid` solto | ⚠️ | Funciona se estiver sozinho numa pasta (qualquer nome). Soltar um `.mid` na janela é ignorado (drop aceita só pasta/áudio/letra). | `_on_files_dropped` | B |
+| `.mogg` solto | ⚠️ | Não criptografado (0x0A): extrai OGG ✅. Criptografado (0x0B/0x0D): devolve o próprio `.mogg`, nada é gravado; quem chama trata como sucesso. Grava `*_extracted.ogg` **ao lado da origem**. | `_load_audio_file_smart`, `extract_ogg_from_mogg` | M |
+
+## 2. Áudio
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| `analyze_audio_file` | ⚠️ | Duração/início/fim corretos (opus 245,5 s). BPM com resolução de 50 ms: clique 128→133, 145→150, 166→171; stem de guitarra do Joe (166 BPM)→80. `.mogg` criptografado → devolve padrões silenciosamente (180 s, 120 BPM). | `mogg_generator.analyze_audio_file` | M |
+| `convert_audio_to_ogg` wav/mp3 | ✅ | WAV e MP3 → OGG Vorbis. | `convert_audio_to_ogg` | — |
+| `convert_audio_to_ogg` opus | ❌ | `.opus` começa com `OggS` e é só **copiado**: sai `.ogg` com Opus dentro. | `convert_audio_to_ogg` | C |
+| `create_unencrypted_mogg` | ⚠️ | Cabeçalho 0x0A + tabela correta a partir de WAV/OGG Vorbis; ida e volta OK. A partir de `.opus` o `.mogg` leva Opus (RB3 não toca). Sempre 2 canais (só o 1º áudio). | `create_unencrypted_mogg` | C |
+| `extract_ogg_from_mogg` | ✅ | Não gera lixo em `.mogg` criptografado (devolve a origem). Problema está em quem chama (importador). | `extract_ogg_from_mogg` | — |
+| Stems multitrack | ❌ | DTA declara 8 canais fixos (`guitar 0 1, bass 2, drum 3 4, keys 5 6, vocals 7`) quando há >1 stem, mas o `.mogg` tem 2 canais (validador: `DTA_MOGG_CHANNELS`). Stems `.opus` copiados soltos para a pasta da música. No Clone Hero, `song.ogg` = cópia do `guitar.opus` + todos os stems → guitarra dobrada. | exportadores, `rb3_dta_exporter.generate_songs_dta_content` | A |
+
+## 3. Letras e vocais
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| `.txt` / `.lrc` / `.srt` | ✅ | txt a partir de 4 s no BPM; lrc/srt nos tempos marcados; nenhuma sílaba com timestamp ou índice. | `lyric_processor.align_lyrics_to_song` | — |
+| Divisão silábica | ⚠️ | Boa em PT/FR (`a-mou-reux`, `can-tan-do`); erra inglês (`lo-ve`). | `syllabify_word` | B |
+| Geração de vocal | ✅ | 13 notas para 2 versos, fim de frase marcado. Altura é um ciclo fixo (60..72). | `auto_generate_chart` | B |
+| Sem letra = sem microfone | ✅ | 0 notas vocais, `(vocal_parts 0)`. Obs.: `tracks` do DTA ainda lista `vocals`. | `auto_generate_chart`, DTA | B |
+
+## 4. Auto-chart e edição
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| Banda Completa / Kit RB2-GH / Só Guitarra, Baixo, Teclado, Pro Guitar, Pro Bass, Pro Keys, Vocal | ✅ | Áudio real (60 s do stem de guitarra): todos geram só os instrumentos pedidos, nas 4 dificuldades (ex.: guitarra 147/140/89/40), em <1 s. "Só Vocal" sem letra gera nada (correto). Sem áudio: 180 s a 120 BPM. | `auto_charter.auto_generate_chart` | — |
+| Só Bateria (e bateria em qualquer modo) | ❌ | Gera lanes `orange` (bumbo) e `red` (caixa), que não existem em `DRUM_NOTES` (`kick`/`snare`): **bumbo e caixa somem no MIDI** (756→507 notas). Mesmo problema no editor (Mini-REAPER) e no `.chart`; e o bumbo/caixa importados de um `.mid` (lanes `kick`/`snare`) ficam invisíveis no editor. | `auto_charter`, `mini_reaper_canvas.LANE_NAMES_DRUMS`, `rbn_specs.DRUM_NOTES` | C |
+| Gerar só faltantes | ⚠️ | Preserva trilhas existentes, mas gera na grade de BPM constante (166) ignorando o mapa de 154 tempos do Joe → fora do tempo. | `generate_missing_instruments_only` | M |
+| Ranking 0-6 automático (botão da Aba 4) | ⚠️ | Conta notas de todas as dificuldades + marcadores: Joe dá 6 em tudo. O ranking definido pelo próprio auto-charter é razoável. Fórmula DTA `val*60+50` não segue os tiers Harmonix. | `_on_auto_calc_rankings_clicked`, `rank_to_dta` | M |
+| Modelo: adicionar/remover nota | ⚠️ | Inserção ordenada ✅. `remove_note_near` e o clique-toggle do editor ignoram a dificuldade (remove a nota Expert ao editar Easy). | `ChartSong.remove_note_near`, `MiniReaperCanvas._on_canvas_click` | M |
+| Salvar/abrir projeto | ❌ | A UI **não tem** salvar/abrir projeto. `to_dict/from_dict` existem mas perdem `vocal_notes`, `lyrics_raw`, `diff_vocals`, `audio_stems`, `duration_ms`, `audio_offset_ms`. | `ChartSong.to_dict` | A |
+
+## 5. Exportação (a: auto-chart; b: Joe importado) + validador + reimportação
+
+| Destino | Status | Validador (a / b) | Reimportação | Código | Sev |
+|---|---|---|---|---|---|
+| Clone Hero | ⚠️ | 0 erros / 0 erros | (a) idêntica exceto bateria (bumbo/caixa perdidos); (b) contagens idênticas, tempo ≤1 ms. Perdas da seção 1 (OD, frases, tom markers…) e `song.ini` regravado (preview 30000, `icon = midguitar`, sem `pro_drums`). | `clonehero_exporter.export_clone_hero_song` | A |
+| RB3 (pasta `songs/`) | ❌ | `PS3_MISSING_EDAT`, `PS3_PLAIN_MID` (+`DTA_MOGG_CHANNELS` em b) | contagens OK a partir de `songs/<x>/` | `rb3_dta_exporter.export_rb3_song_package` | C |
+| PS3 / RPCS3 | ❌ | idem | idem | `ps3_pkg_exporter.export_ps3_pkg_structure` | C |
+| RB2 | ❌ | idem + `PROFILE_UNVERIFIED` | perde Keys/Pro (esperado no RB2) | `rb2_exporter.export_rb2_song_package` | C |
+| Xbox 360 | ❌ | `XBOX_NO_CON_PACKAGE` | contagens OK | `xbox360_exporter.export_xbox360_structure` | C |
+| PS4 | ❌ | `PS4_NO_SONGDTA` | contagens OK | `ps4_exporter.export_ps4_structure` | C |
+| Aviso do validador na UI | ✅ | Os 6 botões rodam e mostram "Sucesso" + lista de erros como aviso. | `_show_export_result` | — |
+
+Problemas comuns RB3/PS3/RB2/Xbox/PS4: `.mid` solto (sem `.mid.edat`), sem `gen/*.milo_ps3` e `*_keep.png_ps3`,
+nenhum `.pkg`/CON é gerado (só `package.conf` / `project.gp4`), `.mogg` com Opus quando a origem é `.opus`.
+PS3: layout `USRDIR/songs/` (os pacotes reais usam `USRDIR/<pasta>/songs/`) e o `.bat` copia para
+`BLUS30463/USRDIR/songs`, então cada música instalada **sobrescreve o `songs.dta` da anterior**.
+DTA RB3: `(drum_solo (seq 96 …))` (real: `(seqs (kick.cue …))`), `tracks` lista instrumentos sem notas,
+sem `song_length`/`vocal_gender`/`tracks_count`/`encoding` (acentos), aspas do título não escapadas.
+RB2: `decade the10s` e `vocal_gender male` fixos. Xbox: arquivos duplicados em `songs/` e `Content/`.
+
+## 6. Pacotes
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| Escanear pasta | ✅ | Achou 3 músicas (CH .mid, CH auto, .chart). | `pack_compiler.scan_folder_for_songs` | — |
+| Pacote PS3 (4 músicas) | ⚠️ | `songs.dta` unificado com 4 entradas, nomes curtos sem colisão. Herda todos os erros PS3; música sem áudio sai sem `.mogg` sem aviso (`LAYOUT_MISSING_MOGG`). `song_id` = `1010000000 + idx*100 + hash%90` → colide entre pacotes diferentes. | `compile_ps3_song_pack` | A |
+| Pacote Clone Hero | ✅ | Uma pasta por música, validador sem erros. Duas músicas com mesmo artista/título se sobrescrevem. | `compile_clone_hero_pack` | B |
+
+## 7. Palco ao vivo / MIDI
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| Listar portas / gamepads | ✅ | Entradas: nenhuma nesta máquina; saída: GS Wavetable. `find_rockband_midi_input` cai em "qualquer porta" se não achar Rock Band. | `midi/detector.py` | B |
+| Presets (4) | ✅ | Carregam; modos `strum_required`/`instant_or_strum`/`passthrough`. | `config_manager.load_preset` | — |
+| Mapper (casas + palhetada + oitava) | ✅ | Verde+palhetada → [52,59,64]; laranja → [48,55,60]; oitava +1 soma 12. | `midi/mapper.GuitarMapper` | — |
+| Leitor: bateria canal 10 | ✅ | Kick 36 → evento de bateria + som no canal 9. | `MIDIReader._midi_callback` | — |
+| Leitor: Pro Guitar canais 1-6 | ✅ | Ch1 nota 67 → corda 1 casa 3. | idem | — |
+| Leitor: modo AUTO teclado | ❌ | Teclado no canal 1 (README: "C3..C5 no canal 1 → Teclado") vira Pro Guitar com casa negativa (-4, -16). Em outros canais, notas 48-55/60-67 viram casas da guitarra 5 botões. | idem | M |
+| Leitor: palhetada MIDI em AUTO | ❌ | Notas 69/71/72 só são vistas se estiverem em `DEFAULT_RB_MIDI_NOTES` (não estão) → vira tecla. Guitarra 5 botões via MIDI fica muda em AUTO (`strum_required`). | idem | M |
+| Motor de áudio | ✅ / 🖐 | Inicia (synth nativo ID 0), carrega samples wav/opus, fecha limpo. Som real: manual. | `audio/engine.AudioEngine` | — |
+| Gamepad, visualizadores, whammy, ribbon | 🖐 | Precisa de hardware. | `reader.start_gamepad_listener`, `ui/*_view.py` | — |
+
+## 8. Interface e build
+
+| Funcionalidade | Status | Evidência | Código | Sev |
+|---|---|---|---|---|
+| Janela principal | ✅ | `MidGuitarApp()` constrói e fecha. | `ui/app.py` | — |
+| Estúdio (5 abas) | ✅ | Constrói; importar pasta, ranking, sincronizar campos, 6 exportações, "Gerar tudo" com áudio, play/stop, diálogo de letras, redraw — sem exceção. | `ui/creator_studio_dialog.py` | — |
+| Arrastar e soltar | ✅ / 🖐 | `tkinterdnd2` registra o alvo no Toplevel; o drop real é manual. | `_setup_drag_and_drop` | — |
+| Botão "Tutorial Visual" | ⚠️ | Abre `TUTORIAL_VISUAL.md` relativo ao diretório atual; o arquivo não vai no build → não faz nada no `.exe`. | `_build_guide_tab` | B |
+| Texto da UI "Clone Hero / YARG / GHWT" | ❌ | Promete pasta "DATA/MODS do GHWT Definitive Edition"; o GHWT:DE não lê `song.ini`+`notes.mid`. | `_update_target_game_desc` | M |
+| `build_exe.py` (só revisado) | ⚠️ | Sem `--paths=.` (depende do diretório atual para achar `src`), `TUTORIAL_VISUAL.md` fora do `--add-data`, `config.json` gravado ao lado do `.exe` (falha em `Program Files`). Coleta customtkinter/rtmidi/pygame/PIL/soundfile/tkinterdnd2 ✅. | `build_exe.py`, `config_manager.get_user_dir` | B |
+
+## Contagem
+
+| Status | Itens |
+|---|---|
+| ✅ funciona | 16 (+2 ✅ com parte manual) |
+| ⚠️ parcial | 16 |
+| ❌ quebrado / inexistente | 16 |
+| 🖐 manual | 1 (+ as 2 partes manuais acima) |
+| **Total de linhas avaliadas** | **51** |
+
+## Problemas priorizados por passo do programa
+
+### (2) Ciclo Clone Hero
+1. **C** Bateria: lanes `orange`/`red` (auto-charter, editor, `.chart`) vs `kick`/`snare` (`DRUM_NOTES`, importador `.mid`) → bumbo e caixa somem no MIDI; bumbo/caixa importados ficam invisíveis no editor. Unificar o nome das lanes.
+2. **A** Importador `.mid` descarta overdrive, solo, frases vocais (105), marcadores de tom, fills, HARM1-3 e canais Pro Guitar → qualquer custom importado e reexportado perde Star Power, frases e pro drums. Preservar (ou repassar intactas) as trilhas/marcadores não editados.
+3. **A** Áudio CH: `.opus` copiado como `song.ogg` + stems copiados → guitarra dobrada. Não gerar `song.ogg` quando há stems; manter extensão real.
+4. **A** Não há salvar/abrir projeto; `to_dict` perde vocais, letra, stems, duração.
+5. **M** `song.ini`: importar/preservar `preview_start_time`, `delay`, `pro_drums`, `diff_*_real`, `diff_vocals`, `song_length`.
+6. **M** `.chart`: artista, `[Events]`, star power, forçadas/open.
+7. **M** Ranking 0-6 da UI conta todas as dificuldades (sempre 6).
+8. **M** BPM com resolução de 50 ms; "gerar faltantes" ignora o mapa de tempos.
+
+### (3) Exportação PS3 no formato real
+1. **C** `.mid` em vez de `.mid.edat`; sem `milo_ps3`/`png_ps3`; nenhum `.pkg` gerado.
+2. **C** `.mogg` com Opus quando a origem é `.opus` (converter para Vorbis de verdade).
+3. **C** Layout `USRDIR/songs/` + `.bat` copiando para `BLUS30463/USRDIR/songs` → cada instalação sobrescreve o `songs.dta` anterior. Usar `USRDIR/<pasta única>/songs/`.
+4. **A** Multitrack: DTA com 8 canais fixos x `.mogg` de 2 canais; stems soltos copiados. Montar o `.mogg` multicanal a partir dos stems e gerar `tracks`/`pans`/`vols` coerentes.
+5. **M** DTA: `drum_solo` no formato errado, `tracks` com instrumentos vazios, sem `song_length`/`vocal_gender`/`encoding`, aspas não escapadas, fórmula de rank fora dos tiers, `song_id` colidindo entre pacotes.
+
+### (3b) Importação PS3 (pkg / edat / mogg)
+1. **A** Ler `.mid.edat` (NPD) e `.mogg` criptografado (v11/v13); hoje 0 notas e áudio inexistente sem aviso.
+2. **A** `audio_path` apontando para `*_extracted.ogg` inexistente (usar o retorno de `extract_ogg_from_mogg` e avisar).
+3. **A** Parser de `songs.dta` real (chaves com aspas, multi-linha) — já existe `validation.parse_dta`, reutilizar.
+4. **A** Importar `.pkg` direto e aceitar a raiz do pacote / `songs/` (procurar `songs/*/`).
+5. **M** Não gravar `*_extracted.ogg` ao lado da origem (usar pasta temporária/cache).
+
+### (4) Xbox CON / RB2 / PS4 / GHWT:DE
+1. **C** Xbox 360: gerar e ler pacote CON/STFS (export hoje é pasta solta; import inexistente).
+2. **C** RB2: mesmos problemas do PS3 + `decade`/`vocal_gender` fixos; perfil não verificado.
+3. **C** PS4: gerar `.songdta_ps4`, `.rbmid_ps4`, `.moggsong`.
+4. **M** GHWT:DE: import inexistente; texto da UI promete compatibilidade que não existe.
+
+### (5) Checklists manuais
+- Conectar Mustang/Squier, teclado RB3, bateria e MIDI Pro Adapter: modo AUTO, visualizadores, som, whammy/ribbon.
+- Gamepad USB (guitarra 5 botões) e teclas do PC na barra de toque do estúdio.
+- Playtest do Mini-REAPER com áudio (sincronia visual/sonora) e arrastar-e-soltar real de MP3/letra/pasta.
+- Clone Hero/YARG: abrir o export do Joe e de uma música auto-gerada (sem guitarra dobrada, Star Power, pro drums).
+- RPCS3 (RB3/RB2), Xbox (Xenia/console) e PS4 (GoldHEN): só depois das fases 3-4; usar o validador antes.
+- `.exe` gerado por `build_exe.py`: abrir de uma pasta qualquer, salvar config, botão do tutorial.
+
+### Outros bugs
+- **M** MIDI AUTO: canal 1 sempre vira Pro Guitar (teclado RB3 vira casa negativa); notas 48-55/60-67 viram guitarra 5 botões; palhetada 69/71/72 inalcançável.
+- **M** `remove_note_near` e o clique do editor ignoram a dificuldade.
+- **B** `generate_rbn_midi` altera a música (recalcula dificuldades) como efeito colateral.
+- **B** Pro Guitar: exportador limita casa a 17 (importador aceita 22; Squier tem 22).
+- **B** Botão do tutorial e `build_exe.py` (caminho relativo, `--paths`, config ao lado do `.exe`).
+- **B** Pacote CH: músicas com mesmo artista/título se sobrescrevem; `detect_target` devolve `rb3_ps3` para exports Xbox/PS4 (pasta `songs/`).
+- **B** Divisão silábica erra em inglês.
