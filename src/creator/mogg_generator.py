@@ -93,9 +93,10 @@ def is_vorbis_ogg(path: str) -> bool:
     return get_ogg_codec(path) == "vorbis"
 
 
-def convert_audio_to_ogg(source_path: str, target_ogg_path: str) -> bool:
+def convert_audio_to_ogg(source_path: str, target_ogg_path: str, target_rate: int = None) -> bool:
     """
     Converte qualquer arquivo de áudio (.mp3, .wav, .flac, .ogg, .mogg) para OGG Vorbis padrão.
+    target_rate: reamostra para essa taxa (o .mogg do Rock Band exige 44100 Hz).
     """
     if not source_path or not os.path.exists(source_path):
         return False
@@ -107,6 +108,9 @@ def convert_audio_to_ogg(source_path: str, target_ogg_path: str) -> bool:
 
     # Já é Ogg Vorbis: só copia. Ogg com Opus (ou outro codec) é decodificado e regravado
     # como Vorbis abaixo, porque o Rock Band não toca Opus dentro do .mogg.
+    if target_rate:
+        return _convert_resampled(source_path, target_ogg_path, int(target_rate))
+
     try:
         if is_vorbis_ogg(source_path):
             if os.path.abspath(source_path) != os.path.abspath(target_ogg_path):
@@ -134,6 +138,34 @@ def convert_audio_to_ogg(source_path: str, target_ogg_path: str) -> bool:
     except Exception as e:
         print(f"[MoggGenerator] Erro ao converter {source_path} para OGG via soundfile: {e}")
         return False
+
+
+def _convert_resampled(source_path: str, target_ogg_path: str, target_rate: int) -> bool:
+    """Converte para Ogg Vorbis estéreo em target_rate (copia se já estiver assim)."""
+    try:
+        import soundfile as sf
+        info = sf.info(source_path)
+        if (info.samplerate == target_rate and info.channels <= 2 and is_vorbis_ogg(source_path)):
+            if os.path.abspath(source_path) != os.path.abspath(target_ogg_path):
+                shutil.copy2(source_path, target_ogg_path)
+            return True
+        from src.creator.audio_resample import read_audio
+        data = read_audio(source_path, target_rate, channels=2)
+        write_vorbis(target_ogg_path, data, target_rate)
+        return os.path.exists(target_ogg_path)
+    except Exception as e:
+        print(f"[MoggGenerator] Erro ao converter {source_path} para OGG {target_rate} Hz: {e}")
+        return False
+
+
+def write_vorbis(target_ogg_path: str, data: np.ndarray, samplerate: int, block: int = 65536):
+    """Grava (frames, canais) float32 como Ogg Vorbis em blocos (evita crash do libvorbis)."""
+    import soundfile as sf
+    data = np.clip(data, -1.0, 1.0)
+    with sf.SoundFile(target_ogg_path, "w", samplerate=samplerate, channels=data.shape[1],
+                      format="OGG", subtype="VORBIS") as fout:
+        for i in range(0, len(data), block):
+            fout.write(np.ascontiguousarray(data[i:i + block], dtype=np.float32))
 
 
 def _parse_ogg_pages(ogg_path: str):
@@ -185,6 +217,20 @@ def _parse_ogg_pages(ogg_path: str):
     return pages, total_bytes, max_samples
 
 
+MOGG_SAMPLE_RATE = 44100
+
+
+def _is_rb_ready_vorbis(path: str) -> bool:
+    """Ogg Vorbis a 44100 Hz (qualquer número de canais): pode entrar no .mogg sem regravar."""
+    try:
+        if not is_vorbis_ogg(path):
+            return False
+        import soundfile as sf
+        return sf.info(path).samplerate == MOGG_SAMPLE_RATE
+    except Exception:
+        return False
+
+
 def create_unencrypted_mogg(source_audio_path: str, target_mogg_path: str) -> bool:
     """
     Gera um arquivo .mogg oficial (cabeçalho 0x0A + Seek Table + stream Ogg Vorbis)
@@ -202,15 +248,14 @@ def create_unencrypted_mogg(source_audio_path: str, target_mogg_path: str) -> bo
 
     temp_ogg = None
     try:
-        # Só Ogg Vorbis é usado direto; Opus e demais formatos são convertidos para um OGG temporário
-        is_ogg = is_vorbis_ogg(source_audio_path)
-
-        if is_ogg:
+        # Só Ogg Vorbis a 44100 Hz é usado direto; Opus, outras taxas e demais formatos
+        # são convertidos (e reamostrados) para um OGG temporário
+        if _is_rb_ready_vorbis(source_audio_path):
             ogg_path = source_audio_path
         else:
             fd, temp_ogg = tempfile.mkstemp(suffix=".ogg")
             os.close(fd)
-            if not convert_audio_to_ogg(source_audio_path, temp_ogg):
+            if not convert_audio_to_ogg(source_audio_path, temp_ogg, target_rate=MOGG_SAMPLE_RATE):
                 return False
             ogg_path = temp_ogg
 
