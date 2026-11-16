@@ -179,11 +179,15 @@ def _floats(vals) -> str:
 def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = None,
                                layout: Optional[AudioLayout] = None,
                                song_length_ms: Optional[int] = None,
-                               album_art: Optional[bool] = None) -> str:
+                               album_art: Optional[bool] = None,
+                               rb2: bool = False) -> str:
     """Gera o texto de definição songs.dta conforme a sintaxe oficial Harmonix.
 
     layout: canais reais do .mogg (rb_mogg_multitrack); sem ele, mix estéreo de 2 canais.
-    O texto é para gravar em UTF-8 (a entrada declara `encoding utf8`)."""
+    O texto é para gravar em UTF-8 (a entrada declara `encoding utf8`).
+    rb2=True: modo Rock Band 2 (só campos que o RB2 conhece; ver _generate_rb2_dta)."""
+    if rb2:
+        return _generate_rb2_dta(song, shortname, song_id, album_art)
     if song_id is None:
         song_id = stable_song_id(song)
     charted = charted_instruments(song)
@@ -276,6 +280,109 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
    (album_name "{_q(song.album)}")
    (album_track_number {track_number}){tuning}
    (author "{_q(song.charter)}")
+)
+"""
+
+
+def rb2_decade(year) -> str:
+    """Ano -> símbolo de década do DTA (the60s ... the10s); o RB2 não conhece décadas
+    fora dessa faixa, então anos extremos são limitados a ela."""
+    y = _int_or(year, 2010)
+    if y >= 2010:
+        return "the10s"
+    if y >= 2000:
+        return "the00s"
+    return "the%ds" % max(60, min(90, (y // 10) * 10 % 100))
+
+
+def latin1_safe(text: str) -> str:
+    """Troca o que o latin-1 (codificação do DTA do RB2) não representa pela letra base
+    (ou '?'), em vez de perder o caractere sem aviso."""
+    import unicodedata
+    out = []
+    for ch in text:
+        try:
+            ch.encode("latin-1")
+            out.append(ch)
+        except UnicodeEncodeError:
+            base = unicodedata.normalize("NFKD", ch)
+            base = "".join(c for c in base if c.isascii())
+            out.append(base or "?")
+    return "".join(out)
+
+
+def _generate_rb2_dta(song: ChartSong, shortname: str, song_id: Optional[int],
+                      album_art: Optional[bool]) -> str:
+    """songs.dta do Rock Band 2: format 4, game_origin rb2, sem teclado nem real_*,
+    sem `encoding` (o jogo lê latin-1) e mix estéreo único de 2 canais."""
+    if song_id is None:
+        song_id = stable_song_id(song, salt="rb2")
+    has_vocals = bool(song.vocal_notes)
+    has_guitar = bool(song.guitar_notes)
+    has_bass = bool(song.bass_notes)
+    has_drums = bool(song.drum_notes)
+    if album_art is None:
+        album_art = True
+    preview_start = max(0, int(song.preview_start_ms or 0))
+    rating = _int_or(_ini(song, "rating"), 2)
+    rating = rating if 1 <= rating <= 4 else 2
+    track_number = max(1, _int_or(_ini(song, "album_track"), 1))
+    gender = ""
+    if has_vocals and _ini(song, "vocal_gender"):
+        gender = "\n   (vocal_gender %s)" % _vocal_gender(song)
+    band = any([has_drums, has_guitar, has_bass, has_vocals])
+    return f"""({shortname}
+   (name "{_q(song.title)}")
+   (artist "{_q(song.artist)}")
+   (master TRUE)
+   (context 2000)
+   (song
+      (name "songs/{shortname}/{shortname}")
+      (tracks
+         ((guitar (0 1))
+          (bass (0 1))
+          (drum (0 1))
+          (vocals (0 1))
+         )
+      )
+      (vocal_parts {1 if has_vocals else 0})
+      (pans (-1.0 1.0))
+      (vols (-1.5 -1.5))
+      (cores (-1 -1))
+      (drum_solo
+         (seqs (kick.cue snare.cue tom1.cue tom2.cue crash.cue))
+      )
+      (drum_freestyle
+         (seqs (kick.cue snare.cue hat.cue ride.cue crash.cue))
+      )
+      (midi_file "songs/{shortname}/{shortname}.mid")
+   )
+   (song_scroll_speed 2300)
+   (bank "sfx/tambourine_bank.milo")
+   (anim_tempo kTempoMedium)
+   (preview {preview_start} {preview_start + 30000})
+   (rank
+      (drum {rank_value("drum", song.diff_drums, has_drums)})
+      (guitar {rank_value("guitar", song.diff_guitar, has_guitar)})
+      (bass {rank_value("bass", song.diff_bass, has_bass)})
+      (vocals {rank_value("vocals", song.diff_vocals, has_vocals)})
+      (band {rank_value("band", song.diff_band, band)})
+   )
+   (genre {rb3_genre(song.genre)})
+   (decade {rb2_decade(song.year)}){gender}
+   (format 4)
+   (version 1)
+   (fake FALSE)
+   (downloaded TRUE)
+   (game_origin rb2)
+   (song_id {song_id})
+   (rating {rating})
+   (short_version 0)
+   (album_art {"TRUE" if album_art else "FALSE"})
+   (year_released {_int_or(song.year, 2010)})
+   (album_name "{_q(song.album)}")
+   (album_track_number {track_number})
+   (base_points 500000)
 )
 """
 
