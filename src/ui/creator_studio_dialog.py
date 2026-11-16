@@ -1894,31 +1894,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _on_auto_calc_rankings_clicked(self):
         """Calcula automaticamente os rankings de 0 a 6 para cada instrumento com base nas notas atuais."""
-        def _calc_tier(notes_list):
-            if not notes_list:
-                return 0
-            cnt = len(notes_list)
-            if cnt < 80: return 1
-            if cnt < 180: return 2
-            if cnt < 320: return 3
-            if cnt < 500: return 4
-            if cnt < 750: return 5
-            return 6
-
-        self.song.diff_guitar = _calc_tier(self.song.guitar_notes)
-        self.song.diff_bass = _calc_tier(self.song.bass_notes)
-        self.song.diff_drums = _calc_tier(self.song.drum_notes)
-        self.song.diff_keys = _calc_tier(self.song.keys_notes)
-        self.song.diff_pro_guitar = _calc_tier(self.song.pro_guitar_notes)
-        self.song.diff_pro_bass = _calc_tier(self.song.pro_bass_notes)
-        self.song.diff_pro_keys = _calc_tier(self.song.pro_keys_notes)
-        self.song.diff_vocals = 0 if not self.song.vocal_notes else min(6, max(1, len(self.song.vocal_notes) // 25 + 1))
-
-        active_tiers = [t for t in [
-            self.song.diff_guitar, self.song.diff_bass, self.song.diff_drums,
-            self.song.diff_keys, self.song.diff_vocals
-        ] if t > 0]
-        self.song.diff_band = round(sum(active_tiers) / len(active_tiers)) if active_tiers else 0
+        from src.creator.difficulty import calculate_rankings
+        calculate_rankings(self.song)
         self._sync_song_to_fields()
 
     def _sync_fields_to_song(self):

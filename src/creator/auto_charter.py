@@ -365,17 +365,11 @@ def auto_generate_chart(
         _generate_lower_difficulties(song, selected_instruments)
 
     # 11. ATUALIZA RANKING DE DIFICULDADE (0 a 6 estrelas/pontos) AUTOMATICAMENTE
-    base_rank = 5 if "Metal" in intensity else (2 if "Pop" in intensity else 4)
-    song.diff_guitar = base_rank if song.guitar_notes else 0
-    song.diff_bass = max(1, base_rank - 1) if song.bass_notes else 0
-    song.diff_drums = base_rank if song.drum_notes else 0
-    song.diff_keys = max(1, base_rank - 1) if song.keys_notes else 0
-    song.diff_vocals = 3 if song.vocal_notes else 0
-    song.diff_pro_guitar = base_rank if song.pro_guitar_notes else 0
-    song.diff_pro_bass = max(1, base_rank - 1) if song.pro_bass_notes else 0
-    song.diff_pro_keys = base_rank if song.pro_keys_notes else 0
-    active_ranks = [r for r in [song.diff_guitar, song.diff_bass, song.diff_drums, song.diff_keys, song.diff_vocals] if r > 0]
-    song.diff_band = int(round(sum(active_ranks) / len(active_ranks))) if active_ranks else 3
+    # Pela densidade real de notas Expert de cada instrumento (ver difficulty.py)
+    from src.creator.difficulty import calculate_rankings
+    calculate_rankings(song)
+    if song.diff_band == 0:
+        song.diff_band = 3
 
     return song
 
