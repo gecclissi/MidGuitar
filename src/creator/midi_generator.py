@@ -22,7 +22,7 @@ from src.creator import passthrough as pt
 from src.creator.rbn_specs import (
     TICKS_PER_BEAT,
     FRET_NOTES, DRUM_NOTES, OPEN_NOTES, ENHANCED_OPENS_TEXT, BEAT_BAR_DOWNBEAT, BEAT_OFFBEAT,
-    GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE,
+    GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE, GUITAR_SOLO_MARKER,
     VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE, VOCAL_TALKIE
 )
 
@@ -345,6 +345,20 @@ def _merge_intervals(intervals: list) -> list:
     return [(s, e) for s, e in merged]
 
 
+def _merge_marker_intervals(intervals) -> list:
+    """Como _merge_intervals, para frases (início, fim[, velocity]): a frase unida fica
+    com a velocity da primeira (100 quando não informada)."""
+    merged = []
+    for iv in sorted((iv for iv in intervals if iv[1] > iv[0]), key=lambda x: (x[0], x[1])):
+        s, e = iv[0], iv[1]
+        v = int(iv[2]) if len(iv) > 2 else 100
+        if merged and s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e, v])
+    return [(s, e, v) for s, e, v in merged]
+
+
 def _resolve_overlaps(notes: list) -> list:
     """Remove sobreposições por (canal, altura).
 
@@ -387,7 +401,7 @@ def _emit_track(track: MidiTrack, notes: list, markers: dict = None, lyrics: lis
     for pitch, intervals in (markers or {}).items():
         if pitch in kept:
             continue
-        all_notes += [(s, e, pitch, 100, True, 0) for s, e in _merge_intervals(intervals)]
+        all_notes += [(s, e, pitch, v, True, 0) for s, e, v in _merge_marker_intervals(intervals)]
     resolved = _resolve_overlaps(all_notes)
 
     # Ordem no mesmo tick: note_off, letra/texto, note_on
@@ -422,7 +436,8 @@ def _build_vocal_track(track: MidiTrack, notes: list, tm: TempoMap, extras: dict
     - Letras cantadas sincronizadas (MetaMessage lyrics)
     - Frases vocais (Nota 105)
     - Frases de Overdrive (Nota 106)
-    Frases importadas (passthrough 105/106) valem no lugar das geradas.
+    Frases importadas guardam os limites exatos em phrase_start_ms/phrase_end_ms; as que
+    ficaram no passthrough (não representáveis) valem no lugar das geradas.
     """
     sung, lyrics = [], []
     markers = {VOCAL_PHRASE_MARKER: [], VOCAL_OVERDRIVE: []}
@@ -439,9 +454,18 @@ def _build_vocal_track(track: MidiTrack, notes: list, tm: TempoMap, extras: dict
 
     for n in notes:
         s_tick, e_tick = _note_ticks(tm, n.time_ms, n.duration_ms, MIN_VOCAL_TICKS)
+        p_start = getattr(n, "phrase_start_ms", None)
+        p_end = getattr(n, "phrase_end_ms", None)
+
+        # Nota que abre uma frase importada fecha a frase em aberto (notas novas antes dela)
+        if p_start is not None and phrase_start_tick is not None:
+            close_phrase(is_od_phrase)
+            phrase_start_tick = None
+            phrase_end_tick = None
+            is_od_phrase = False
 
         if phrase_start_tick is None:
-            phrase_start_tick = max(0, s_tick - 40)
+            phrase_start_tick = max(0, tm.ms_to_tick(p_start)) if p_start is not None else max(0, s_tick - 40)
             is_od_phrase = n.is_overdrive
 
         pitch = VOCAL_TALKIE if n.is_talkie else n.pitch
@@ -449,6 +473,8 @@ def _build_vocal_track(track: MidiTrack, notes: list, tm: TempoMap, extras: dict
             lyrics.append((s_tick, n.lyric))
         sung.append((s_tick, e_tick, pitch, getattr(n, "velocity", 100)))
         phrase_end_tick = e_tick + 40
+        if p_end is not None:
+            phrase_end_tick = max(phrase_start_tick + 1, tm.ms_to_tick(p_end))
 
         if n.is_phrase_end:
             close_phrase(is_od_phrase or n.is_overdrive)
@@ -460,22 +486,26 @@ def _build_vocal_track(track: MidiTrack, notes: list, tm: TempoMap, extras: dict
     if phrase_start_tick is not None and phrase_end_tick is not None:
         close_phrase(is_od_phrase)
 
-    if pt.extra_pitches(extras) & {VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE}:
+    # Frases que ficaram no passthrough valem no lugar das geradas (inclusive a 106,
+    # que segue os limites das frases 105)
+    if VOCAL_PHRASE_MARKER in pt.extra_pitches(extras):
         markers = {}
     return _emit_track(track, sung, markers, lyrics, extras, tm)
 
 
 def _build_instrument_track(track: MidiTrack, notes: list, note_map: dict, overdrive_note: int, tm: TempoMap,
-                            extras: dict = None):
-    """Converte lista de NoteEvent em note_on/note_off, com frases de Overdrive unidas.
+                            extras: dict = None, solo_note: int = GUITAR_SOLO_MARKER):
+    """Converte lista de NoteEvent em note_on/note_off, com frases de Overdrive e Solo unidas.
 
-    NoteEvent com lane "overdrive" (Star Power do auto_charter) vira uma frase
-    de overdrive cobrindo time_ms .. time_ms + duration_ms.
+    NoteEvent com lane "overdrive" (editor, auto_charter, importação) vira uma frase
+    de overdrive cobrindo time_ms .. time_ms + duration_ms; lane "solo" vira a frase
+    de solo (nota 103). Frases sobrepostas são unidas.
     """
-    playable, od = [], []
+    playable, od, solo = [], [], []
     for n in notes:
-        if n.lane == "overdrive":
-            od.append(_note_ticks(tm, n.time_ms, n.duration_ms, 1))
+        if n.lane in ("overdrive", "solo"):
+            s, e = _note_ticks(tm, n.time_ms, n.duration_ms, 1)
+            (od if n.lane == "overdrive" else solo).append((s, e, getattr(n, "velocity", 100)))
             continue
         diff_map = note_map.get(n.difficulty, note_map.get("Expert", {}))
         pitch = diff_map.get(n.lane)
@@ -485,7 +515,7 @@ def _build_instrument_track(track: MidiTrack, notes: list, note_map: dict, overd
         playable.append((start, end, pitch, getattr(n, "velocity", 100)))
         if n.is_overdrive:
             od.append((start, end))
-    return _emit_track(track, playable, {overdrive_note: od}, extras=extras, tm=tm)
+    return _emit_track(track, playable, {overdrive_note: od, solo_note: solo}, extras=extras, tm=tm)
 
 
 def _build_pro_guitar_track(track: MidiTrack, notes: list, tm: TempoMap, extras: dict = None):

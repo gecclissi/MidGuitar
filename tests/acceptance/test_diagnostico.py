@@ -63,7 +63,9 @@ def _drum_song():
 def test_ch_import_counts_match_source(joe_song):
     src = mido.MidiFile(os.path.join(JOE, "notes.mid"))
     for track, attr in [("PART GUITAR", "guitar"), ("PART DRUMS", "drum"), ("PART KEYS", "keys")]:
-        got = collections.Counter(n.difficulty for n in getattr(joe_song, f"{attr}_notes"))
+        # Overdrive/solo são lanes do editor (frases), não notas tocáveis
+        got = collections.Counter(n.difficulty for n in getattr(joe_song, f"{attr}_notes")
+                                  if n.lane not in ("overdrive", "solo"))
         for diff, (lo, hi) in DIFF_RANGES.items():
             assert got[diff] == _src_count(src, track, lo, hi), (track, diff)
     assert len(joe_song.tempo_map.tempos) == 154

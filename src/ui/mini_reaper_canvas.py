@@ -64,7 +64,7 @@ LANE_NAMES_DRUMS = [
     ("blue", "Tom / Condução (Azul)"),
     ("green", "Prato Ataque (Verde)"),
     ("overdrive", "⭐ Overdrive"),
-    ("solo", "⚡ Preenchimento (Fill)"),
+    ("solo", "⚡ Solo de Bateria"),
 ]
 
 LANE_NAMES_VOCALS = [

@@ -4,6 +4,7 @@ Representa a música completa com metadados, trilhas de instrumentos,
 eventos de tempo, seções e notas musicais.
 """
 
+import copy
 from dataclasses import dataclass, field, fields
 from typing import Any, List, Dict, Optional
 import json
@@ -37,6 +38,10 @@ class VocalNote:
     is_overdrive: bool = False # Frase de Overdrive (Nota 106)
     is_phrase_end: bool = False # Fim da frase vocal (Nota 105)
     velocity: int = 100
+    # Limites exatos da frase importada (ms): na 1ª nota da frase o início, na última o fim.
+    # None = o gerador usa a margem padrão em volta das notas.
+    phrase_start_ms: Optional[float] = None
+    phrase_end_ms: Optional[float] = None
 
 @dataclass
 class ProGuitarNote:
@@ -59,6 +64,84 @@ class ProKeysNote:
 
 # Nomes antigos das lanes de bateria (projetos salvos antes da unificação)
 LEGACY_DRUM_LANES = {"orange": "kick", "red": "snare"}
+
+
+# Marcadores das trilhas de 5 lanes/bateria que o editor mostra como lanes
+INSTRUMENT_MARKER_LANES = {116: "overdrive", 103: "solo"}
+MARKER_TRACKS = {"PART GUITAR": "guitar_notes", "PART BASS": "bass_notes",
+                 "PART DRUMS": "drum_notes", "PART KEYS": "keys_notes"}
+_VOCAL_PHRASE = 105
+_VOCAL_OD = 106
+
+
+def _lift_instrument_markers(song: "ChartSong") -> None:
+    """Overdrive (116) e solo (103) do passthrough viram notas das lanes do editor.
+
+    Tudo ou nada por altura: se alguma frase não for representável (canal != 0), a
+    altura fica toda no passthrough (como antes) para não misturar as duas fontes."""
+    for tname, attr in MARKER_TRACKS.items():
+        extras = song.track_extras.get(tname)
+        if not extras or not extras.get("notes"):
+            continue
+        target = getattr(song, attr)
+        for pitch, lane in INSTRUMENT_MARKER_LANES.items():
+            items = [x for x in extras["notes"] if int(x[2]) == pitch]
+            if not items or any(int(x[4]) != 0 for x in items):
+                continue
+            for on_ms, off_ms, _p, vel, _ch in items:
+                target.append(NoteEvent(time_ms=on_ms, lane=lane, duration_ms=round(off_ms - on_ms, 3),
+                                        difficulty="Expert", is_overdrive=(lane == "overdrive"),
+                                        velocity=int(vel)))
+            extras["notes"] = [x for x in extras["notes"] if int(x[2]) != pitch]
+        target.sort(key=lambda n: n.time_ms)
+
+
+def _lift_vocal_phrases(song: "ChartSong") -> None:
+    """Frases vocais (105) e de overdrive (106) do passthrough viram dados das VocalNote.
+
+    Só quando o modelo consegue regravá-las iguais: canal 0, velocity 100, sem frases
+    encostadas/sobrepostas, toda frase com nota cantada e toda nota dentro de uma frase.
+    A 106 só sobe se cada frase dela coincidir com uma 105."""
+    extras = song.track_extras.get("PART VOCALS")
+    notes = sorted(song.vocal_notes, key=lambda n: n.time_ms)
+    if not extras or not notes:
+        return
+    phrases = sorted((x for x in extras.get("notes", []) if int(x[2]) == _VOCAL_PHRASE),
+                     key=lambda x: x[0])
+    if not phrases or any(int(x[4]) != 0 or int(x[3]) != 100 for x in phrases):
+        return
+    if any(b[0] <= a[1] for a, b in zip(phrases, phrases[1:])):
+        return
+    groups = []
+    for on_ms, off_ms, *_rest in phrases:
+        lo, hi = round(on_ms), round(off_ms)
+        members = [n for n in notes if lo <= n.time_ms < hi]
+        if not members:
+            return
+        groups.append((on_ms, off_ms, members))
+    if sum(len(g[2]) for g in groups) != len(notes):
+        return
+    od = [x for x in extras["notes"] if int(x[2]) == _VOCAL_OD]
+    bounds = {(round(on, 2), round(off, 2)) for on, off, _m in groups}
+    lift_od = all(int(x[4]) == 0 and int(x[3]) == 100 and (round(x[0], 2), round(x[1], 2)) in bounds
+                  for x in od)
+    od_bounds = {(round(x[0], 2), round(x[1], 2)) for x in od} if lift_od else set()
+    for on_ms, off_ms, members in groups:
+        for m in members:
+            m.is_phrase_end = m is members[-1]
+            m.phrase_start_ms = on_ms if m is members[0] else None
+            m.phrase_end_ms = off_ms if m is members[-1] else None
+        if (round(on_ms, 2), round(off_ms, 2)) in od_bounds:
+            members[0].is_overdrive = True
+    drop = {_VOCAL_PHRASE, _VOCAL_OD} if lift_od else {_VOCAL_PHRASE}
+    extras["notes"] = [x for x in extras["notes"] if int(x[2]) not in drop]
+
+
+def lift_editable_markers(song: "ChartSong") -> None:
+    """Passa para o modelo editável os marcadores importados que o editor sabe editar."""
+    if song.track_extras:
+        _lift_instrument_markers(song)
+        _lift_vocal_phrases(song)
 
 
 def _build(cls, data: dict):
@@ -239,11 +322,13 @@ class ChartSong:
         for n in song.drum_notes:
             n.lane = LEGACY_DRUM_LANES.get(n.lane, n.lane)
         song.passthrough_tracks = list(data.get("passthrough_tracks", []))
-        song.track_extras = dict(data.get("track_extras", {}))
+        song.track_extras = copy.deepcopy(dict(data.get("track_extras", {})))
         song.ini_extra = dict(data.get("ini_extra", {}))
         song.source_mogg = dict(data.get("source_mogg") or {})
         tm = data.get("tempo_map")
         song.tempo_map = TempoMap.from_dict(tm) if tm else None
+        # Projetos antigos guardavam overdrive/solo/frases vocais no passthrough
+        lift_editable_markers(song)
         return song
 
 

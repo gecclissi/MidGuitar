@@ -208,7 +208,9 @@ def test_synthetic_roundtrip_survives_project_json(synthetic, tmp_path):
 
 def test_markers_are_not_model_notes(synthetic):
     _src, song = synthetic
-    assert {n.lane for n in song.guitar_notes} <= {"green", "red", "yellow", "blue", "orange", "open"}
+    # Overdrive (116) e solo (103) viram lanes do editor; o resto dos marcadores não
+    assert {n.lane for n in song.guitar_notes} <= {"green", "red", "yellow", "blue", "orange", "open",
+                                                   "overdrive", "solo"}
     assert {n.lane for n in song.drum_notes} == {"kick", "yellow", "snare"}
     assert len(song.vocal_notes) == 3
     assert [v.is_phrase_end for v in song.vocal_notes] == [False, True, True]

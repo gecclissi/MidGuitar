@@ -22,7 +22,7 @@ def _full_song():
     s.add_pro_keys_note(ProKeysNote(time_ms=40, pitch=60, velocity=96))
     s.events.append(TextEvent(0, "[section intro]"))
     s.passthrough_tracks = [{"name": "VENUE", "events": [[1.5, {"type": "text", "text": "[x]", "meta": True}]]}]
-    s.track_extras = {"PART GUITAR": {"notes": [[0.0, 100.0, 116, 100, 0]], "events": []}}
+    s.track_extras = {"PART GUITAR": {"notes": [[0.0, 100.0, 110, 100, 0]], "events": []}}
     s.tempo_track_name = "notes"
     s.ini_extra = {"pro_drums": "True"}
     return s
@@ -77,7 +77,7 @@ def test_save_and_open_project_buttons(monkeypatch, boxes, tmp_path):
     fake = _fake()
     dialog.CreatorStudioDialog._on_open_project(fake)
     assert len(fake.applied) == 1 and fake.applied[0].title == "Projeto"
-    assert fake.applied[0].track_extras["PART GUITAR"]["notes"][0][2] == 116
+    assert fake.applied[0].track_extras["PART GUITAR"]["notes"][0][2] == 110
 
 
 def test_open_project_error_shows_message(monkeypatch, boxes, tmp_path):

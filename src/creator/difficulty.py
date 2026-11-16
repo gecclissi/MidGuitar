@@ -12,10 +12,11 @@ VOCAL_DENSITY_THRESHOLDS = (0.4, 0.8, 1.3, 1.9, 2.6)
 
 
 def _expert_times(notes) -> List[int]:
-    """Instantes distintos (ms) das notas Expert; acordes contam como um só ataque."""
+    """Instantes distintos (ms) das notas Expert; acordes contam como um só ataque.
+    Frases de overdrive/solo não são notas tocáveis e não contam."""
     times = set()
     for n in notes:
-        if getattr(n, "difficulty", "Expert") == "Expert":
+        if getattr(n, "difficulty", "Expert") == "Expert" and getattr(n, "lane", None) not in ("overdrive", "solo"):
             times.add(int(n.time_ms))
     return sorted(times)
 

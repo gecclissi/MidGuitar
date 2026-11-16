@@ -7,13 +7,17 @@ pelo gerador MIDI (convertido pelo mapa de tempo da música):
 - trilhas inteiras que o MidGuitar não edita (HARM1-3, VENUE, PART GUITAR GHL,
   PART ELITE_DRUMS, PART REAL_GUITAR_22, PART KEYS_ANIM_*, BEAT...):
   ``song.passthrough_tracks = [{"name": str|None, "events": [[ms, msg], ...]}]``
-- marcadores dentro das trilhas editáveis (overdrive 116, solo 103, frases
-  vocais 105/106, marcadores de tom 110-112, fills 120-124, HOPO forçado,
+- marcadores dentro das trilhas editáveis (marcadores de tom 110-112, fills 120-124, HOPO forçado,
   canais e marcadores do Pro Guitar, textos como [ENHANCED_OPENS]...):
   ``song.track_extras = {"PART DRUMS": {"notes": [[on_ms, off_ms, pitch, vel, ch]],
   "events": [[ms, msg]]}}``
 
 ``msg`` é o dicionário de uma mensagem mido (sem ``time``), serializável em JSON.
+
+Overdrive (116) e solo (103) de guitarra/baixo/bateria/teclado e as frases vocais
+(105/106) passam do passthrough para o modelo editável (chart_model.lift_editable_markers):
+lanes "overdrive"/"solo" e limites de frase nas VocalNote. Só ficam aqui quando não são
+representáveis sem perda (canal diferente de 0, frases vocais vazias ou encostadas...).
 """
 from typing import Dict, List, Optional, Tuple
 

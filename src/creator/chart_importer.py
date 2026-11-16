@@ -777,6 +777,10 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
         # Registrado mesmo vazio: marca a trilha como importada (o gerador não inventa âncoras)
         song.track_extras[upper] = extras
 
+    # Overdrive, solo e frases vocais saem do passthrough e viram dados editáveis
+    from src.creator.chart_model import lift_editable_markers
+    lift_editable_markers(song)
+
     # Ordena todas as trilhas por tempo
     song.guitar_notes.sort(key=lambda n: n.time_ms)
     song.bass_notes.sort(key=lambda n: n.time_ms)
