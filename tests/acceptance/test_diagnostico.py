@@ -116,7 +116,6 @@ def test_ch_roundtrip_keeps_tom_markers(joe_song, tmp_path):
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="song.ini: preview_start_time/diff_*_real/pro_drums não são importados")
 def test_ch_import_reads_preview_and_pro_ranks(joe_song):
     assert joe_song.preview_start_ms == 72497
     assert joe_song.diff_pro_guitar == 5 and joe_song.diff_vocals == 1

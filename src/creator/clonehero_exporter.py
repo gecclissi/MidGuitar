@@ -58,9 +58,14 @@ diff_guitar_real = {d_pro_guitar}
 diff_bass_real = {d_pro_bass}
 diff_keys_real = {d_pro_keys}
 preview_start_time = {song.preview_start_ms}
-icon = midguitar
-loading_phrase = Criado e gravado com MidGuitar Universal Studio!
 """
+    # Chaves importadas que o MidGuitar não gera (preview_end_time, pro_drums, diff_*_real...)
+    from src.creator.chart_importer import INI_MANAGED_KEYS
+    extra = {k: v for k, v in (getattr(song, "ini_extra", None) or {}).items()
+             if k not in INI_MANAGED_KEYS and "\n" not in str(v)}
+    extra.setdefault("icon", "midguitar")
+    extra.setdefault("loading_phrase", "Criado e gravado com MidGuitar Universal Studio!")
+    ini_content += "".join(f"{k} = {v}\n" for k, v in extra.items())
     ini_path = os.path.join(target_dir, "song.ini")
     with open(ini_path, "w", encoding="utf-8") as f:
         f.write(ini_content)

@@ -13,6 +13,18 @@ from src.creator.chart_model import ChartSong, NoteEvent, TextEvent
 from src.creator.rbn_specs import FRET_NOTES, DRUM_NOTES, TICKS_PER_BEAT
 from src.creator.tempo_map import TempoMap, TempoChange, TimeSigChange
 
+# song.ini: ranking de dificuldade -> atributo do ChartSong
+INI_DIFF_KEYS = {
+    "diff_guitar": "diff_guitar", "diff_bass": "diff_bass", "diff_drums": "diff_drums",
+    "diff_keys": "diff_keys", "diff_vocals": "diff_vocals", "diff_band": "diff_band",
+    "diff_guitar_real": "diff_pro_guitar", "diff_bass_real": "diff_pro_bass",
+    "diff_keys_real": "diff_pro_keys",
+}
+# Chaves que o MidGuitar gera a partir do modelo (o valor do modelo vence na exportação)
+INI_MANAGED_KEYS = {"name", "artist", "album", "genre", "year", "charter", "song_length",
+                    "preview_start_time"} | set(INI_DIFF_KEYS)
+
+
 def parse_song_ini(ini_path: str) -> dict:
     """Lê os metadados do song.ini."""
     config = configparser.ConfigParser(interpolation=None)
@@ -46,14 +58,17 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
             song.year = int(meta.get("year", song.year))
         except Exception:
             pass
+        for key, attr in INI_DIFF_KEYS.items():
+            try:
+                setattr(song, attr, max(0, int(meta.get(key, getattr(song, attr)))))
+            except Exception:
+                pass
         try:
-            song.diff_guitar = max(0, int(meta.get("diff_guitar", song.diff_guitar)))
-            song.diff_bass = max(0, int(meta.get("diff_bass", song.diff_bass)))
-            song.diff_drums = max(0, int(meta.get("diff_drums", song.diff_drums)))
-            song.diff_keys = max(0, int(meta.get("diff_keys", song.diff_keys)))
-            song.diff_band = max(0, int(meta.get("diff_band", song.diff_band)))
+            song.preview_start_ms = max(0, int(float(meta.get("preview_start_time", song.preview_start_ms))))
         except Exception:
             pass
+        # Chaves que o modelo não usa (preview_end_time, pro_drums, diff_*_real...) voltam na exportação
+        song.ini_extra = {k: v for k, v in meta.items() if k not in INI_MANAGED_KEYS}
     else:
         # 1.1 Busca songs.dta caso seja uma pasta de Rock Band 2 / 3
         dta_candidates = [os.path.join(folder_path, "songs.dta"), os.path.join(os.path.dirname(folder_path), "songs.dta")]
