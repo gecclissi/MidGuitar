@@ -1,6 +1,6 @@
 # 🎸 Guia Visual Passo a Passo • MidGuitar Universal Studio
 
-Este é o **Tutorial Visual Ilustrado** do **MidGuitar**, projetado para que **qualquer pessoa (mesmo leiga, sem conhecimento de música ou edição de áudio)** consiga criar, editar, testar (Playtest) e exportar músicas completas para **PlayStation 3 (Rock Band 3 & Rock Band 2)**, **Xbox 360 (Rock Band 3 & Rock Band 2)**, **PlayStation 4 (Rock Band 4)** e **PC (Clone Hero / YARG / Guitar Hero WT:DE)**.
+Este é o **Tutorial Visual Ilustrado** do **MidGuitar**, projetado para que **qualquer pessoa (mesmo leiga, sem conhecimento de música ou edição de áudio)** consiga criar, editar, testar (Playtest) e exportar músicas completas para **PlayStation 3 (Rock Band 3 & Rock Band 2)**, **Xbox 360 (Rock Band 3 & Rock Band 2)**, **PC (Clone Hero / YARG)**. (A opção PlayStation 4 / Rock Band 4 é experimental e não verificada: ainda não toca no RB4.)
 
 ---
 
@@ -11,7 +11,7 @@ flowchart LR
     A["1. Arrastar MP3 + Letra (.txt/.lrc) + Capa"] --> B["2. Escolher Banda Completa ou Modo SOLO (Só Guitarra, Só Vocal, etc.)"]
     B --> C["3. Gerar Tudo em 1 Clique (Notas + Pro Guitar/Keys + Capa)"]
     C --> D["4. Testar no Mini-REAPER (Easy/Medium/Hard/Expert + Playtest)"]
-    D --> E["5. Ajustar Ranking (0 a 6) & Exportar para PS3 / X360 / PS4 / PC"]
+    D --> E["5. Ajustar Ranking (0 a 6) & Exportar para PS3 / X360 / PC"]
 ```
 
 ---
@@ -119,10 +119,11 @@ Você pode exportar tanto pela **Aba 1** quanto pela **Aba 4** sem precisar baix
    * Gera pacote exclusivo com `songs.dta` no formato clássico (`format 4`) e **filtra automaticamente do arquivo MIDI as trilhas exclusivas do RB3** (`PART KEYS`, `PART REAL_GUITAR`, `PART REAL_BASS`, `PART REAL_KEYS`), garantindo 100% de compatibilidade sem travar o Rock Band 2!
 3. **🟢 Xbox 360 — Rock Band 3 & Rock Band 2 (Console RGH/JTAG, Pendrive Horizon & Emulador Xenia)**:
    * Gera a estrutura `Content/0000000000000000/45410914/` (RB3) ou `45410869/` (RB2) com textura `.png_xbox` com cabeçalho HMX legítimo.
-4. **🔵 PlayStation 4 — Rock Band 4 (Console GoldHEN & FPKG)**:
-   * Gera o pacote `CUSA02084` com projeto `project.gp4` pronto para compilação de `.pkg` via *orbis-pub-gen*.
-5. **🎮 PC — Clone Hero / YARG / Guitar Hero World Tour: Definitive Edition (GHWT:DE)**:
+4. **🔵 PlayStation 4 — Rock Band 4 (EXPERIMENTAL, não verificado)**:
+   * Gera só a estrutura de arquivos (`songs.dta`, `.mid`, `.mogg`, `project.gp4`). O RB4 exige arquivos binários (`.rbmid_ps4`, `.songdta_ps4`, `.moggsong`, `.png_ps4`) que o MidGuitar ainda não gera: **isto ainda não toca no Rock Band 4**.
+5. **🎮 PC — Clone Hero / YARG**:
    * Gera a pasta pronta com `song.ini`, `notes.mid`, `album.png` (512x512) e `song.ogg`.
+   * Os mods do *Guitar Hero World Tour: Definitive Edition* (`.pak.xen`/`.fsb.xen`) usam outro formato: **não são gerados nem importados**.
 
 ---
 

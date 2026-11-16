@@ -18,7 +18,7 @@ import pygame
 from PIL import Image
 
 from src.creator.chart_model import ChartSong, NoteEvent, PROJECT_EXTENSION, load_project, save_project
-from src.creator.chart_importer import import_song_from_folder
+from src.creator.chart_importer import UnsupportedFormatError, import_song_from_folder
 from src.creator.xbox_stfs import is_stfs_file
 from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
@@ -136,7 +136,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         h_title = ctk.CTkLabel(
             header,
-            text="🎵 MidGuitar Universal Studio (Rock Band 3, PS3 PKG, Xbox 360, PS4 & Clone Hero)",
+            text="🎵 MidGuitar Universal Studio (Rock Band 3, PS3 PKG, Xbox 360 & Clone Hero)",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color="#38BDF8"
         )
@@ -444,8 +444,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 "🎸 Rock Band 2 (PS3 HEN/CFW & Emulador RPCS3)",
                 "🟢 Xbox 360 - Rock Band 3 (Console RGH/JTAG & Emulador Xenia)",
                 "🟢 Xbox 360 - Rock Band 2 (Console RGH/JTAG & RB2 Deluxe)",
-                "🔵 PlayStation 4 - Rock Band 4 (Console GoldHEN & FPKG)",
-                "🎮 Clone Hero / YARG / Guitar Hero WT (PC)"
+                "🔵 PlayStation 4 - Rock Band 4 (EXPERIMENTAL, não verificado)",
+                "🎮 Clone Hero / YARG (PC)"
             ],
             command=self._on_target_game_changed
         )
@@ -510,12 +510,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(btn_convert_rb2_x360, "Exportar para Rock Band 2 (Xbox 360 Horizon ou RB2 Deluxe)")
 
         btn_convert_ps4 = ctk.CTkButton(
-            quick_row, text="🔵 RB4 (PS4)", width=105, height=28,
+            quick_row, text="🔵 RB4 (PS4, exp.)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._on_export_ps4
         )
         btn_convert_ps4.pack(side="left", padx=2)
-        set_tooltip(btn_convert_ps4, "Exportar para Rock Band 4 (PS4 GoldHEN / FPKG)")
+        set_tooltip(btn_convert_ps4, "EXPERIMENTAL: gera só a estrutura de arquivos do PS4; ainda não toca no Rock Band 4")
 
         btn_convert_ch = ctk.CTkButton(
             quick_row, text="🎮 Clone Hero", width=105, height=28,
@@ -547,6 +547,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
         try:
             song = import_song_from_folder(folder)
+        except UnsupportedFormatError as e:
+            messagebox.showwarning("Formato não suportado", str(e))
+            return
         except Exception as e:
             messagebox.showerror("Erro na importação", f"Não foi possível importar:\n{folder}\n\n{e}")
             return
@@ -1680,8 +1683,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 "🎸 Rock Band 2 (PS3 HEN/CFW & Emulador RPCS3)",
                 "🟢 Xbox 360 - Rock Band 3 (Console RGH/JTAG & Emulador Xenia)",
                 "🟢 Xbox 360 - Rock Band 2 (Console RGH/JTAG & RB2 Deluxe)",
-                "🔵 PlayStation 4 - Rock Band 4 (Console GoldHEN & FPKG)",
-                "🎮 Clone Hero / YARG / Guitar Hero WT (PC)"
+                "🔵 PlayStation 4 - Rock Band 4 (EXPERIMENTAL, não verificado)",
+                "🎮 Clone Hero / YARG (PC)"
             ],
             command=self._on_target_game_changed
         )
@@ -1745,12 +1748,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(btn_save_rb2_x360, "Salvar e Exportar para Rock Band 2 (Xbox 360 Horizon ou RB2 Deluxe)")
 
         btn_save_ps4 = ctk.CTkButton(
-            quick_row_3, text="🔵 RB4 (PS4)", width=105, height=28,
+            quick_row_3, text="🔵 RB4 (PS4, exp.)", width=105, height=28,
             fg_color="#334155", hover_color="#475569", font=ctk.CTkFont(size=10),
             command=self._save_from_editor_ps4
         )
         btn_save_ps4.pack(side="left", padx=2)
-        set_tooltip(btn_save_ps4, "Salvar e Exportar para Rock Band 4 (PS4 GoldHEN / FPKG)")
+        set_tooltip(btn_save_ps4, "EXPERIMENTAL: salva e gera só a estrutura de arquivos do PS4; ainda não toca no Rock Band 4")
 
         btn_save_ch = ctk.CTkButton(
             quick_row_3, text="🎮 Clone Hero", width=105, height=28,
@@ -2673,11 +2676,12 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             return
         pkg_dir = export_ps4_structure(self.song, out_dir)
         self._show_export_result(
-            "Sucesso PlayStation 4!",
-            f"Pacote para PlayStation 4 (Rock Band 4) gerado com sucesso em:\n{pkg_dir}\n\n"
-            f"• Arquivos DTA, MIDI e Áudio prontos para /user/appmeta/CUSA02084/ ou YARG no PS4 (GoldHEN/HEN)!\n"
-            f"• Arquivo 'project.gp4' pronto para compilar em .pkg pelo orbis-pub-gen (FPKG)!\n"
-            f"• Veja o arquivo 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta!",
+            "PlayStation 4 (experimental, não verificado)",
+            f"EXPERIMENTAL / NÃO VERIFICADO: gerei só a estrutura de arquivos em:\n{pkg_dir}\n\n"
+            f"• Isto ainda NÃO toca no Rock Band 4: ele usa .rbmid_ps4, .songdta_ps4, .moggsong e "
+            f".png_ps4, que o MidGuitar ainda não gera.\n"
+            f"• Para jogar, use Rock Band 3 (PS3/RPCS3/Xbox 360) ou Clone Hero/YARG.\n"
+            f"• Veja 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta.",
             pkg_dir, "ps4"
         )
 
@@ -2767,8 +2771,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _update_target_game_desc(self, choice):
         """Atualiza o texto descritivo do jogo de destino para que o usuário saiba exatamente o que será criado."""
-        if "Clone Hero" in choice or "Guitar Hero" in choice:
-            desc = "🎮 Clone Hero / YARG / Guitar Hero WT: Gera pasta com 'song.ini', 'notes.mid', 'album.png' e áudio (song.ogg). Compatível direto com pasta Songs do Clone Hero/YARG e pasta DATA/MODS do GHWT Definitive Edition!"
+        if "Clone Hero" in choice:
+            desc = "🎮 Clone Hero / YARG: Gera pasta com 'song.ini', 'notes.mid', 'album.png' e áudio. Compatível direto com a pasta Songs do Clone Hero/YARG. (Mods do Guitar Hero World Tour: Definitive Edition usam outro formato e não são gerados.)"
         elif "Xbox 360" in choice and ("Rock Band 2" in choice or "RB2" in choice):
             desc = "🟢 Rock Band 2 no Xbox 360: Gera pacote 'Xbox360_Content/.../45410869/' pronto para transferir via Horizon para o Xbox 360 e RB2 Deluxe!"
         elif "Xbox 360" in choice:
@@ -2776,7 +2780,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         elif "Rock Band 2" in choice:
             desc = "🎸 Rock Band 2 no PS3 / RPCS3: Gera DLC BLUS30147 com 'songs.dta' (format 4), '.mogg' e instalador automático para PS3 HEN/CFW e RPCS3!"
         elif "PlayStation 4" in choice or "Rock Band 4" in choice:
-            desc = "🔵 Rock Band 4 no PS4: Gera DLC CUSA02084 com 'project.gp4' (orbis-pub-gen para FPKG) e suporte a PS4 desbloqueado (GoldHEN/HEN)!"
+            desc = "🔵 PS4 / Rock Band 4 (experimental, não verificado): gera só a estrutura de arquivos (songs.dta, .mid, .mogg e project.gp4). O Rock Band 4 usa formatos binários (.rbmid_ps4, .songdta_ps4, .moggsong, .png_ps4) que ainda não são gerados: isto ainda não toca no RB4."
         elif "Rock Band 3" in choice:
             desc = "🎸 Rock Band 3 no PS3 / RPCS3: Gera DLC BLUS30463 com 'PARAM.SFO', 'songs.dta', MIDI RBN (com Pro Guitar & Pro Keys) e instalador automático!"
         else:

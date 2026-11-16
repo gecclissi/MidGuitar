@@ -45,5 +45,5 @@ PROFILES: Dict[str, TargetProfile] = {
     "rb2": TargetProfile("rb2", "Rock Band 2", False, KNOWN_TRACKS - _RB2_FORBIDDEN, True, True,
                          _RB2_FORBIDDEN, edat_verified=False),
     "xbox360": TargetProfile("xbox360", "Rock Band 3 (Xbox 360)", False, KNOWN_TRACKS, True, True),
-    "ps4": TargetProfile("ps4", "Rock Band 4 (PS4)", True, KNOWN_TRACKS, True, True),
+    "ps4": TargetProfile("ps4", "Rock Band 4 (PS4, experimental)", False, KNOWN_TRACKS, True, True),
 }

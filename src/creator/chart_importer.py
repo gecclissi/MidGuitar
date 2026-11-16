@@ -39,6 +39,39 @@ def parse_song_ini(ini_path: str) -> dict:
         print(f"[ChartImporter] Erro ao ler song.ini: {e}")
     return metadata
 
+class UnsupportedFormatError(Exception):
+    """A pasta é de um formato que o MidGuitar ainda não sabe importar (mensagem em português)."""
+
+
+GHWTDE_MESSAGE = ("Formato GHWT:DE ainda não suportado: os mods do Guitar Hero World Tour: "
+                  "Definitive Edition (.pak.xen / .fsb.xen, song.ini com [ModInfo]/[SongInfo]) "
+                  "usam outro formato e não podem ser importados. Use uma música do Clone Hero / "
+                  "YARG (notes.mid ou notes.chart) ou do Rock Band.")
+
+
+def is_ghwtde_folder(folder_path: str) -> bool:
+    """Pasta de mod do GHWT:DE: arquivos .pak.xen/.fsb.xen, ou song.ini sem [song] que
+    tem [ModInfo]/[SongInfo] (e nenhum notes.mid/notes.chart de Clone Hero)."""
+    try:
+        if not os.path.isdir(folder_path):
+            return False
+        names = {n.lower() for n in os.listdir(folder_path)}
+        if "notes.mid" in names or "notes.chart" in names:
+            return False
+        for _root, _dirs, files in os.walk(folder_path):
+            if any(f.lower().endswith((".pak.xen", ".fsb.xen")) for f in files):
+                return True
+        if "song.ini" in names:
+            cp = configparser.ConfigParser(interpolation=None, strict=False)
+            cp.read(os.path.join(folder_path, [n for n in os.listdir(folder_path)
+                                               if n.lower() == "song.ini"][0]), encoding="utf-8-sig")
+            sections = {x.lower() for x in cp.sections()}
+            return "song" not in sections and bool(sections & {"modinfo", "songinfo"})
+    except Exception:
+        pass
+    return False
+
+
 def import_song_from_folder(folder_path: str) -> ChartSong:
     """
     Importa uma pasta completa de música contendo notes.mid, song.ini e áudio.
@@ -55,6 +88,8 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         if is_stfs_file(folder_path):
             return import_song_from_con(folder_path)
         folder_path = os.path.dirname(os.path.abspath(folder_path))
+    if is_ghwtde_folder(folder_path):
+        raise UnsupportedFormatError(GHWTDE_MESSAGE)
     warnings = []
     # sem barra final: o songs.dta é procurado na pasta pai
     folder_path = _resolve_song_dir(os.path.normpath(folder_path), warnings)

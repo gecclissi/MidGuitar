@@ -411,7 +411,10 @@ def _validate_ps4(folder: str) -> List[Issue]:
     songdtas = [p for p in _walk_files(folder)
                 if p.lower().endswith(".songdta_ps4")] if os.path.isdir(folder) else []
     if not songdtas:
-        return [Issue("error", "PS4_NO_SONGDTA", "Nenhum arquivo *.songdta_ps4 encontrado")]
+        return [Issue("error", "PS4_NO_SONGDTA", "PS4 / Rock Band 4 é experimental e não verificado: o RB4 exige "
+                      "arquivos binários (.songdta_ps4, .rbmid_ps4, .moggsong, .png_ps4) que o "
+                      "MidGuitar ainda não gera. Esta pasta tem só a estrutura de arquivos "
+                      "e ainda não toca no Rock Band 4")]
     issues: List[Issue] = []
     for p in sorted(songdtas):
         issues.extend(_guard(_validate_ps4_song, folder, p))

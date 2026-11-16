@@ -47,3 +47,27 @@ def test_errors_use_showwarning(monkeypatch, calls):
     _call()
     assert len(calls.warn) == 1 and not calls.info
     assert calls.warn[0] == ("Pronto", "Exportado\n\nERRO")
+
+
+def test_import_ghwtde_folder_shows_unsupported_message(monkeypatch, calls, tmp_path):
+    """Pasta de mod do GHWT:DE: aviso claro em vez de importar uma música vazia."""
+    (tmp_path / "Content").mkdir()
+    (tmp_path / "Content" / "x_song.pak.xen").write_bytes(b"\0")
+    (tmp_path / "song.ini").write_text("[ModInfo]\nname=x\n[SongInfo]\ntitle=x\n", encoding="utf-8")
+    errors = []
+    monkeypatch.setattr(dialog.messagebox, "showerror", lambda *a, **k: errors.append(a))
+
+    class _Entry:
+        def delete(self, *a): pass
+        def insert(self, *a): pass
+
+    class _Fake:
+        folder_entry = _Entry()
+        def _apply_loaded_song(self, song):
+            raise AssertionError("não deve carregar a música")
+
+    dialog.CreatorStudioDialog._import_folder_path(_Fake(), str(tmp_path))
+    assert not errors and not calls.info
+    assert len(calls.warn) == 1
+    assert calls.warn[0][0] == "Formato não suportado"
+    assert "GHWT:DE ainda não suportado" in calls.warn[0][1]

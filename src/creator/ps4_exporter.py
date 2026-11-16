@@ -1,7 +1,8 @@
 """
-Exportador de Músicas para PlayStation 4 (Rock Band 4 / PS4 HEN / YARG / FPKG).
-Gera a estrutura oficial para custom songs no PlayStation 4:
-- sce_sys/param.sfo (metadados do PS4 com CUSA02084 / CUSA02901)
+Exportador EXPERIMENTAL e NÃO VERIFICADO para PlayStation 4 (Rock Band 4).
+O RB4 usa formatos binários (.rbmid_ps4, .songdta_ps4, .moggsong, .png_ps4) que o
+MidGuitar não gera (não há referência de PS4 para conferir): o resultado é só uma
+estrutura de arquivos no estilo RB3 e AINDA NÃO TOCA no Rock Band 4. Estrutura gerada:
 - songs/songs.dta
 - songs/{shortname}/{shortname}.mid
 - songs/{shortname}/{shortname}.mogg (multicanal, 44100 Hz)
@@ -54,29 +55,20 @@ def export_ps4_structure(song: ChartSong, output_base_dir: str, total_duration_m
     # 6. Manual detalhado de instalação
     readme_path = os.path.join(root_dir, "COMO_INSTALAR_NO_PS4.txt")
     readme_content = f"""========================================================================
-MIDGUITAR - GUIA DE INSTALAÇÃO NO PLAYSTATION 4 (ROCK BAND 4 / YARG)
+MIDGUITAR - PLAYSTATION 4 / ROCK BAND 4 (EXPERIMENTAL, NÃO VERIFICADO)
 Música: {song.title} - {song.artist}
-Title ID: {PS4_RB4_TITLE_ID} / {PS4_RB4_RIVALS_ID}
 ========================================================================
 
-COMO USAR NO SEU PLAYSTATION 4 (CONSOLES COM HEN / GOLDHEN):
+ATENÇÃO: esta pasta AINDA NÃO TOCA no Rock Band 4.
 
-MÉTODO 1: VIA GESTOR DE ARQUIVOS (FTP / PS4-EXPLORER)
-1. Conecte-se ao PS4 via FTP (FileZilla) ou abra o aplicativo PS4-Explorer
-   no próprio videogame.
-2. Navegue até a pasta de DLCs do Rock Band 4 instalada no seu console:
-   /user/appmeta/{PS4_RB4_TITLE_ID}/
-   ou
-   /data/songs/
-3. Copie a pasta '{clean_shortname}' com os arquivos gerados (MIDI, DTA e Áudio).
-4. Inicie o Rock Band 4 e aproveite suas novas músicas!
+O Rock Band 4 usa arquivos binários próprios (.rbmid_ps4, .songdta_ps4,
+.moggsong e .png_ps4) que o MidGuitar ainda não gera, e não existe uma
+referência de PS4 para conferir o formato. O que há aqui é só a estrutura de
+arquivos no estilo do Rock Band 3 (songs.dta, .mid, .mogg) e um project.gp4
+de exemplo, que servem de ponto de partida para ferramentas de terceiros.
 
-MÉTODO 2: COMPILANDO EM PACOTE FPKG (ORBIS-PUB-GEN)
-1. Se você compila DLCs em formato .pkg instalável para o PS4:
-2. Abra a ferramenta 'orbis-pub-gen' no computador.
-3. Carregue o arquivo 'project.gp4' gerado nesta pasta.
-4. Clique em 'Build' para gerar o arquivo .pkg final.
-5. Copie o .pkg para um pendrive em exFAT/FAT32 e instale pelo 'GoldHEN Package Installer'.
+Para jogar esta música hoje, use as exportações já verificadas:
+Rock Band 3 (PS3/RPCS3), Xbox 360 (pacote CON) ou Clone Hero / YARG.
 ========================================================================
 """
     with open(readme_path, "w", encoding="utf-8") as f:

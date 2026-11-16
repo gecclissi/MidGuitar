@@ -353,10 +353,10 @@ def test_ps3_pkg_file_import(copy_ref):
 
 
 @need(PAVLO)
-@pytest.mark.xfail(strict=True, reason="GHWT:DE (.pak.xen/.fsb.xen) não é suportado: só o título é lido")
-def test_ghwtde_import(copy_ref):
-    song = import_song_from_folder(copy_ref(PAVLO))
-    assert song.guitar_notes and song.audio_path
+def test_ghwtde_import_is_refused_with_clear_message(copy_ref):
+    from src.creator.chart_importer import UnsupportedFormatError
+    with pytest.raises(UnsupportedFormatError, match="GHWT:DE ainda não suportado"):
+        import_song_from_folder(copy_ref(PAVLO))
 
 
 # ---------------------------------------------------------------------------
@@ -385,12 +385,17 @@ def test_xbox360_export_passes_validator(tmp_path):
     assert not [i for i in validate_export(folder, "xbox360") if i.level == "error"]
 
 
-@pytest.mark.xfail(strict=True, reason="PS4: não gera .songdta_ps4/.rbmid_ps4/.moggsong")
-def test_ps4_export_passes_validator(tmp_path):
+def test_ps4_export_is_honest_about_being_unverified(tmp_path):
+    """PS4/RB4 usa binários que não geramos: o validador diz isso em português claro."""
     from src.creator.ps4_exporter import export_ps4_structure
     from src.creator.validation import validate_export
     folder = export_ps4_structure(_small_song(tmp_path), str(tmp_path / "out"))
-    assert not [i for i in validate_export(folder, "ps4") if i.level == "error"]
+    issues = validate_export(folder, "ps4")
+    msg = next(i.message for i in issues if i.code == "PS4_NO_SONGDTA")
+    assert "experimental" in msg and "não toca" in msg.lower().replace("ainda não toca", "não toca")
+    assert any(i.code == "PROFILE_UNVERIFIED" for i in issues)
+    readme = open(os.path.join(folder, "COMO_INSTALAR_NO_PS4.txt"), encoding="utf-8").read()
+    assert "AINDA NÃO TOCA" in readme
 
 
 def test_clonehero_export_from_scratch_validates(tmp_path):
