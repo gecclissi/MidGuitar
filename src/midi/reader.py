@@ -28,6 +28,12 @@ DEFAULT_RB_MIDI_NOTES = {
     55: "orange",
 }
 
+# Notas de palhetada enviadas pelo MIDI Pro Adapter no modo guitarra 5 botões
+STRUM_MIDI_NOTES = (69, 71, 72)
+
+# Squier tem 22 trastes (a Mustang tem 17)
+PRO_GUITAR_MAX_FRET = 22
+
 class MIDIReader:
     def __init__(
         self,
@@ -56,6 +62,10 @@ class MIDIReader:
         self.on_strum_event = on_strum_event            # func(is_down: bool)
 
         self.mode = InstrumentMode.AUTO
+        # Modo AUTO: último instrumento reconhecido (resolve notas ambíguas)
+        self._auto_latched = None
+        # (canal, nota) -> instrumento que recebeu o note on (o note off vai para o mesmo)
+        self._active_routes = {}
         self.midi_in = None
         self.current_port_name = None
         self.is_running = False
@@ -66,6 +76,8 @@ class MIDIReader:
 
     def set_mode(self, mode: InstrumentMode):
         self.mode = mode
+        self._auto_latched = None
+        self._active_routes.clear()
 
     def connect_midi(self, port_index: int, port_name: str) -> bool:
         """Conecta a uma porta MIDI de entrada."""
@@ -135,30 +147,26 @@ class MIDIReader:
             note = data1
             velocity = data2
             hex_msg = f"{midi_msg[0]:02X} {data1:02X} {data2:02X}"
+            route = self._route_note(channel, note)
+            self._active_routes[(channel, note)] = route
 
-            # A) MODO GUITARRA PRO (Canais 1 a 6 dedicados por corda - Squier / Mustang)
-            if (self.mode == InstrumentMode.PRO_GUITAR) or (self.mode == InstrumentMode.AUTO and 1 <= channel <= 6 and channel in PRO_GUITAR_STRINGS):
+            # A) GUITARRA PRO (Canais 1 a 6 dedicados por corda - Squier / Mustang)
+            if route == InstrumentMode.PRO_GUITAR:
                 # Canal 1 = 1ª Corda (High E), ..., Canal 6 = 6ª Corda (Low E)
                 string_num = channel
-                open_note = PRO_GUITAR_STRINGS[string_num]["open_note"]
-                fret = note - open_note
+                fret = note - PRO_GUITAR_STRINGS[string_num]["open_note"]
                 str_name = PRO_GUITAR_STRINGS[string_num]["name"]
-
                 self._log_event("PRO GUITAR", f"Ch {channel} ({str_name}) | Traste {fret} | Vel: {velocity}")
-
                 if self.on_pro_guitar_event:
                     self.on_pro_guitar_event(string_num, fret, True, velocity)
-                
-                if self.mode == InstrumentMode.AUTO and self.on_mode_detected:
-                    self.on_mode_detected(InstrumentMode.PRO_GUITAR)
-
+                self._notify_auto(InstrumentMode.PRO_GUITAR)
                 # Toca nota real polifônica
                 if self.on_audio_play:
                     self.on_audio_play([note], velocity, channel=0)
                 return
 
-            # B) MODO GUITARRA CLÁSSICA 5 BOTÕES (Se configurado ou se nota for clássica RB)
-            if self.mode == InstrumentMode.CLASSIC_GUITAR or (self.mode == InstrumentMode.AUTO and note in DEFAULT_RB_MIDI_NOTES):
+            # B) GUITARRA CLÁSSICA 5 BOTÕES (MIDI Pro Adapter)
+            if route == InstrumentMode.CLASSIC_GUITAR:
                 fret_name = DEFAULT_RB_MIDI_NOTES.get(note)
                 if fret_name:
                     stop_notes, play_notes = self.mapper.handle_fret_change(fret_name, True)
@@ -166,24 +174,20 @@ class MIDIReader:
                     self._log_event("NOTE ON", f"Ch {channel} | Casa {fret_name.upper()} | Vel: {velocity}")
                     if self.on_classic_fret_event:
                         self.on_classic_fret_event(fret_name, True)
-                    return
-                elif note in (69, 71, 72): # Strum
+                else:  # palhetada
                     stop_notes, play_notes = self.mapper.handle_strum(is_down=True, is_pressed=True)
                     self._dispatch_notes(stop_notes, play_notes, velocity)
                     self._log_event("STRUM", f"Ch {channel} | Palheta | Vel: {velocity}")
                     if self.on_strum_event:
                         self.on_strum_event(True)
-                    return
+                self._notify_auto(InstrumentMode.CLASSIC_GUITAR)
+                return
 
-            # C) MODO TECLADO (25 teclas C3=48 a C5=72 ou qualquer teclado MIDI)
+            # C) TECLADO (25 teclas C3=48 a C5=72 ou qualquer teclado MIDI)
             self._log_event("NOTE ON", f"Ch {channel} | Nota: {note} | Vel: {velocity} [{hex_msg}]")
-            
             if self.on_keyboard_event:
                 self.on_keyboard_event(note, True, velocity)
-            
-            if self.mode == InstrumentMode.AUTO and (48 <= note <= 72) and self.on_mode_detected:
-                self.on_mode_detected(InstrumentMode.KEYBOARD)
-
+            self._notify_auto(InstrumentMode.KEYBOARD)
             if self.on_audio_play:
                 self.on_audio_play([note], velocity, channel=0)
 
@@ -193,12 +197,15 @@ class MIDIReader:
         elif status == 0x80 or (status == 0x90 and data2 == 0):
             note = data1
             hex_msg = f"{midi_msg[0]:02X} {data1:02X} {data2:02X}"
+            # O note off segue o mesmo caminho do note on correspondente
+            route = self._active_routes.pop((channel, note), None)
+            if route is None:
+                route = self._route_note(channel, note, learn=False)
 
             # Guitarra Pro
-            if (self.mode == InstrumentMode.PRO_GUITAR) or (self.mode == InstrumentMode.AUTO and 1 <= channel <= 6 and channel in PRO_GUITAR_STRINGS):
+            if route == InstrumentMode.PRO_GUITAR:
                 string_num = channel
-                open_note = PRO_GUITAR_STRINGS[string_num]["open_note"]
-                fret = note - open_note
+                fret = note - PRO_GUITAR_STRINGS[string_num]["open_note"]
                 if self.on_pro_guitar_event:
                     self.on_pro_guitar_event(string_num, fret, False, 0)
                 if self.on_audio_stop:
@@ -206,18 +213,17 @@ class MIDIReader:
                 return
 
             # Guitarra 5 Botões
-            if self.mode == InstrumentMode.CLASSIC_GUITAR or (self.mode == InstrumentMode.AUTO and note in DEFAULT_RB_MIDI_NOTES):
+            if route == InstrumentMode.CLASSIC_GUITAR:
                 fret_name = DEFAULT_RB_MIDI_NOTES.get(note)
                 if fret_name:
                     stop_notes, play_notes = self.mapper.handle_fret_change(fret_name, False)
                     self._dispatch_notes(stop_notes, play_notes)
                     if self.on_classic_fret_event:
                         self.on_classic_fret_event(fret_name, False)
-                    return
-                elif note in (69, 71, 72):
+                else:
                     stop_notes, play_notes = self.mapper.handle_strum(is_down=True, is_pressed=False)
                     self._dispatch_notes(stop_notes, play_notes)
-                    return
+                return
 
             # Teclado / Geral
             self._log_event("NOTE OFF", f"Ch {channel} | Nota: {note} [{hex_msg}]")
@@ -249,6 +255,68 @@ class MIDIReader:
             self._log_event("PITCH BEND", f"Valor: {raw_val} ({normalized:+.2f})")
             if self.on_whammy:
                 self.on_whammy(normalized)
+
+    # -------------------------------------------------------------
+    # Roteamento de notas (modo fixo ou AUTO)
+    # -------------------------------------------------------------
+    @staticmethod
+    def _pro_guitar_fret(channel: int, note: int):
+        """Casa da Pro Guitar para (canal, nota), ou None se não for uma casa válida."""
+        string = PRO_GUITAR_STRINGS.get(channel)
+        if string is None:
+            return None
+        fret = note - string["open_note"]
+        return fret if 0 <= fret <= PRO_GUITAR_MAX_FRET else None
+
+    def _route_note(self, channel: int, note: int, learn: bool = True) -> InstrumentMode:
+        """Decide para qual instrumento vai uma nota (canais diferentes de 10).
+
+        Modo fixo: respeita o modo escolhido (cai no teclado quando a nota não faz
+        sentido para ele, em vez de gerar casa negativa ou travar).
+        Modo AUTO: usa as evidências do tráfego e lembra do último instrumento
+        reconhecido para resolver os casos ambíguos:
+          - canais 2 a 6 com casa válida: Pro Guitar (só ela usa esses canais);
+          - canal 1: casa válida da corda Mi agudo (nota 64..86) é Pro Guitar, a menos que
+            um teclado já tenha sido reconhecido; nota abaixo de 64 (ou acima de 86) é teclado;
+          - outros canais: casas 48-55/60-67 e palhetada 69/71/72 são a guitarra 5 botões
+            do MIDI Pro Adapter, a menos que um teclado já tenha sido reconhecido;
+            qualquer outra nota é teclado.
+        """
+        mode = self.mode
+        if mode == InstrumentMode.PRO_GUITAR:
+            if self._pro_guitar_fret(channel, note) is not None:
+                return InstrumentMode.PRO_GUITAR
+            return InstrumentMode.KEYBOARD
+        if mode == InstrumentMode.CLASSIC_GUITAR:
+            if note in DEFAULT_RB_MIDI_NOTES or note in STRUM_MIDI_NOTES:
+                return InstrumentMode.CLASSIC_GUITAR
+            return InstrumentMode.KEYBOARD
+        if mode in (InstrumentMode.KEYBOARD, InstrumentMode.DRUMS):
+            return InstrumentMode.KEYBOARD
+
+        # AUTO
+        latched = self._auto_latched
+        if 1 <= channel <= 6:
+            fret = self._pro_guitar_fret(channel, note)
+            if fret is None:
+                route = InstrumentMode.KEYBOARD
+            elif channel == 1 and latched == InstrumentMode.KEYBOARD:
+                route = InstrumentMode.KEYBOARD
+            else:
+                route = InstrumentMode.PRO_GUITAR
+        else:
+            is_classic_note = note in DEFAULT_RB_MIDI_NOTES or note in STRUM_MIDI_NOTES
+            if is_classic_note and latched != InstrumentMode.KEYBOARD:
+                route = InstrumentMode.CLASSIC_GUITAR
+            else:
+                route = InstrumentMode.KEYBOARD
+        if learn:
+            self._auto_latched = route
+        return route
+
+    def _notify_auto(self, detected: InstrumentMode):
+        if self.mode == InstrumentMode.AUTO and self.on_mode_detected:
+            self.on_mode_detected(detected)
 
     def _dispatch_notes(self, stop_notes: list[int], play_notes: list[int], velocity: int = 100, channel: int = 0):
         if stop_notes and self.on_audio_stop:

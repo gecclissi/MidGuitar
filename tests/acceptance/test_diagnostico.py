@@ -462,14 +462,12 @@ def test_midi_drums_channel_10():
     assert got["dr"] == [(36, 100)]
 
 
-@pytest.mark.xfail(strict=True, reason="modo AUTO: teclado no canal 1 vira Pro Guitar com casa negativa")
 def test_midi_auto_keyboard_on_channel_1():
     r, got = _reader()
     r._midi_callback(([0x90, 60, 90], 0.0))
     assert got["kb"] and not got["pg"]
 
 
-@pytest.mark.xfail(strict=True, reason="modo AUTO: palhetada (notas 69/71/72) nunca é reconhecida; vira tecla de teclado")
 def test_midi_auto_strum_note():
     r, got = _reader()
     r._midi_callback(([0x96, 71, 100], 0.0))
