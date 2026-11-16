@@ -59,6 +59,30 @@ def extract_ogg_from_mogg(mogg_path: str, output_ogg_path: str = None) -> str:
         return mogg_path
 
 
+def get_ogg_codec(path: str) -> str:
+    """
+    Identifica o codec de um arquivo Ogg lendo a primeira página:
+    "vorbis" (\x01vorbis), "opus" (OpusHead), "other" (flac/speex...) ou "" se não for Ogg.
+    """
+    try:
+        with open(path, "rb") as f:
+            head = f.read(512)
+    except Exception:
+        return ""
+    if head[:4] != b"OggS":
+        return ""
+    if b"vorbis" in head:
+        return "vorbis"
+    if b"OpusHead" in head:
+        return "opus"
+    return "other"
+
+
+def is_vorbis_ogg(path: str) -> bool:
+    """True se o arquivo é um Ogg Vorbis (o único formato Ogg que o Rock Band toca)."""
+    return get_ogg_codec(path) == "vorbis"
+
+
 def convert_audio_to_ogg(source_path: str, target_ogg_path: str) -> bool:
     """
     Converte qualquer arquivo de áudio (.mp3, .wav, .flac, .ogg, .mogg) para OGG Vorbis padrão.
@@ -71,11 +95,10 @@ def convert_audio_to_ogg(source_path: str, target_ogg_path: str) -> bool:
         extracted = extract_ogg_from_mogg(source_path, target_ogg_path)
         return os.path.exists(extracted)
 
-    # Verifica se já é um arquivo OggS nativo válido
+    # Já é Ogg Vorbis: só copia. Ogg com Opus (ou outro codec) é decodificado e regravado
+    # como Vorbis abaixo, porque o Rock Band não toca Opus dentro do .mogg.
     try:
-        with open(source_path, "rb") as f:
-            magic = f.read(4)
-        if magic == b"OggS":
+        if is_vorbis_ogg(source_path):
             if os.path.abspath(source_path) != os.path.abspath(target_ogg_path):
                 shutil.copy2(source_path, target_ogg_path)
             return True
@@ -169,9 +192,8 @@ def create_unencrypted_mogg(source_audio_path: str, target_mogg_path: str) -> bo
 
     temp_ogg = None
     try:
-        # Verifica se já é OggS puro; se não for, converte para um OGG temporário
-        with open(source_audio_path, "rb") as f:
-            is_ogg = (f.read(4) == b"OggS")
+        # Só Ogg Vorbis é usado direto; Opus e demais formatos são convertidos para um OGG temporário
+        is_ogg = is_vorbis_ogg(source_audio_path)
 
         if is_ogg:
             ogg_path = source_audio_path
@@ -275,16 +297,23 @@ def analyze_audio_file(audio_path: str) -> dict:
         result["duration_ms"] = max(5000, int(duration_sec * 1000))
         result["last_sound_ms"] = max(2000, result["duration_ms"] - 2000)
 
-        # Lê mono reduzido em blocos para análise rápida de energia e BPM (sem travar a UI)
-        hop_frames = max(1, int(sr * 0.05))  # janelas de 50ms (20 Hz de resolução de envelope)
+        # Envelope de energia RMS com passo de 10 ms (100 Hz). A resolução fina é o que
+        # permite estimar o BPM com precisão (com 50 ms, 128 BPM virava 133).
+        hop_ms = 10
+        hop_frames = max(1, int(round(sr * hop_ms / 1000.0)))
         energies = []
+        block_hops = 200  # lê 2 s por vez e reparte em passos de 10 ms
         with sf.SoundFile(play_path, "r") as f:
-            while f.tell() < total_frames:
-                chunk = f.read(hop_frames, dtype="float32", always_2d=True)
+            while True:
+                chunk = f.read(hop_frames * block_hops, dtype="float32", always_2d=True)
                 if len(chunk) == 0:
                     break
-                rms = float(np.sqrt(np.mean(chunk ** 2)))
-                energies.append(rms)
+                mono_sq = np.mean(chunk.astype(np.float64) ** 2, axis=1)
+                full = (len(mono_sq) // hop_frames) * hop_frames
+                if full:
+                    energies.extend(np.sqrt(mono_sq[:full].reshape(-1, hop_frames).mean(axis=1)))
+                if full < len(mono_sq):
+                    energies.append(float(np.sqrt(mono_sq[full:].mean())))
 
         if not energies:
             return result
@@ -296,11 +325,11 @@ def analyze_audio_file(audio_path: str) -> dict:
         # Detecta início e fim do som real (threshold de 4% da energia máxima)
         active_indices = np.where(norm_env > 0.04)[0]
         if len(active_indices) > 0:
-            result["first_sound_ms"] = int(active_indices[0] * 50)
-            result["last_sound_ms"] = min(result["duration_ms"] - 500, int(active_indices[-1] * 50))
+            result["first_sound_ms"] = int(active_indices[0] * hop_ms)
+            result["last_sound_ms"] = min(result["duration_ms"] - 500, int(active_indices[-1] * hop_ms))
 
-        # Agrega em janelas de 500ms (10 blocos de 50ms) para perfil de energia da música
-        win_size = 10
+        # Agrega em janelas de 500ms (50 blocos de 10ms) para perfil de energia da música
+        win_size = 500 // hop_ms
         num_wins = len(norm_env) // win_size
         if num_wins > 0:
             reshaped = norm_env[:num_wins * win_size].reshape(num_wins, win_size)
@@ -308,21 +337,25 @@ def analyze_audio_file(audio_path: str) -> dict:
 
         # Estimativa de BPM por autocorrelação do envelope de ataque (onset strength)
         onset = np.maximum(0.0, np.diff(norm_env, prepend=norm_env[0]))
-        if len(onset) > 100:
+        if len(onset) > 500:
             # Usa trecho central da música (até 60 segundos) para estimar BPM
             mid_start = len(onset) // 4
-            mid_slice = onset[mid_start : min(len(onset), mid_start + 1200)]
+            mid_slice = onset[mid_start : min(len(onset), mid_start + 6000)]
             mid_slice = mid_slice - np.mean(mid_slice)
             corr = np.correlate(mid_slice, mid_slice, mode="full")
             corr = corr[len(corr) // 2 :]
 
-            # Lags em blocos de 50ms (20 Hz):
-            # 80 BPM = 0.75s = 15 blocos | 170 BPM = 0.35s = 7 blocos
-            min_lag = 7
-            max_lag = min(18, len(corr) - 1)
+            # Lags em blocos de 10ms: 175 BPM = 0.343s ~ 35 blocos | 80 BPM = 0.75s = 75 blocos
+            min_lag = 35
+            max_lag = min(75, len(corr) - 2)
             if max_lag > min_lag:
                 best_lag = min_lag + int(np.argmax(corr[min_lag : max_lag + 1]))
-                est_bpm = 60.0 / (best_lag * 0.05)
+                # Interpolação parabólica em torno do pico (precisão sub-bloco)
+                y0, y1, y2 = corr[best_lag - 1], corr[best_lag], corr[best_lag + 1]
+                denom = y0 - 2.0 * y1 + y2
+                shift = 0.5 * (y0 - y2) / denom if abs(denom) > 1e-12 else 0.0
+                lag = best_lag + max(-1.0, min(1.0, float(shift)))
+                est_bpm = 60.0 / (lag * hop_ms / 1000.0)
                 # Arredonda para BPM musical inteiro próximo
                 result["bpm"] = float(round(max(75.0, min(175.0, est_bpm))))
     except Exception as e:

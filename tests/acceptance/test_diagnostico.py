@@ -281,7 +281,6 @@ def test_encrypted_mogg_is_not_extracted_as_garbage(copy_ref):
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="convert_audio_to_ogg só copia .opus (OggS): o .mogg sai com Opus, que o RB3 não toca")
 def test_opus_becomes_vorbis_inside_mogg(copy_ref, tmp_path):
     from src.creator.mogg_generator import create_unencrypted_mogg
     opus = copy_ref(os.path.join(JOE, "bass.opus"))
@@ -293,7 +292,6 @@ def test_opus_becomes_vorbis_inside_mogg(copy_ref, tmp_path):
         assert b"vorbis" in f.read(128)
 
 
-@pytest.mark.xfail(strict=True, reason="BPM do analisador tem resolução de 50 ms: 128 BPM vira 133")
 def test_bpm_detection_click_128(tmp_path):
     from src.creator.mogg_generator import analyze_audio_file
     sr, bpm = 44100, 128
