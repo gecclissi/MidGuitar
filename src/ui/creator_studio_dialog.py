@@ -33,6 +33,41 @@ from src.ui.tooltip import set_tooltip
 from src.ui.key_strum_config_dialog import KeyStrumConfigDialog, DEFAULT_KEYS, KEY_NAMES_FRIENDLY
 from src.ui.lyrics_manager_dialog import LyricsManagerDialog
 from src.utils.config_manager import save_config
+from src.ui.background_task import run_sync, run_with_progress
+
+# Executor dos trabalhos pesados (exportação, abrir pacote, compilar pacote).
+# None = thread + janela de progresso quando o dono é uma janela Tk, ou na hora (run_sync)
+# quando não é (testes com objetos falsos). Os testes podem trocar por run_sync.
+TASK_RUNNER = None
+
+EXPORT_PROGRESS_TEXT = "Exportando… (o áudio pode levar 1 a 2 minutos)"
+
+
+def _run_task(owner, text, work, on_success, on_error):
+    runner = TASK_RUNNER
+    if runner is None:
+        runner = run_with_progress if isinstance(owner, tk.Misc) else run_sync
+    runner(owner, text, work, on_success, on_error)
+
+
+def _show_task_error(title):
+    def _on_error(exc):
+        messagebox.showerror(title, f"{exc}")
+    return _on_error
+
+
+def _export_in_background(owner, export_fn, out_dir, title, message_fn, target):
+    """Exporta numa thread e, no fim, mostra o resultado com a verificação de compatibilidade."""
+    song = owner.song
+
+    def _on_success(pkg_dir):
+        owner._show_export_result(title, message_fn(pkg_dir), pkg_dir, target)
+
+    def _on_error(exc):
+        messagebox.showerror("Erro na exportação", f"A exportação falhou:\n\n{exc}")
+
+    _run_task(owner, EXPORT_PROGRESS_TEXT, lambda: export_fn(song, out_dir), _on_success, _on_error)
+
 
 class CreatorStudioDialog(ctk.CTkToplevel):
     def __init__(self, master, audio_engine=None):
@@ -545,18 +580,21 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.folder_entry.delete(0, "end")
         self.folder_entry.insert(0, folder)
 
-        try:
-            song = import_song_from_folder(folder)
-        except UnsupportedFormatError as e:
-            messagebox.showwarning("Formato não suportado", str(e))
-            return
-        except Exception as e:
-            messagebox.showerror("Erro na importação", f"Não foi possível importar:\n{folder}\n\n{e}")
-            return
-        self._apply_loaded_song(song)
-        warnings = getattr(song, "import_warnings", None) or []
-        if warnings:
-            messagebox.showwarning("Importado com avisos", "\n\n".join(warnings))
+        def _on_success(song):
+            self._apply_loaded_song(song)
+            warnings = getattr(song, "import_warnings", None) or []
+            if warnings:
+                messagebox.showwarning("Importado com avisos", "\n\n".join(warnings))
+
+        def _on_error(e):
+            if isinstance(e, UnsupportedFormatError):
+                messagebox.showwarning("Formato não suportado", str(e))
+            else:
+                messagebox.showerror("Erro na importação", f"Não foi possível importar:\n{folder}\n\n{e}")
+
+        # O primeiro import de um .mogg criptografado leva ~25 s: roda fora da interface
+        _run_task(self, "Abrindo a música… (pacotes com áudio criptografado podem levar até 30 s)",
+                  lambda: import_song_from_folder(folder), _on_success, _on_error)
 
     def _apply_loaded_song(self, song: ChartSong):
         """Troca a música do estúdio (importada ou aberta de um projeto) e atualiza a tela."""
@@ -1042,18 +1080,28 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         pack_name = self.batch_name_entry.get().strip() or "MegaPack_RB3"
         choice = self.batch_target_combo.get()
 
+        songs = list(self.batch_songs)
+        art = self.batch_art_path
         if "Clone Hero" in choice:
-            res_dir = compile_clone_hero_pack(self.batch_songs, pack_name, out_dir)
-            messagebox.showinfo("Sucesso Clone Hero!", f"Mega Pacote Clone Hero gerado com sucesso em:\n{res_dir}\n\nCole na sua pasta Songs!")
+            def _work():
+                return compile_clone_hero_pack(songs, pack_name, out_dir)
+
+            def _on_success(res_dir):
+                messagebox.showinfo("Sucesso Clone Hero!", f"Mega Pacote Clone Hero gerado com sucesso em:\n{res_dir}\n\nCole na sua pasta Songs!")
         else:
-            res_dir = compile_ps3_song_pack(self.batch_songs, pack_name, out_dir, self.batch_art_path)
-            messagebox.showinfo(
-                "Mega Pacote PS3 / RPCS3 Pronto!",
-                f"🎉 Mega Pacote criado com sucesso contendo {len(self.batch_songs)} músicas!\n\n"
-                f"Pasta gerada: {res_dir}\n\n"
-                f"• Todas as músicas foram unificadas em um único songs.dta consolidado!\n"
-                f"• Para instalar no RPCS3: Dê dois cliques em 'INSTALAR_PACOTE_NO_RPCS3.bat' dentro da pasta!"
-            )
+            def _work():
+                return compile_ps3_song_pack(songs, pack_name, out_dir, art)
+
+            def _on_success(res_dir):
+                messagebox.showinfo(
+                    "Mega Pacote PS3 / RPCS3 Pronto!",
+                    f"🎉 Mega Pacote criado com sucesso contendo {len(songs)} músicas!\n\n"
+                    f"Pasta gerada: {res_dir}\n\n"
+                    f"• Todas as músicas foram unificadas em um único songs.dta consolidado!\n"
+                    f"• Para instalar no RPCS3: Dê dois cliques em 'INSTALAR_PACOTE_NO_RPCS3.bat' dentro da pasta!"
+                )
+        _run_task(self, f"Compilando o pacote com {len(songs)} músicas…", _work, _on_success,
+                  _show_task_error("Erro ao compilar o pacote"))
 
     # -------------------------------------------------------------------------
     # ABA 3: EDITOR VISUAL DE NOTAS (MINI-REAPER) & GRAVAÇÃO
@@ -2584,11 +2632,10 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote do Rock Band 3")
         if not out_dir:
             return
-        pkg_dir = export_rb3_song_package(self.song, out_dir)
-        self._show_export_result(
-            "Sucesso!",
-            f"Pacote Rock Band 3 gerado com sucesso em:\n{pkg_dir}\n\nVocê já pode copiar para o RPCS3 ou Xbox 360!",
-            pkg_dir, "rb3_ps3")
+        _export_in_background(
+            self, export_rb3_song_package, out_dir, "Sucesso!",
+            lambda pkg_dir: f"Pacote Rock Band 3 gerado com sucesso em:\n{pkg_dir}\n\nVocê já pode copiar para o RPCS3 ou Xbox 360!",
+            "rb3_ps3")
 
     def _on_export_rb2(self):
         if not self._ensure_audio_loaded("Para exportar para o Rock Band 2 com áudio compilado (.mogg):"):
@@ -2599,14 +2646,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote do Rock Band 2 (PS3 / RPCS3 / Xbox 360)")
         if not out_dir:
             return
-        pkg_dir = export_rb2_song_package(self.song, out_dir)
-        self._show_export_result(
-            "Sucesso Rock Band 2!",
-            f"🎸 Pacote para Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 & RB2 Deluxe) gerado com sucesso em:\n{pkg_dir}\n\n"
+        _export_in_background(
+            self, export_rb2_song_package, out_dir, "Sucesso Rock Band 2!",
+            lambda pkg_dir: f"🎸 Pacote para Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 & RB2 Deluxe) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• No RPCS3 (PC): Dê 2 cliques em 'INSTALAR_NO_RB2_RPCS3.bat' dentro da pasta!\n"
             f"• No PS3 Real: Copie a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30147/USRDIR/\n"
             f"• No Xbox 360: Use a pasta 'Xbox360_Content/0000000000000000/45410869/'",
-            pkg_dir, "rb2"
+            "rb2"
         )
 
     def _on_export_ps3_pkg(self):
@@ -2618,18 +2664,19 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote PS3 / RPCS3")
         if not out_dir:
             return
-        pkg_dir = export_ps3_pkg_structure(self.song, out_dir)
-        pkgs = sorted(f for f in os.listdir(pkg_dir) if f.lower().endswith(".pkg"))
-        pkg_line = f"Pacote pronto: {pkgs[0]}\n\n" if pkgs else ""
-        self._show_export_result(
-            "Sucesso PS3 / RPCS3!",
-            f"Pacote PS3 / RPCS3 gerado com sucesso em:\n{pkg_dir}\n\n{pkg_line}"
-            f"• RPCS3: menu File > Install Packages/Raps/Edats e escolha o .pkg\n"
-            f"• PS3 com HEN/CFW: copie o .pkg para um pendrive e instale pelo Package Manager\n"
-            f"• Ou copie à mão a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/ "
-            f"(sem renomear: o .mid.edat depende do nome dela)",
-            pkg_dir, "rb3_ps3"
-        )
+
+        def _message(pkg_dir):
+            pkgs = sorted(f for f in os.listdir(pkg_dir) if f.lower().endswith(".pkg"))
+            pkg_line = f"Pacote pronto: {pkgs[0]}\n\n" if pkgs else ""
+            return (
+                f"Pacote PS3 / RPCS3 gerado com sucesso em:\n{pkg_dir}\n\n{pkg_line}"
+                f"• RPCS3: menu File > Install Packages/Raps/Edats e escolha o .pkg\n"
+                f"• PS3 com HEN/CFW: copie o .pkg para um pendrive e instale pelo Package Manager\n"
+                f"• Ou copie à mão a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/ "
+                f"(sem renomear: o .mid.edat depende do nome dela)"
+            )
+        _export_in_background(self, export_ps3_pkg_structure, out_dir, "Sucesso PS3 / RPCS3!",
+                              _message, "rb3_ps3")
 
     def _on_convert_to_clone_hero(self):
         if not self._ensure_audio_loaded("Para exportar para o Clone Hero com áudio (song.ogg):"):
@@ -2640,11 +2687,10 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha a pasta de destino (ex: Clone Hero/Songs)")
         if not out_dir:
             return
-        pkg_dir = export_clone_hero_song(self.song, out_dir)
-        self._show_export_result(
-            "Sucesso Clone Hero!",
-            f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!",
-            pkg_dir, "clonehero")
+        _export_in_background(
+            self, export_clone_hero_song, out_dir, "Sucesso Clone Hero!",
+            lambda pkg_dir: f"Pasta Clone Hero gerada com sucesso em:\n{pkg_dir}\n\nAbra o jogo e faça um Scan Songs!",
+            "clonehero")
 
     def _on_export_xbox360(self):
         if not self._ensure_audio_loaded("Para exportar para o Xbox 360 com áudio compilado (.mogg):"):
@@ -2655,14 +2701,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote Xbox 360 (Rock Band 3)")
         if not out_dir:
             return
-        pkg_dir = export_xbox360_structure(self.song, out_dir)
-        self._show_export_result(
-            "Sucesso Xbox 360!",
-            f"Pacote CON do Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
+        _export_in_background(
+            self, export_xbox360_structure, out_dir, "Sucesso Xbox 360!",
+            lambda pkg_dir: f"Pacote CON do Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• Arquivo '*_rb3con': copie para Hdd1:\\Content\\0000000000000000\\45410914\\00000001\\ "
             f"(RGH/JTAG, Horizon/FATXplorer) ou instale no Xenia (File > Install Content).\n"
             f"• Veja o arquivo 'COMO_INSTALAR_NO_XBOX360.txt' dentro da pasta!",
-            pkg_dir, "xbox360"
+            "xbox360"
         )
 
     def _on_export_ps4(self):
@@ -2674,15 +2719,14 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         out_dir = filedialog.askdirectory(title="Escolha onde salvar o pacote PlayStation 4 (Rock Band 4)")
         if not out_dir:
             return
-        pkg_dir = export_ps4_structure(self.song, out_dir)
-        self._show_export_result(
-            "PlayStation 4 (experimental, não verificado)",
-            f"EXPERIMENTAL / NÃO VERIFICADO: gerei só a estrutura de arquivos em:\n{pkg_dir}\n\n"
+        _export_in_background(
+            self, export_ps4_structure, out_dir, "PlayStation 4 (experimental, não verificado)",
+            lambda pkg_dir: f"EXPERIMENTAL / NÃO VERIFICADO: gerei só a estrutura de arquivos em:\n{pkg_dir}\n\n"
             f"• Isto ainda NÃO toca no Rock Band 4: ele usa .rbmid_ps4, .songdta_ps4, .moggsong e "
             f".png_ps4, que o MidGuitar ainda não gera.\n"
             f"• Para jogar, use Rock Band 3 (PS3/RPCS3/Xbox 360) ou Clone Hero/YARG.\n"
             f"• Veja 'COMO_INSTALAR_NO_PS4.txt' dentro da pasta.",
-            pkg_dir, "ps4"
+            "ps4"
         )
 
     def _save_from_editor_rb3(self):
