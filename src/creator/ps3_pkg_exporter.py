@@ -17,6 +17,7 @@ segunda música não sobrescreve o songs.dta da primeira.
 """
 
 import os
+import re
 import struct
 from PIL import Image
 from src.creator.chart_model import ChartSong
@@ -96,12 +97,41 @@ def save_icon0(path: str, art_path: str = None, title: str = "", subtitle: str =
     _create_default_icon(path, title, subtitle)
 
 
+_BAT_SAFE_PUNCT = set(" -_.,:;'+#/@=?[]{}~*")
+_BAT_ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def bat_safe_text(text: str, max_len: int = 120) -> str:
+    """Reduz um texto vindo do usuário a algo inerte num .bat.
+
+    Mantém letras (inclusive acentuadas), dígitos e uma pontuação neutra; troca '&' por 'e' e
+    remove ^ | < > % ( ) ! " e quebras de linha, que o cmd.exe interpretaria como comandos.
+    """
+    out = []
+    for ch in str(text or ""):
+        if ch == "&":
+            out.append(" e ")
+        elif ch.isalnum() or ch in _BAT_SAFE_PUNCT:
+            out.append(ch)
+        else:
+            out.append(" ")
+    return " ".join("".join(out).split())[:max_len]
+
+
 def rpcs3_install_bat(folder: str, title_id: str, label: str) -> str:
-    """Script .bat que copia USRDIR\\<pasta> para dev_hdd0\\game\\<title_id>\\USRDIR\\<pasta>."""
+    """Script .bat que copia USRDIR\\<pasta> para dev_hdd0\\game\\<title_id>\\USRDIR\\<pasta>.
+
+    folder e title_id entram em caminhos e precisam ser só ASCII alfanumérico; label (título,
+    artista, nome do pacote) passa por bat_safe_text.
+    """
+    for name, value in (("folder", folder), ("title_id", title_id)):
+        if not _BAT_ID_RE.match(str(value or "")):
+            raise ValueError("%s inválido para o .bat: %r" % (name, value))
+    label = bat_safe_text(label)
     return rf"""@echo off
 chcp 65001 > nul
 echo ============================================================
-echo   MidGuitar - Instalador no RPCS3 ({title_id})
+echo   MidGuitar - Instalador no RPCS3 - {title_id}
 echo   {label}
 echo ============================================================
 echo.
@@ -134,7 +164,7 @@ if exist "%RPCS3_FOUND%" (
   echo [SUCESSO!] Instalado em %RPCS3_FOUND%\{folder}
   echo Abra o jogo e aproveite!
 ) else (
-  echo Pasta não encontrada. Verifique se o jogo ({title_id}) está instalado no emulador.
+  echo Pasta não encontrada. Verifique se o jogo {title_id} está instalado no emulador.
 )
 pause
 """
