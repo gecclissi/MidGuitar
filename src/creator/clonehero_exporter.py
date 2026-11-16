@@ -11,6 +11,30 @@ import shutil
 from src.creator.chart_model import ChartSong
 from src.creator.midi_generator import generate_rbn_midi, save_midi
 
+CH_STEM_NAMES = {
+    "song", "guitar", "bass", "rhythm", "keys", "crowd", "vocals", "vocals_1", "vocals_2",
+    "drums", "drums_1", "drums_2", "drums_3", "drums_4",
+}
+
+
+def _clone_hero_stem_name(base: str):
+    """Mapeia o nome de um stem para o padrão Clone Hero; None se não houver correspondência."""
+    name = base.strip().lower()
+    if name.endswith("_extracted"):
+        name = name[: -len("_extracted")]
+    if name in CH_STEM_NAMES:
+        return name
+    squashed = name.replace(" ", "_").replace("-", "_")
+    if squashed in CH_STEM_NAMES:
+        return squashed
+    for key, target in (("rhythm", "rhythm"), ("drum", "drums"), ("vocal", "vocals"), ("vox", "vocals"),
+                        ("voice", "vocals"), ("keys", "keys"), ("keyboard", "keys"), ("piano", "keys"),
+                        ("crowd", "crowd"), ("bass", "bass"), ("guitar", "guitar")):
+        if key in name:
+            return target
+    return None
+
+
 def export_clone_hero_song(song: ChartSong, output_base_dir: str, audio_source_path: str = None, total_duration_ms: int = 180000) -> str:
     """
     Exporta a música para formato nativo do Clone Hero / YARG.
@@ -70,27 +94,41 @@ preview_start_time = {song.preview_start_ms}
     with open(ini_path, "w", encoding="utf-8") as f:
         f.write(ini_content)
 
-    # 3. Copia e converte arquivos de áudio (gera song.ogg oficial para máxima compatibilidade no Clone Hero / YARG)
-    from src.creator.mogg_generator import convert_audio_to_ogg
+    # 3. Áudio. Com stems: só os stems são copiados (nomes do padrão Clone Hero) e song.ogg
+    #    só existe se houver uma mixagem completa separada dos stems. Sem stems: song.ogg.
     audio_path = audio_source_path or song.audio_path
-    if audio_path and os.path.exists(audio_path):
-        ogg_dest = os.path.join(target_dir, "song.ogg")
-        if not convert_audio_to_ogg(audio_path, ogg_dest):
+    stems = [p for p in (song.audio_stems or []) if p and os.path.exists(p)]
+    stem_keys = {os.path.normcase(os.path.abspath(p)) for p in stems}
+    audio_is_stem = bool(audio_path) and os.path.normcase(os.path.abspath(audio_path)) in stem_keys
+
+    used_names = set()
+    for stem_p in stems:
+        ext = os.path.splitext(stem_p)[1].lower()
+        base = _clone_hero_stem_name(os.path.splitext(os.path.basename(stem_p))[0])
+        if base is None:
+            base = os.path.splitext(os.path.basename(stem_p))[0]
+            print(f"[CloneHeroExporter] Aviso: stem '{base}' não segue o padrão do Clone Hero "
+                  f"(guitar, bass, rhythm, drums, keys, vocals, crowd, song); mantido com o nome original.")
+        fname = base + ext
+        if fname.lower() in used_names:  # evita sobrescrever dois stems com o mesmo nome
+            fname = os.path.splitext(os.path.basename(stem_p))[0] + ext
+        used_names.add(fname.lower())
+        try:
+            shutil.copy2(stem_p, os.path.join(target_dir, fname))
+        except Exception as e:
+            print(f"[CloneHeroExporter] Erro ao copiar stem {fname}: {e}")
+
+    needs_song_ogg = bool(audio_path) and os.path.exists(audio_path) and not audio_is_stem
+    if needs_song_ogg and stems and "song" in {os.path.splitext(n)[0] for n in used_names}:
+        needs_song_ogg = False  # já existe um stem 'song'
+    if needs_song_ogg:
+        from src.creator.mogg_generator import convert_audio_to_ogg
+        if not convert_audio_to_ogg(audio_path, os.path.join(target_dir, "song.ogg")):
             ext = os.path.splitext(audio_path)[1].lower()
             try:
                 shutil.copy2(audio_path, os.path.join(target_dir, f"song{ext}"))
             except Exception as e:
                 print(f"[CloneHeroExporter] Erro ao copiar áudio: {e}")
-
-    if song.audio_stems:
-        for stem_p in song.audio_stems:
-            if os.path.exists(stem_p):
-                fname = os.path.basename(stem_p)
-                dest_p = os.path.join(target_dir, fname)
-                try:
-                    shutil.copy2(stem_p, dest_p)
-                except Exception as e:
-                    print(f"[CloneHeroExporter] Erro ao copiar stem {fname}: {e}")
 
     # 4. Copia a arte do álbum ou gera uma estilizada (512x512) para nunca ficar sem capa
     dest_art = os.path.join(target_dir, "album.png")

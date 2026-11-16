@@ -102,8 +102,9 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         f_lower = f.lower()
         full_p = os.path.join(folder_path, f)
         if f_lower.endswith(".mogg"):
-            from src.creator.mogg_generator import extract_ogg_from_mogg
-            extracted_ogg = os.path.join(folder_path, f"{os.path.splitext(f)[0]}_extracted.ogg")
+            from src.creator.mogg_generator import extract_ogg_from_mogg, extraction_cache_dir
+            # Extrai para um cache temporário: nunca grava ao lado da pasta de origem
+            extracted_ogg = os.path.join(extraction_cache_dir(folder_path), f"{os.path.splitext(f)[0]}_extracted.ogg")
             if extract_ogg_from_mogg(full_p, extracted_ogg):
                 song.audio_stems.append(extracted_ogg)
                 if not song.audio_path:

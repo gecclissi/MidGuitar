@@ -599,7 +599,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     def _on_quick_load_mp3(self):
         f = filedialog.askopenfilename(
             title="Selecione o MP3 / Áudio da sua música",
-            filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.flac *.mogg")]
+            filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.opus *.flac *.mogg")]
         )
         if f:
             self._load_audio_file_smart(f)
@@ -628,7 +628,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         )
         f = filedialog.askopenfilename(
             title="Selecione o arquivo de áudio da música",
-            filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.flac *.mogg")]
+            filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.opus *.flac *.mogg")]
         )
         if f:
             self._load_audio_file_smart(f)
@@ -2010,15 +2010,16 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             self.audio_entry.insert(0, self.song.audio_path)
 
     def _on_browse_audio(self):
-        f = filedialog.askopenfilename(filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.flac *.mogg")])
+        f = filedialog.askopenfilename(filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.opus *.flac *.mogg")])
         if f:
             self._load_audio_file_smart(f)
 
     def _load_audio_file_smart(self, f: str):
         """Carrega áudio, extrai Artista - Título do nome do arquivo e detecta BPM e duração reais!"""
         if f.lower().endswith(".mogg"):
-            from src.creator.mogg_generator import extract_ogg_from_mogg
-            extracted = os.path.splitext(f)[0] + "_extracted.ogg"
+            from src.creator.mogg_generator import extract_ogg_from_mogg, extraction_cache_dir
+            extracted = os.path.join(extraction_cache_dir(os.path.dirname(os.path.abspath(f))),
+                                     os.path.splitext(os.path.basename(f))[0] + "_extracted.ogg")
             if extract_ogg_from_mogg(f, extracted):
                 f = extracted
 

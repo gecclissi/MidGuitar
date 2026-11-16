@@ -30,6 +30,16 @@ def is_mogg_file(filepath: str) -> bool:
         return False
 
 
+def extraction_cache_dir(source_dir: str) -> str:
+    """Pasta temporária (uma por pasta de origem) para áudios extraídos de .mogg.
+    Evita gravar arquivos *_extracted.ogg ao lado dos originais do usuário."""
+    import hashlib
+    key = hashlib.md5(os.path.abspath(source_dir).encode("utf-8")).hexdigest()[:12]
+    cache = os.path.join(tempfile.gettempdir(), "midguitar_cache", key)
+    os.makedirs(cache, exist_ok=True)
+    return cache
+
+
 def extract_ogg_from_mogg(mogg_path: str, output_ogg_path: str = None) -> str:
     """
     Remove o cabeçalho Harmonix 0x0A de um arquivo .mogg e salva o stream .ogg puro
@@ -39,7 +49,7 @@ def extract_ogg_from_mogg(mogg_path: str, output_ogg_path: str = None) -> str:
         return mogg_path
 
     if output_ogg_path is None:
-        base_dir = os.path.dirname(mogg_path)
+        base_dir = extraction_cache_dir(os.path.dirname(os.path.abspath(mogg_path)))
         base_name = os.path.splitext(os.path.basename(mogg_path))[0]
         output_ogg_path = os.path.join(base_dir, f"{base_name}_extracted.ogg")
 
