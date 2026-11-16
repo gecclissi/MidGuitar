@@ -169,3 +169,119 @@ RB2: `decade the10s` e `vocal_gender male` fixos. Xbox: arquivos duplicados em `
 - **B** Botão do tutorial e `build_exe.py` (caminho relativo, `--paths`, config ao lado do `.exe`).
 - **B** Pacote CH: músicas com mesmo artista/título se sobrescrevem; `detect_target` devolve `rb3_ps3` para exports Xbox/PS4 (pasta `songs/`).
 - **B** Divisão silábica erra em inglês.
+
+## Situação após o programa (2026-11)
+
+O diagnóstico acima fica como histórico. Esta tabela mostra cada funcionalidade depois dos
+passos 2 a 5, com o commit que corrigiu e o teste que garante. Todos os `xfail` de
+`tests/acceptance/test_diagnostico.py` foram removidos (viraram testes normais que passam).
+O que depende de jogo, console ou instrumento físico está marcado 🖐 e tem roteiro em
+[`docs/TESTE_NO_JOGO.md`](../../TESTE_NO_JOGO.md).
+
+Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado · 🖐 falta conferir à mão.
+
+### Importação
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Pasta Clone Hero (`notes.mid`) | ⚠️ | ✅ sem perdas (passthrough de OD, frases, tom markers, fills, HARM, canais Pro) | fbdcac4, 2d24e08 (notas abertas) | `test_ch_fidelity.py`, `test_ch_roundtrip_keeps_*` |
+| `song.ini` | ⚠️ | ✅ prévia, rankings Pro e chaves desconhecidas preservadas | 79f0aa9 | `test_song_ini.py`, `test_ch_import_reads_preview_and_pro_ranks` |
+| Pasta com `notes.chart` | ⚠️ | ✅ artista, `[Events]`, star power, forçadas/open, bateria kick/snare | 370d396 | `test_chart_import.py`, `test_chart_import_reads_*` |
+| Pasta RB3 solta / raiz do pacote | ⚠️ | ✅ procura `songs/*/` e lê o `songs.dta` real | c5fe817 | `test_ps3_import_export.py` |
+| Pasta PS3 extraída (`.mid.edat` + `.mogg` criptografado) | ❌ | ✅ | c5fe817, deda3b9, 61747a8, 2637c9d | `test_ps3_extracted_folder_imports_notes`, `test_ps3_import_audio_path_exists` |
+| Pacote CON do Xbox 360 | ❌ | ✅ (botão **Abrir pacote** e arrastar) | 26d4f35, 93c7a28, e6675b0 | `test_xbox_con_import`, `test_xbox_import_export.py` |
+| `.pkg` do PS3 direto | ❌ | ✅ | 1d73f9a, c5fe817 | `test_ps3_pkg_file_import`, `test_ps3_pkg.py` |
+| Mod GHWT:DE | ❌ | ❌ não suportado, mas recusado com mensagem clara | 385fd18 | `test_ghwtde_import_is_refused_with_clear_message` |
+| `.mid` solto | ⚠️ | ⚠️ funciona numa pasta; soltar um `.mid` sozinho na janela ainda é ignorado | — | — |
+| `.mogg` solto | ⚠️ | ✅ criptografado é decifrado; extração vai para cache temporário | 61747a8, 2637c9d, 6f7411a | `test_encrypted_mogg_is_decrypted_not_garbage`, `test_mogg_crypt.py` |
+| Abrir pacote sem travar a janela (~25 s na 1ª vez) | — | ✅ thread + janela de progresso | c1e2b86 | `test_background_tasks.py` |
+
+### Áudio
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| `analyze_audio_file` (BPM) | ⚠️ | ✅ envelope de 10 ms + interpolação parabólica | e8359c7 | `test_bpm_detection_click_128` |
+| `convert_audio_to_ogg` wav/mp3 | ✅ | ✅ | — | `test_audio_ch_cycle.py` |
+| `convert_audio_to_ogg` opus | ❌ | ✅ vira Vorbis de verdade | e8359c7 | `test_opus_becomes_vorbis_inside_mogg` |
+| `create_unencrypted_mogg` | ⚠️ | ✅ Vorbis, 44100 Hz, multicanal | e8359c7, 98ef303, c75a7d7 | `test_unencrypted_mogg_roundtrip`, `test_audio_resample.py` |
+| `extract_ogg_from_mogg` | ✅ | ✅ | — | — |
+| Stems multitrack | ❌ | ✅ `.mogg` multicanal coerente com o DTA; CH sem guitarra dobrada | c75a7d7, ddea0c8, 6f7411a | `test_rb3_multistem_mogg_channels_match_dta`, `test_audio_ch_cycle.py` |
+
+### Letras e vocais
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| `.txt` / `.lrc` / `.srt` | ✅ | ✅ | — | `test_lyrics_txt_lrc_srt` |
+| Divisão silábica | ⚠️ | ⚠️ inglês ainda erra (`lo-ve`) | — | — |
+| Geração de vocal | ✅ | ✅ | — | — |
+| Sem letra = sem microfone | ✅ | ✅ | — | `test_no_lyrics_means_no_vocals` |
+
+### Auto-chart e edição
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Modos do auto-chart | ✅ | ✅ | — | `test_auto_chart_all_modes_generate_four_difficulties` |
+| Só Bateria (bumbo/caixa) | ❌ | ✅ lanes `kick`/`snare` em todo lugar | 370d396 | `test_drum_kick_snare_*`, `test_chart_drums_export_kick_and_snare` |
+| Gerar só faltantes | ⚠️ | ⚠️ ainda usa BPM constante (ignora o mapa de tempos) | — | — |
+| Ranking 0-6 automático | ⚠️ | ✅ por densidade de notas Expert | bbecb75 | `test_audio_ch_cycle.py` |
+| Adicionar/remover nota | ⚠️ | ✅ editor e `remove_note_near` respeitam a dificuldade | b07987e | `test_editor_difficulty.py` |
+| Salvar/abrir projeto | ❌ | ✅ `.mgproj` com vocais, letra, stems, duração | 52dced6 | `test_project_file.py`, `test_project_roundtrip_*` |
+
+### Exportação
+
+| Destino | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Clone Hero / YARG | ⚠️ | ✅ validador sem erros, sem perdas · 🖐 no jogo | fbdcac4, 6f7411a, 79f0aa9 | `test_ch_export_roundtrip_keeps_counts_and_validates`, `test_clonehero_export_from_scratch_validates` |
+| RB3 (pasta `songs/`) | ❌ | ✅ `.mid.edat`, MIDI só com trilhas RB · 🖐 no jogo | 4e824ce, a68ed0c | `test_rb_export_ps3.py` |
+| PS3 / RPCS3 (`.pkg`) | ❌ | ✅ layout `USRDIR/<pasta>/songs`, `.mid.edat`, `png_ps3`, `.pkg` instalável · 🖐 no RPCS3/PS3 | ddea0c8, deda3b9, 1d73f9a, 49a8f9f, dc0d7a1 | `test_ps3_export_passes_validator`, `test_ps3_import_export.py` |
+| RB2 | ❌ | ⚠️ gerador de DTA compartilhado, `.mid.edat`; perfil RB2 não verificado · 🖐 | d7471df, 4e824ce | `test_rb2_dta.py` |
+| Xbox 360 | ❌ | ⚠️ pacote CON assinado e conferido por dentro; não verificado em console/Xenia · 🖐 | 26d4f35, 33dd69d, 0e0a3c3 | `test_xbox360_export_passes_validator`, `test_xbox_stfs.py` |
+| PS4 | ❌ | ❌ experimental, avisa que não toca no RB4 | 385fd18 | `test_ps4_export_is_honest_about_being_unverified` |
+| Aviso do validador na UI | ✅ | ✅ | — | `test_export_dialog.py` |
+| Exportar sem travar a janela (~1,5 min no PS3/Xbox) | ❌ (novo) | ✅ thread + janela "Exportando…", botões desligados, erro sempre mostrado | c1e2b86 | `test_background_tasks.py` |
+| DTA RB3 (`drum_solo`, `tracks`, `song_length`, `encoding`, aspas, rank, `song_id`) | ❌ | ✅ formato Magma C3, `song_id` estável | ddea0c8 | `test_rb3_dta_drum_solo_format`, `test_rb_export_ps3.py` |
+
+### Pacotes
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Escanear pasta | ✅ | ✅ | — | — |
+| Pacote PS3 | ⚠️ | ✅ layout real, `song_id` estável sem colisão · 🖐 no jogo | ddea0c8 | `test_pack_compilers_two_songs` |
+| Pacote Clone Hero | ✅ | ⚠️ duas músicas com mesmo artista/título ainda se sobrescrevem | — | `test_pack_compilers_two_songs` |
+| Compilar sem travar a janela | — | ✅ | c1e2b86 | `test_background_tasks.py` |
+
+### Palco ao vivo / MIDI
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Listar portas / gamepads | ✅ | ✅ | — | — |
+| Presets | ✅ | ✅ | — | — |
+| Mapper | ✅ | ✅ | — | — |
+| Bateria canal 10 | ✅ | ✅ · 🖐 | — | `test_midi_drums_channel_10` |
+| Pro Guitar canais 1-6 | ✅ | ✅ casas 0 a 22 · 🖐 | 3413ab9 | `test_midi_auto_mode.py` |
+| AUTO: teclado no canal 1 | ❌ | ✅ nota sem casa válida vira teclado e o app lembra do último instrumento · 🖐 | 3413ab9 | `test_midi_auto_keyboard_on_channel_1`, `test_midi_auto_mode.py` |
+| AUTO: palhetada 69/71/72 | ❌ | ✅ · 🖐 | 3413ab9 | `test_midi_auto_strum_note`, `test_midi_auto_mode.py` |
+| Motor de áudio | ✅ / 🖐 | ✅ / 🖐 | — | — |
+| Gamepad, visualizadores, whammy, ribbon | 🖐 | 🖐 | — | roteiro em `TESTE_NO_JOGO.md` §5 |
+
+### Interface e build
+
+| Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
+|---|---|---|---|---|
+| Janela principal | ✅ | ✅ | — | — |
+| Estúdio (5 abas) | ✅ | ✅ · 🖐 passeio | — | roteiro em `TESTE_NO_JOGO.md` §6 |
+| Arrastar e soltar | ✅ / 🖐 | ✅ (inclui `.pkg` e CON) / 🖐 | e6675b0 | `test_drop_con_without_extension_imports` |
+| Botão "Tutorial Visual" | ⚠️ | ✅ acha o tutorial no `.exe` e avisa se faltar | 528d018 | `test_selftest_passes_from_source` |
+| Texto da UI "GHWT" | ❌ | ✅ não promete mais GHWT:DE | 385fd18 | — |
+| `build_exe.py` | ⚠️ | ✅ `--paths=.`, tutorial e imagens no build, pycryptodome/soundfile/tkinterdnd2/mido, `--selftest`, config em `%APPDATA%\MidGuitar` com migração · 🖐 abrir o `.exe` | 528d018 | `test_config_paths.py`, `test_selftest_passes_from_source` |
+
+### Ainda abertos (conhecidos)
+
+- **M** "Gerar só faltantes" usa BPM constante (ignora o mapa de tempos da música importada).
+- **B** Pro Guitar: o exportador ainda limita a casa a 17 (a Squier tem 22).
+- **B** `generate_rbn_midi` recalcula dificuldades como efeito colateral.
+- **B** Pacote Clone Hero: músicas com mesmo artista/título se sobrescrevem.
+- **B** Divisão silábica erra em inglês; soltar um `.mid` sozinho na janela é ignorado.
+- **🖐** Nada foi tocado ainda num jogo de verdade (RPCS3, PS3, Xbox/Xenia, Clone Hero/YARG) nem com
+  instrumentos físicos: seguir `docs/TESTE_NO_JOGO.md`. Xbox 360 e RB2 continuam "não verificados";
+  PS4 continua experimental.
