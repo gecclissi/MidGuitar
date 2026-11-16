@@ -184,7 +184,7 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 
 | Funcionalidade | Antes | Agora | Commit(s) | Teste(s) |
 |---|---|---|---|---|
-| Pasta Clone Hero (`notes.mid`) | ⚠️ | ✅ sem perdas (passthrough de OD, frases, tom markers, fills, HARM, canais Pro) | fbdcac4, 2d24e08 (notas abertas) | `test_ch_fidelity.py`, `test_ch_roundtrip_keeps_*` |
+| Pasta Clone Hero (`notes.mid`) | ⚠️ | ✅ sem perdas; overdrive (116), solo (103) e frases vocais (105/106) viram dados editáveis, o resto (tom markers, fills, HARM, canais Pro) segue no passthrough | fbdcac4, 2d24e08 (notas abertas), 1f5954c | `test_ch_fidelity.py`, `test_ch_roundtrip_keeps_*`, `test_editable_markers.py` |
 | `song.ini` | ⚠️ | ✅ prévia, rankings Pro e chaves desconhecidas preservadas | 79f0aa9 | `test_song_ini.py`, `test_ch_import_reads_preview_and_pro_ranks` |
 | Pasta com `notes.chart` | ⚠️ | ✅ artista, `[Events]`, star power, forçadas/open, bateria kick/snare | 370d396 | `test_chart_import.py`, `test_chart_import_reads_*` |
 | Pasta RB3 solta / raiz do pacote | ⚠️ | ✅ procura `songs/*/` e lê o `songs.dta` real | c5fe817 | `test_ps3_import_export.py` |
@@ -195,6 +195,9 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 | `.mid` solto | ⚠️ | ⚠️ funciona numa pasta; soltar um `.mid` sozinho na janela ainda é ignorado | — | — |
 | `.mogg` solto | ⚠️ | ✅ criptografado é decifrado; extração vai para cache temporário | 61747a8, 2637c9d, 6f7411a | `test_encrypted_mogg_is_decrypted_not_garbage`, `test_mogg_crypt.py` |
 | Abrir pacote sem travar a janela (~25 s na 1ª vez) | — | ✅ thread + janela de progresso | c1e2b86 | `test_background_tasks.py` |
+| `.pkg` / `.mogg` truncado ou corrompido | ⚠️ | ✅ `PkgError` / `MoggCryptError` com mensagem clara, sem arquivo pela metade na extração | 80b9f4e | `test_io_robustness.py` |
+| Cache `%TEMP%\midguitar_cache` | ⚠️ crescia sem limite | ✅ limpo ao abrir o app e ao importar (mantém os mais novos até ~2 GB) | 64f315e | `test_cache_and_close.py` |
+| Abrir projeto cujo áudio sumiu (cache limpo/arquivo movido) | ❌ abria mudo, sem aviso | ✅ avisa quais áudios faltam e oferece escolher o áudio de novo | 64f315e | `test_open_project_with_missing_audio_warns`, `test_open_project_relink_audio` |
 
 ### Áudio
 
@@ -213,7 +216,7 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 |---|---|---|---|---|
 | `.txt` / `.lrc` / `.srt` | ✅ | ✅ | — | `test_lyrics_txt_lrc_srt` |
 | Divisão silábica | ⚠️ | ⚠️ inglês ainda erra (`lo-ve`) | — | — |
-| Geração de vocal | ✅ | ✅ | — | — |
+| Geração de vocal | ✅ | ✅ segue o mapa de tempo (mudanças de BPM) | 0d3846f | `test_generated_lyrics_fall_on_map_beats` |
 | Sem letra = sem microfone | ✅ | ✅ | — | `test_no_lyrics_means_no_vocals` |
 
 ### Auto-chart e edição
@@ -222,7 +225,10 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 |---|---|---|---|---|
 | Modos do auto-chart | ✅ | ✅ | — | `test_auto_chart_all_modes_generate_four_difficulties` |
 | Só Bateria (bumbo/caixa) | ❌ | ✅ lanes `kick`/`snare` em todo lugar | 370d396 | `test_drum_kick_snare_*`, `test_chart_drums_export_kick_and_snare` |
-| Gerar só faltantes | ⚠️ | ⚠️ ainda usa BPM constante (ignora o mapa de tempos) | — | — |
+| Gerar só faltantes | ⚠️ | ✅ notas nas batidas reais do mapa de tempo (auto-chart idem) | 0d3846f | `test_generated_missing_instrument_falls_on_map_beats` |
+| Grade e snap do editor | ⚠️ BPM constante | ✅ compassos/batidas pelo mapa de tempo e fórmula de compasso | 0d3846f | `test_editor_snap_uses_tempo_map`, `test_editor_grid_lines_use_tempo_map` |
+| Overdrive / solo / frases vocais de música importada | ❌ invisíveis no editor; edições sumiam | ✅ aparecem nas lanes; adicionar/apagar chega à exportação | 1f5954c | `test_editable_markers.py` |
+| Lane "solo" do editor/auto-chart | ❌ nunca exportada | ✅ vira frase de solo (nota 103), importada de volta na mesma lane | 1f5954c | `test_new_song_solo_lane_exports_merged_103`, `test_solo_roundtrip_through_import` |
 | Ranking 0-6 automático | ⚠️ | ✅ por densidade de notas Expert | bbecb75 | `test_audio_ch_cycle.py` |
 | Adicionar/remover nota | ⚠️ | ✅ editor e `remove_note_near` respeitam a dificuldade | b07987e | `test_editor_difficulty.py` |
 | Salvar/abrir projeto | ❌ | ✅ `.mgproj` com vocais, letra, stems, duração | 52dced6 | `test_project_file.py`, `test_project_roundtrip_*` |
@@ -238,7 +244,9 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 | Xbox 360 | ❌ | ⚠️ pacote CON assinado e conferido por dentro; não verificado em console/Xenia · 🖐 | 26d4f35, 33dd69d, 0e0a3c3 | `test_xbox360_export_passes_validator`, `test_xbox_stfs.py` |
 | PS4 | ❌ | ❌ experimental, avisa que não toca no RB4 | 385fd18 | `test_ps4_export_is_honest_about_being_unverified` |
 | Aviso do validador na UI | ✅ | ✅ | — | `test_export_dialog.py` |
-| Exportar sem travar a janela (~1,5 min no PS3/Xbox) | ❌ (novo) | ✅ thread + janela "Exportando…", botões desligados, erro sempre mostrado | c1e2b86 | `test_background_tasks.py` |
+| Exportar sem travar a janela (~1,5 min no PS3/Xbox) | ❌ (novo) | ✅ thread + janela "Exportando…", botões desligados, erro sempre mostrado; fechar o app ou o estúdio no meio pergunta antes | c1e2b86, 64f315e | `test_background_tasks.py`, `test_cache_and_close.py` |
+| Gravação de CON / `.pkg` / `.mogg` | ⚠️ erro deixava arquivo corrompido | ✅ grava em `.tmp` e troca no fim; leitura curta vira erro | 80b9f4e, 64f315e | `test_io_robustness.py` |
+| Instaladores `.bat` (RB3, RB2, pacote) | ❌ título com `&`/`%` quebrava o script (injeção de comandos) | ✅ texto do usuário higienizado; pasta e title id validados | cbdd691 | `test_bat_safety.py` |
 | DTA RB3 (`drum_solo`, `tracks`, `song_length`, `encoding`, aspas, rank, `song_id`) | ❌ | ✅ formato Magma C3, `song_id` estável | ddea0c8 | `test_rb3_dta_drum_solo_format`, `test_rb_export_ps3.py` |
 
 ### Pacotes
@@ -273,15 +281,20 @@ Legenda igual à de cima: ✅ funciona · ⚠️ parcial · ❌ não suportado �
 | Arrastar e soltar | ✅ / 🖐 | ✅ (inclui `.pkg` e CON) / 🖐 | e6675b0 | `test_drop_con_without_extension_imports` |
 | Botão "Tutorial Visual" | ⚠️ | ✅ acha o tutorial no `.exe` e avisa se faltar | 528d018 | `test_selftest_passes_from_source` |
 | Texto da UI "GHWT" | ❌ | ✅ não promete mais GHWT:DE | 385fd18 | — |
+| README / tutorial | ⚠️ prometiam "substitui 100%" e RB2/Xbox prontos | ✅ status por destino (formato verificado x testado no jogo) com link para `TESTE_NO_JOGO.md` | b475a11 | — |
 | `build_exe.py` | ⚠️ | ✅ `--paths=.`, tutorial e imagens no build, pycryptodome/soundfile/tkinterdnd2/mido, `--selftest`, config em `%APPDATA%\MidGuitar` com migração · 🖐 abrir o `.exe` | 528d018 | `test_config_paths.py`, `test_selftest_passes_from_source` |
 
 ### Ainda abertos (conhecidos)
 
-- **M** "Gerar só faltantes" usa BPM constante (ignora o mapa de tempos da música importada).
 - **B** Pro Guitar: o exportador ainda limita a casa a 17 (a Squier tem 22).
 - **B** `generate_rbn_midi` recalcula dificuldades como efeito colateral.
 - **B** Pacote Clone Hero: músicas com mesmo artista/título se sobrescrevem.
 - **B** Divisão silábica erra em inglês; soltar um `.mid` sozinho na janela é ignorado.
+- **B** Overdrive do Pro Guitar/Pro Keys e frases vocais não representáveis (vazias, encostadas,
+  canal ≠ 0) continuam só no passthrough; o overdrive vocal de customs reais (nota 116 na
+  `PART VOCALS`) também, enquanto o gerador usa 106 para o overdrive vocal novo.
+- **B** O auto-chart gera compassos de 4 tempos; em trechos 3/4 as notas caem nas batidas do mapa,
+  mas o padrão rítmico não acompanha o compasso.
 - **🖐** Nada foi tocado ainda num jogo de verdade (RPCS3, PS3, Xbox/Xenia, Clone Hero/YARG) nem com
   instrumentos físicos: seguir `docs/TESTE_NO_JOGO.md`. Xbox 360 e RB2 continuam "não verificados";
   PS4 continua experimental.
