@@ -51,7 +51,7 @@ def _wav(path, seconds=3.0, sr=44100):
 
 def _drum_song():
     s = ChartSong(title="Bateria", artist="Diag")
-    for lane, t in [("orange", 0), ("red", 500), ("yellow", 1000), ("blue", 1500), ("green", 2000)]:
+    for lane, t in [("kick", 0), ("snare", 500), ("yellow", 1000), ("blue", 1500), ("green", 2000)]:
         s.add_note("drum", NoteEvent(time_ms=t, lane=lane, difficulty="Expert"))
     return s
 
@@ -98,21 +98,18 @@ def _ch_export_mid(song, tmp_path):
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="importador ignora a nota 105: todas as frases vocais viram 1 só")
 def test_ch_roundtrip_keeps_vocal_phrases(joe_song, tmp_path):
     out, _ = _ch_export_mid(joe_song, tmp_path)
     assert len(_ons(_track(out, "PART VOCALS"), {105})) == 35
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="importador ignora overdrive (116): Star Power some na ida e volta")
 def test_ch_roundtrip_keeps_overdrive(joe_song, tmp_path):
     out, _ = _ch_export_mid(joe_song, tmp_path)
     assert len(_ons(_track(out, "PART GUITAR"), {116})) == 15
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="importador ignora marcadores de tom (110-112): pro drums vira tudo prato")
 def test_ch_roundtrip_keeps_tom_markers(joe_song, tmp_path):
     out, _ = _ch_export_mid(joe_song, tmp_path)
     assert len(_ons(_track(out, "PART DRUMS"), {110, 111, 112})) == 15
@@ -194,7 +191,11 @@ def test_chart_drums_export_kick_and_snare(tmp_path):
 # ---------------------------------------------------------------------------
 @pytest.mark.xfail(strict=True, reason="auto-charter e Mini-REAPER usam lanes orange/red para bumbo/caixa; o gerador MIDI só conhece kick/snare")
 def test_drum_kick_snare_lanes_are_exported():
-    mid = generate_rbn_midi(_drum_song())
+    from src.creator.auto_charter import auto_generate_chart
+    s = ChartSong()
+    auto_generate_chart(s, selected_instruments=["drum"])
+    assert {n.lane for n in s.drum_notes} - {"overdrive"} <= set(DRUM_NOTES["Expert"])
+    mid = generate_rbn_midi(s)
     notes = {m.note for m in _ons(_track(mid, "PART DRUMS"))}
     assert {96, 97} <= notes
 
@@ -246,7 +247,6 @@ def test_lyrics_txt_lrc_srt():
 # ---------------------------------------------------------------------------
 # Projeto (to_dict / from_dict)
 # ---------------------------------------------------------------------------
-@pytest.mark.xfail(strict=True, reason="ChartSong.to_dict não salva vocal_notes, lyrics_raw, diff_vocals, audio_stems, duration_ms")
 def test_project_roundtrip_keeps_vocals():
     from src.creator.lyric_processor import align_lyrics_to_song
     s = ChartSong()

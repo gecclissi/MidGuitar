@@ -4,8 +4,8 @@ Representa a música completa com metadados, trilhas de instrumentos,
 eventos de tempo, seções e notas musicais.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from dataclasses import dataclass, field, fields
+from typing import Any, List, Dict, Optional
 import json
 
 from src.creator.tempo_map import TempoMap
@@ -13,11 +13,13 @@ from src.creator.tempo_map import TempoMap
 @dataclass
 class NoteEvent:
     time_ms: int             # Tempo de início em milissegundos
-    lane: str                # "green", "red", "yellow", "blue", "orange" (ou "kick", "snare", etc.)
+    lane: str                # Guitarra/baixo/teclado: "green", "red", "yellow", "blue", "orange"
+                             # Bateria: "kick", "snare", "yellow", "blue", "green" (rbn_specs.DRUM_NOTES)
     duration_ms: int = 150   # Duração (para notas longas / sustains)
     difficulty: str = "Expert" # "Easy", "Medium", "Hard", "Expert"
     is_hopo: bool = False
     is_overdrive: bool = False
+    velocity: int = 100      # Velocity MIDI (acento/ghost da bateria, 96 em customs reais)
 
 @dataclass
 class TextEvent:
@@ -33,6 +35,7 @@ class VocalNote:
     is_talkie: bool = False    # Frase falada / rap
     is_overdrive: bool = False # Frase de Overdrive (Nota 106)
     is_phrase_end: bool = False # Fim da frase vocal (Nota 105)
+    velocity: int = 100
 
 @dataclass
 class ProGuitarNote:
@@ -42,6 +45,7 @@ class ProGuitarNote:
     duration_ms: int = 200
     difficulty: str = "Expert"   # "Easy", "Medium", "Hard", "Expert"
     is_overdrive: bool = False
+    channel: int = 0             # Canal MIDI (tipo de nota: normal, abafada, harmônico...)
 
 @dataclass
 class ProKeysNote:
@@ -50,6 +54,17 @@ class ProKeysNote:
     duration_ms: int = 250
     difficulty: str = "Expert"   # "Easy", "Medium", "Hard", "Expert"
     is_overdrive: bool = False
+    velocity: int = 100
+
+# Nomes antigos das lanes de bateria (projetos salvos antes da unificação)
+LEGACY_DRUM_LANES = {"orange": "kick", "red": "snare"}
+
+
+def _build(cls, data: dict):
+    """Cria o dataclass ignorando chaves desconhecidas (projetos de outras versões)."""
+    names = {f.name for f in fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in names})
+
 
 @dataclass
 class ChartSong:
@@ -92,6 +107,12 @@ class ChartSong:
     events: List[TextEvent] = field(default_factory=list)
     # Mapa de tempo importado de um MIDI (None = tempo constante definido por bpm)
     tempo_map: Optional[TempoMap] = None
+    # Dados importados que o modelo não edita, regravados sem perdas (ver passthrough.py)
+    passthrough_tracks: List[Dict[str, Any]] = field(default_factory=list)
+    track_extras: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    tempo_track_name: Optional[str] = None
+    # Chaves do song.ini importado que o MidGuitar não usa (regravadas na exportação)
+    ini_extra: Dict[str, str] = field(default_factory=dict)
 
     def get_tempo_map(self) -> TempoMap:
         """Devolve o mapa de tempo efetivo da música.
@@ -158,71 +179,51 @@ class ChartSong:
     def get_track_notes(self, track: str) -> List[NoteEvent]:
         return getattr(self, f"{track}_notes", [])
 
+    # Campos simples salvos no projeto (.mgproj)
+    _SCALAR_FIELDS = (
+        "title", "artist", "album", "year", "genre", "charter", "bpm",
+        "preview_start_ms", "duration_ms", "audio_path", "audio_offset_ms",
+        "lyrics_raw", "album_art_path",
+        "diff_guitar", "diff_bass", "diff_drums", "diff_keys", "diff_vocals",
+        "diff_pro_guitar", "diff_pro_bass", "diff_pro_keys", "diff_band",
+        "tempo_track_name",
+    )
+    _NOTE_LISTS = (
+        ("guitar_notes", NoteEvent), ("bass_notes", NoteEvent), ("drum_notes", NoteEvent),
+        ("keys_notes", NoteEvent), ("vocal_notes", VocalNote),
+        ("pro_guitar_notes", ProGuitarNote), ("pro_bass_notes", ProGuitarNote),
+        ("pro_keys_notes", ProKeysNote), ("events", TextEvent),
+    )
+
     def to_dict(self) -> dict:
-        data = {
-            "title": self.title,
-            "artist": self.artist,
-            "album": self.album,
-            "year": self.year,
-            "genre": self.genre,
-            "charter": self.charter,
-            "bpm": self.bpm,
-            "time_signature": list(self.time_signature),
-            "preview_start_ms": self.preview_start_ms,
-            "audio_path": self.audio_path,
-            "album_art_path": self.album_art_path,
-            "diff_guitar": self.diff_guitar,
-            "diff_bass": self.diff_bass,
-            "diff_drums": self.diff_drums,
-            "diff_keys": self.diff_keys,
-            "diff_pro_guitar": self.diff_pro_guitar,
-            "diff_pro_bass": self.diff_pro_bass,
-            "diff_pro_keys": self.diff_pro_keys,
-            "diff_band": self.diff_band,
-            "guitar_notes": [n.__dict__ for n in self.guitar_notes],
-            "bass_notes": [n.__dict__ for n in self.bass_notes],
-            "drum_notes": [n.__dict__ for n in self.drum_notes],
-            "keys_notes": [n.__dict__ for n in self.keys_notes],
-            "pro_guitar_notes": [n.__dict__ for n in self.pro_guitar_notes],
-            "pro_bass_notes": [n.__dict__ for n in self.pro_bass_notes],
-            "pro_keys_notes": [n.__dict__ for n in self.pro_keys_notes],
-            "events": [e.__dict__ for e in self.events],
-        }
+        data = {k: getattr(self, k) for k in self._SCALAR_FIELDS}
+        data["time_signature"] = list(self.time_signature)
+        data["audio_stems"] = list(self.audio_stems)
+        for attr, _cls in self._NOTE_LISTS:
+            data[attr] = [dict(n.__dict__) for n in getattr(self, attr)]
+        data["passthrough_tracks"] = self.passthrough_tracks
+        data["track_extras"] = self.track_extras
+        data["ini_extra"] = dict(self.ini_extra)
         if self.tempo_map is not None:
             data["tempo_map"] = self.tempo_map.to_dict()
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChartSong":
-        song = cls(
-            title=data.get("title", "Nova Música"),
-            artist=data.get("artist", "Artista"),
-            album=data.get("album", "Álbum"),
-            year=data.get("year", 2026),
-            genre=data.get("genre", "Rock"),
-            charter=data.get("charter", "MidGuitar Studio"),
-            bpm=float(data.get("bpm", 120.0)),
-            time_signature=tuple(data.get("time_signature", [4, 4])),
-            preview_start_ms=data.get("preview_start_ms", 30000),
-            audio_path=data.get("audio_path"),
-            album_art_path=data.get("album_art_path"),
-            diff_guitar=data.get("diff_guitar", 3),
-            diff_bass=data.get("diff_bass", 2),
-            diff_drums=data.get("diff_drums", 3),
-            diff_keys=data.get("diff_keys", 2),
-            diff_pro_guitar=data.get("diff_pro_guitar", 3),
-            diff_pro_bass=data.get("diff_pro_bass", 2),
-            diff_pro_keys=data.get("diff_pro_keys", 3),
-            diff_band=data.get("diff_band", 3),
-        )
-        song.guitar_notes = [NoteEvent(**n) for n in data.get("guitar_notes", [])]
-        song.bass_notes = [NoteEvent(**n) for n in data.get("bass_notes", [])]
-        song.drum_notes = [NoteEvent(**n) for n in data.get("drum_notes", [])]
-        song.keys_notes = [NoteEvent(**n) for n in data.get("keys_notes", [])]
-        song.pro_guitar_notes = [ProGuitarNote(**n) for n in data.get("pro_guitar_notes", [])]
-        song.pro_bass_notes = [ProGuitarNote(**n) for n in data.get("pro_bass_notes", [])]
-        song.pro_keys_notes = [ProKeysNote(**n) for n in data.get("pro_keys_notes", [])]
-        song.events = [TextEvent(**e) for e in data.get("events", [])]
+        song = cls()
+        for k in cls._SCALAR_FIELDS:
+            if k in data:
+                setattr(song, k, data[k])
+        song.bpm = float(song.bpm)
+        song.time_signature = tuple(data.get("time_signature", [4, 4]))
+        song.audio_stems = list(data.get("audio_stems", []))
+        for attr, item_cls in cls._NOTE_LISTS:
+            setattr(song, attr, [_build(item_cls, n) for n in data.get(attr, [])])
+        for n in song.drum_notes:
+            n.lane = LEGACY_DRUM_LANES.get(n.lane, n.lane)
+        song.passthrough_tracks = list(data.get("passthrough_tracks", []))
+        song.track_extras = dict(data.get("track_extras", {}))
+        song.ini_extra = dict(data.get("ini_extra", {}))
         tm = data.get("tempo_map")
         song.tempo_map = TempoMap.from_dict(tm) if tm else None
         return song
