@@ -78,10 +78,18 @@ def test_ps3_corrupted_edat_is_flagged(song, out):
     assert "PS3_BAD_EDAT" in codes
 
 
-def test_xbox_export_flags_no_con(song, out):
-    # Fase 3/4 vai inverter este teste
+def test_xbox_export_has_con_and_validates(song, out):
     d = export_xbox360_structure(song, out)
-    codes = {i.code for i in validate_export(d, "xbox360")}
+    issues = validate_export(d, "xbox360")
+    assert not [i for i in issues if i.level == "error"]
+    codes = {i.code for i in issues}
+    assert codes == {"XBOX_MISSING_MILO", "PROFILE_UNVERIFIED"}
+    assert detect_target(d) == "xbox360"
+
+
+def test_xbox_folder_without_con_is_flagged(tmp_path):
+    (tmp_path / "songs").mkdir()
+    codes = {i.code for i in validate_export(str(tmp_path), "xbox360")}
     assert "XBOX_NO_CON_PACKAGE" in codes and "PROFILE_UNVERIFIED" in codes
 
 

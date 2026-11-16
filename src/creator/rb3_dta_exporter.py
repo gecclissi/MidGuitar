@@ -284,8 +284,10 @@ def write_rb3_song_files(song: ChartSong, songs_dir: str, shortname: str,
                          song_id: int = None, audio_source_path: str = None,
                          total_duration_ms: int = 180000, with_art: bool = True,
                          multitrack: bool = True,
-                         edat_folder: Optional[str] = None) -> Tuple[str, Optional[AudioLayout]]:
-    """Grava songs/<s>/<s>.mid, <s>.mogg e gen/<s>_keep.png_ps3 dentro de `songs_dir`.
+                         edat_folder: Optional[str] = None,
+                         art_format: str = "ps3") -> Tuple[str, Optional[AudioLayout]]:
+    """Grava songs/<s>/<s>.mid, <s>.mogg e gen/<s>_keep.png_<art_format> ("ps3" ou "xbox")
+    dentro de `songs_dir`.
 
     Com `edat_folder` (a pasta em USRDIR/), grava <s>.mid.edat cifrado para o PS3 no
     lugar do .mid solto (klicensee e content id derivados dessa pasta).
@@ -313,10 +315,14 @@ def write_rb3_song_files(song: ChartSong, songs_dir: str, shortname: str,
     else:
         save_midi(mid, os.path.join(track_dir, f"{shortname}.mid"))
 
-    # 3. Capa do álbum (gen/<s>_keep.png_ps3), da capa da música ou a padrão
-    has_art = None   # sem png_ps3 (Xbox/PS4): album_art segue a existência da capa
+    # 3. Capa do álbum (gen/<s>_keep.png_ps3 / .png_xbox), da capa da música ou a padrão
+    has_art = None   # sem capa (PS4): album_art segue a existência da capa
     if with_art:
-        has_art = write_album_art_ps3(song, os.path.join(track_dir, "gen", f"{shortname}_keep.png_ps3"))
+        art = os.path.join(track_dir, "gen", f"{shortname}_keep.png_{art_format}")
+        if art_format == "xbox":
+            has_art = write_album_art_xbox(song, art)
+        else:
+            has_art = write_album_art_ps3(song, art)
 
     length = audio_length_ms(song) or song.get_effective_duration_ms()
     dta = generate_songs_dta_content(song, shortname, song_id=song_id, layout=layout,
@@ -327,6 +333,16 @@ def write_rb3_song_files(song: ChartSong, songs_dir: str, shortname: str,
 def write_album_art_ps3(song: ChartSong, dest_path: str) -> bool:
     """Gera a capa png_ps3 a partir de song.album_art_path (ou da capa padrão)."""
     from src.creator.png_ps3 import write_png_ps3
+    return _write_album_art(song, dest_path, write_png_ps3)
+
+
+def write_album_art_xbox(song: ChartSong, dest_path: str) -> bool:
+    """Gera a capa png_xbox a partir de song.album_art_path (ou da capa padrão)."""
+    from src.creator.png_xbox import write_png_xbox
+    return _write_album_art(song, dest_path, write_png_xbox)
+
+
+def _write_album_art(song: ChartSong, dest_path: str, writer) -> bool:
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     src = song.album_art_path if song.album_art_path and os.path.exists(song.album_art_path) else None
     if src is None:
@@ -336,13 +352,13 @@ def write_album_art_ps3(song: ChartSong, dest_path: str) -> bool:
         os.close(fd)
         try:
             _create_default_album_art(tmp, song.title, song.artist)
-            return write_png_ps3(tmp, dest_path)
+            return writer(tmp, dest_path)
         finally:
             try:
                 os.remove(tmp)
             except OSError:
                 pass
-    return write_png_ps3(src, dest_path)
+    return writer(src, dest_path)
 
 
 def write_songs_dta(path: str, blocks: List[str]):

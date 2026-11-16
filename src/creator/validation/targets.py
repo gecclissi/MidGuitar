@@ -90,7 +90,7 @@ def validate_export(folder: str, target: str) -> List[Issue]:
         elif target in ("rb3_ps3", "rb2"):
             issues = _validate_ps3_like(folder, profile)
         elif target == "xbox360":
-            issues = _validate_xbox(folder)
+            issues = _validate_xbox(folder, profile)
         else:
             issues = _validate_ps4(folder)
         if not profile.verified_in_game:
@@ -186,14 +186,14 @@ def _validate_clonehero(folder: str, profile) -> List[Issue]:
     return issues
 
 
-def _validate_ps3_like(folder: str, profile) -> List[Issue]:
+def _validate_ps3_like(folder: str, profile, platform: str = "ps3") -> List[Issue]:
     dtas = _find_songs_dtas(folder) if os.path.isdir(folder) else []
     if not dtas:
         return [Issue("error", "LAYOUT_MISSING_SONG_DIR",
                       "Não foi encontrado songs/songs.dta abaixo da pasta")]
     issues: List[Issue] = []
     for dta in dtas:
-        issues.extend(_guard(_validate_one_songs_dir, folder, dta, profile))
+        issues.extend(_guard(_validate_one_songs_dir, folder, dta, profile, platform))
     return issues
 
 
@@ -212,7 +212,7 @@ def _rel_loc(folder: str, dta: str, location: str) -> str:
     return location
 
 
-def _validate_one_songs_dir(folder: str, dta: str, profile) -> List[Issue]:
+def _validate_one_songs_dir(folder: str, dta: str, profile, platform: str = "ps3") -> List[Issue]:
     songs_dir = os.path.dirname(dta)
     entries = dta_song_entries(dta)
     midi_tracks: Dict[str, Set[str]] = {}
@@ -221,7 +221,7 @@ def _validate_one_songs_dir(folder: str, dta: str, profile) -> List[Issue]:
 
     for entry in entries:
         issues.extend(_guard(_validate_song_files, folder, songs_dir, entry, profile,
-                             midi_tracks, mogg_channels))
+                             midi_tracks, mogg_channels, platform))
 
     for i in _guard(validate_dta, dta, profile, midi_tracks, mogg_channels):
         issues.append(Issue(i.level, i.code, i.message, _rel_loc(folder, dta, i.location)))
@@ -288,7 +288,8 @@ def _validate_edat(folder, edat, s, profile, key, midi_tracks, check_midi=True) 
     return issues
 
 
-def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_channels):
+def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_channels,
+                         platform: str = "ps3"):
     key = str(entry[0])
     s, sdir = _song_paths(songs_dir, entry)
     issues: List[Issue] = []
@@ -297,14 +298,22 @@ def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_ch
                       "Faltando a pasta %s/" % _rel(folder, sdir), _rel(folder, sdir))]
     edat = os.path.join(sdir, s + ".mid.edat")
     mid = os.path.join(sdir, s + ".mid")
-    if os.path.isfile(edat):
+    if platform == "xbox":
+        if os.path.isfile(edat):
+            issues.append(Issue("error", "XBOX_UNEXPECTED_EDAT",
+                                "%s.mid.edat é do PS3: o Xbox 360 usa o .mid sem cifra" % s,
+                                _rel(folder, edat)))
+        if not os.path.isfile(mid):
+            issues.append(Issue("error", "LAYOUT_MISSING_CHART",
+                                "Faltando %s.mid" % s, _rel(folder, mid)))
+    elif os.path.isfile(edat):
         issues.extend(_validate_edat(folder, edat, s, profile, key, midi_tracks,
                                      check_midi=not os.path.isfile(mid)))
     else:
         issues.append(Issue("error", "PS3_MISSING_EDAT",
                             "Faltando %s.mid.edat" % s, _rel(folder, edat)))
     if os.path.isfile(mid):
-        if not os.path.isfile(edat):
+        if platform != "xbox" and not os.path.isfile(edat):
             issues.append(Issue("error", "PS3_PLAIN_MID",
                                 "Só há %s.mid solto: o PS3 exige .mid.edat" % s,
                                 _rel(folder, mid)))
@@ -328,21 +337,74 @@ def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_ch
             issues.append(Issue(i.level, i.code, i.message, _rel(folder, mogg)))
 
     gen = os.path.join(sdir, "gen")
-    milo = os.path.join(gen, s + ".milo_ps3")
+    prefix = "XBOX" if platform == "xbox" else "PS3"
+    milo = os.path.join(gen, "%s.milo_%s" % (s, platform))
     if not os.path.isfile(milo):
-        issues.append(Issue("warning", "PS3_MISSING_MILO",
-                            "Faltando gen/%s.milo_ps3" % s, _rel(folder, milo)))
-    art = os.path.join(gen, s + "_keep.png_ps3")
+        issues.append(Issue("warning", prefix + "_MISSING_MILO",
+                            "Faltando gen/%s" % os.path.basename(milo), _rel(folder, milo)))
+    art = os.path.join(gen, "%s_keep.png_%s" % (s, platform))
     if not _album_art_disabled(entry) and not os.path.isfile(art):
-        issues.append(Issue("warning", "PS3_MISSING_ART",
-                            "Faltando gen/%s_keep.png_ps3" % s, _rel(folder, art)))
+        issues.append(Issue("warning", prefix + "_MISSING_ART",
+                            "Faltando gen/%s" % os.path.basename(art), _rel(folder, art)))
     return issues
 
 
-def _validate_xbox(folder: str) -> List[Issue]:
-    if os.path.isdir(folder) and _find_con_packages(folder):
-        return []
-    return [Issue("error", "XBOX_NO_CON_PACKAGE", _XBOX_MSG)]
+def _validate_xbox(folder: str, profile) -> List[Issue]:
+    """Abre cada pacote CON/LIVE com o leitor STFS (hashes, assinatura, metadados) e
+    valida o songs.dta/.mid/.mogg de dentro com as mesmas regras do PS3."""
+    if os.path.isfile(folder) and _is_con_package(folder):
+        cons = [folder]
+        base = os.path.dirname(folder)
+    else:
+        cons = sorted(_find_con_packages(folder)) if os.path.isdir(folder) else []
+        base = folder
+    if not cons:
+        return [Issue("error", "XBOX_NO_CON_PACKAGE", _XBOX_MSG)]
+    issues: List[Issue] = []
+    for con in cons:
+        issues.extend(_guard(_validate_con, base, con, profile))
+    return issues
+
+
+def _validate_con(folder: str, con: str, profile) -> List[Issue]:
+    import shutil
+    import tempfile
+    from src.creator.xbox_stfs import RB2_TITLE_ID, RB3_TITLE_ID, StfsError, StfsPackage
+    loc = _rel(folder, con)
+    try:
+        pkg = StfsPackage(con)
+    except (StfsError, OSError) as e:
+        return [Issue("error", "XBOX_BAD_CON", "Pacote CON ilegível: %s" % e, loc)]
+    issues: List[Issue] = []
+    for problem in pkg.verify():
+        issues.append(Issue("error", "XBOX_BAD_CON", problem, loc))
+    if pkg.title_id not in (RB3_TITLE_ID, RB2_TITLE_ID):
+        issues.append(Issue("error", "XBOX_WRONG_TITLE",
+                            "Title id %08X não é do Rock Band 3 (45410914)" % pkg.title_id, loc))
+    if pkg.magic != "CON":
+        issues.append(Issue("warning", "XBOX_LIVE_PACKAGE",
+                            "Pacote %s: a assinatura da Microsoft não pode ser conferida aqui"
+                            % pkg.magic, loc))
+    elif not pkg.signed_with_known_kv():
+        issues.append(Issue("warning", "XBOX_UNKNOWN_SIGNER",
+                            "CON assinada com um certificado diferente do KV do Onyx/C3", loc))
+    tmp = tempfile.mkdtemp(prefix="mg_con_")
+    try:
+        pkg.extract(tmp, want=lambda name: not name.lower().endswith(".milo_xbox"))
+        # .milo_xbox não é validado: só marca que existe (arquivo vazio)
+        for e in pkg.files():
+            if e.path.lower().endswith(".milo_xbox"):
+                dest = os.path.join(tmp, *e.path.split("/"))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                open(dest, "wb").close()
+        inner = _validate_ps3_like(tmp, profile, platform="xbox")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    for i in inner:
+        where = i.location
+        issues.append(Issue(i.level, i.code, i.message,
+                            "%s:%s" % (loc, where) if where else loc))
+    return issues
 
 
 def _validate_ps4(folder: str) -> List[Issue]:
