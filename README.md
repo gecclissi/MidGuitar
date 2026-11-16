@@ -84,9 +84,9 @@ O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fl
 - ⚡ **Detecção Automática de Instrumento (Auto Mode)**:
   - O aplicativo escuta as mensagens e comuta automaticamente o visualizador e a resposta sonora para o instrumento que estiver tocando:
     - Bateria no Canal 10 ➔ Ativa visualizador de Bateria e sintetizador de percussão GM.
-    - Notas nos Canais 1 a 6 ➔ Ativa visualizador de Guitarra Pro (6 cordas polifônicas + Pro Chords).
-    - Teclas de C3 a C5 no Canal 1 ➔ Ativa visualizador de Teclado.
-    - 5 Casas clássicas / Strum ➔ Ativa visualizador de 5 botões com sistema de acordes.
+    - Notas nos Canais 1 a 6 que formam uma casa válida da corda (0 a 22) ➔ Ativa visualizador de Guitarra Pro (6 cordas polifônicas + Pro Chords).
+    - Teclas de C3 a C5 no Canal 1 ➔ Ativa visualizador de Teclado. Uma nota abaixo do Mi4 (64) no canal 1 não existe na Pro Guitar, então o app reconhece o teclado e continua nele até chegar uma nota nos canais 2 a 6.
+    - 5 Casas clássicas (48-55 / 60-67) e palhetada (69 / 71 / 72) do MIDI Pro Adapter em outros canais ➔ Ativa visualizador de 5 botões com sistema de acordes.
 
 - 🎛️ **Visualizadores Gráficos Especializados em Tempo Real**:
   - **Guitarra Pro & Pro Chords**: Desenho em alta precisão do braço com 6 cordas (E, A, D, G, B, E), 17 trastes clicáveis, painel interativo de **Pro Chords (`Em`, `G`, `D`, `A`, `C`, `E`, `Am`, `F`)** e **Palheta PRO**, indicando exatamente a corda tocada, a casa apertada e a nota resultante.
