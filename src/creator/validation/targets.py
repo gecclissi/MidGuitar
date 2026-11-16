@@ -52,8 +52,22 @@ def _find_con_packages(folder: str) -> List[str]:
     return [p for p in _walk_files(folder) if _is_con_package(p)]
 
 
+def _is_extracted_xbox(folder: str) -> bool:
+    """Pasta de pacote Xbox 360 já extraído: songs/songs.dta com arte/milo `_xbox` e
+    nenhum arquivo do PS3 (.mid.edat, *_ps3)."""
+    xbox = ps3 = False
+    for p in _walk_files(folder):
+        low = p.lower()
+        if low.endswith((".png_xbox", ".milo_xbox")):
+            xbox = True
+        elif low.endswith((".mid.edat", ".png_ps3", ".milo_ps3")):
+            ps3 = True
+    return xbox and not ps3
+
+
 def detect_target(folder: str) -> Optional[str]:
-    """Adivinha o destino pela estrutura da pasta (rb2 nunca é detectado)."""
+    """Adivinha o destino pela estrutura da pasta (rb2 nunca é detectado). Pasta extraída
+    de CON (songs/ com arte/milo _xbox, sem .edat) é xbox360."""
     try:
         if not os.path.isdir(folder):
             return None
@@ -67,7 +81,7 @@ def detect_target(folder: str) -> Optional[str]:
                 if _parse_song_ini(_decode_ini(f.read())) is not False:
                     return "clonehero"
         if _find_songs_dtas(folder):
-            return "rb3_ps3"
+            return "xbox360" if _is_extracted_xbox(folder) else "rb3_ps3"
         if any(p.lower().endswith(".songdta_ps4") for p in _walk_files(folder)):
             return "ps4"
         if _find_con_packages(folder):
@@ -359,6 +373,12 @@ def _validate_xbox(folder: str, profile) -> List[Issue]:
         cons = sorted(_find_con_packages(folder)) if os.path.isdir(folder) else []
         base = folder
     if not cons:
+        if os.path.isdir(folder) and _find_songs_dtas(folder) and _is_extracted_xbox(folder):
+            # Pasta extraída: confere songs.dta/.mid/.mogg, mas não há CON para o console
+            issues = _validate_ps3_like(folder, profile, platform="xbox")
+            issues.append(Issue("warning", "XBOX_EXTRACTED_FOLDER",
+                                "Pasta de pacote Xbox 360 já extraído (sem CON): " + _XBOX_MSG))
+            return issues
         return [Issue("error", "XBOX_NO_CON_PACKAGE", _XBOX_MSG)]
     issues: List[Issue] = []
     for con in cons:

@@ -179,3 +179,15 @@ def test_song_ini_with_song_section_is_clone_hero(tmp_path):
     d.mkdir()
     (d / "song.ini").write_text("[Song]\nname = X\nartist = Y\n", encoding="utf-8")
     assert detect_target(str(d)) == "clonehero"
+
+
+def test_extracted_xbox_folder_is_detected_and_validated(song, out, tmp_path):
+    from src.creator.xbox_stfs import StfsPackage
+    d = export_xbox360_structure(song, out)
+    con = next(os.path.join(d, n) for n in os.listdir(d))
+    ext = str(tmp_path / "extraida")
+    StfsPackage(con).extract(ext)
+    assert detect_target(ext) == "xbox360"
+    issues = validate_export(ext, "xbox360")
+    assert not [i for i in issues if i.level == "error"], issues
+    assert "XBOX_EXTRACTED_FOLDER" in {i.code for i in issues}
