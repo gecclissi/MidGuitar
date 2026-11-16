@@ -31,6 +31,77 @@ STEM_NAMES = {"drum": "drums", "bass": "bass", "guitar": "guitar", "vocals": "vo
 _DRUM_MIX_BY_CHANNELS = {2: 0, 3: 4, 4: 1, 5: 2, 6: 3}
 
 
+# Limite do cache de áudio extraído (os mais novos ficam; os mais antigos são apagados)
+DEFAULT_CACHE_LIMIT = 2 * 1024 ** 3
+
+
+def midguitar_cache_root() -> str:
+    """Pasta raiz do cache temporário do MidGuitar (%TEMP%/midguitar_cache)."""
+    import tempfile
+    return os.path.join(tempfile.gettempdir(), "midguitar_cache")
+
+
+def _tree_size_mtime(path: str):
+    if os.path.isfile(path):
+        st = os.stat(path)
+        return st.st_size, st.st_mtime
+    size, mtime = 0, os.stat(path).st_mtime
+    for dp, _dirs, files in os.walk(path):
+        for fn in files:
+            try:
+                st = os.stat(os.path.join(dp, fn))
+            except OSError:
+                continue
+            size += st.st_size
+            mtime = max(mtime, st.st_mtime)
+    return size, mtime
+
+
+def cleanup_cache(max_bytes: int = DEFAULT_CACHE_LIMIT, root: Optional[str] = None,
+                  keep: Optional[List[str]] = None) -> int:
+    """Apaga as entradas mais antigas do cache até o total caber em `max_bytes`.
+
+    Entradas: cada item de midguitar_cache/ (pastas por origem) e de midguitar_cache/mogg/.
+    As que contêm algum caminho de `keep` (ex.: o áudio da música aberta) nunca são
+    apagadas. Devolve quantas entradas foram removidas; erros de arquivo em uso são ignorados.
+    """
+    import shutil
+    root = root or midguitar_cache_root()
+    if not os.path.isdir(root):
+        return 0
+    kept = [os.path.normcase(os.path.abspath(k)) for k in (keep or []) if k]
+    entries = []
+    for base in (root, os.path.join(root, "mogg")):
+        if not os.path.isdir(base):
+            continue
+        for name in os.listdir(base):
+            path = os.path.join(base, name)
+            if base == root and name == "mogg":
+                continue
+            try:
+                size, mtime = _tree_size_mtime(path)
+            except OSError:
+                continue
+            entries.append((mtime, size, path))
+    entries.sort(reverse=True)  # mais novos primeiro
+    total, removed = 0, 0
+    for _mtime, size, path in entries:
+        norm = os.path.normcase(os.path.abspath(path))
+        protected = any(k == norm or k.startswith(norm + os.sep) for k in kept)
+        if protected or total + size <= max_bytes:
+            total += size
+            continue
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+            removed += 1
+        except OSError:
+            total += size
+    return removed
+
+
 def mogg_cache_dir() -> str:
     """Pasta de cache dos áudios extraídos de .mogg."""
     import tempfile

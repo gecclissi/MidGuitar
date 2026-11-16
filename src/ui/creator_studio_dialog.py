@@ -17,7 +17,8 @@ import customtkinter as ctk
 import pygame
 from PIL import Image
 
-from src.creator.chart_model import ChartSong, NoteEvent, PROJECT_EXTENSION, load_project, save_project
+from src.creator.chart_model import (ChartSong, NoteEvent, PROJECT_EXTENSION, load_project, missing_audio_files,
+                                     save_project)
 from src.creator.chart_importer import UnsupportedFormatError, import_song_from_folder
 from src.creator.xbox_stfs import is_stfs_file
 from src.creator.clonehero_exporter import export_clone_hero_song
@@ -33,7 +34,7 @@ from src.ui.tooltip import set_tooltip
 from src.ui.key_strum_config_dialog import KeyStrumConfigDialog, DEFAULT_KEYS, KEY_NAMES_FRIENDLY
 from src.ui.lyrics_manager_dialog import LyricsManagerDialog
 from src.utils.config_manager import get_asset_path, save_config
-from src.ui.background_task import run_sync, run_with_progress
+from src.ui.background_task import confirm_close_if_busy, run_sync, run_with_progress
 
 # Executor dos trabalhos pesados (exportação, abrir pacote, compilar pacote).
 # None = thread + janela de progresso quando o dono é uma janela Tk, ou na hora (run_sync)
@@ -77,6 +78,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.geometry("1040x720")
         self.minsize(920, 600)
         self.resizable(True, True)
+        # Fechar no meio de uma exportação pergunta antes (o trabalho seria interrompido)
+        self.protocol("WM_DELETE_WINDOW", self._on_close_request)
 
         self.audio = audio_engine
         self.song = ChartSong()
@@ -592,9 +595,18 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             else:
                 messagebox.showerror("Erro na importação", f"Não foi possível importar:\n{folder}\n\n{e}")
 
+        def _work():
+            # Mantém o cache de áudio extraído (%TEMP%/midguitar_cache) abaixo do limite
+            try:
+                from src.creator.mogg_import import cleanup_cache
+                cleanup_cache()
+            except Exception as e:  # limpeza nunca impede a importação
+                print(f"[CreatorStudio] Limpeza do cache falhou: {e}")
+            return import_song_from_folder(folder)
+
         # O primeiro import de um .mogg criptografado leva ~25 s: roda fora da interface
         _run_task(self, "Abrindo a música… (pacotes com áudio criptografado podem levar até 30 s)",
-                  lambda: import_song_from_folder(folder), _on_success, _on_error)
+                  _work, _on_success, _on_error)
 
     def _apply_loaded_song(self, song: ChartSong):
         """Troca a música do estúdio (importada ou aberta de um projeto) e atualiza a tela."""
@@ -642,7 +654,34 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         except Exception as e:
             messagebox.showerror("Erro ao abrir projeto", f"Não foi possível abrir o projeto:\n{e}")
             return
+        missing = missing_audio_files(song)
+        relink = None
+        if missing:
+            listed = "\n".join("• " + p for p in missing[:6]) + ("\n• ..." if len(missing) > 6 else "")
+            if messagebox.askyesno(
+                    "Áudio do projeto não encontrado",
+                    "O projeto foi aberto, mas estes arquivos de áudio não existem mais:\n\n"
+                    f"{listed}\n\n"
+                    "Áudios extraídos de pacotes (.mogg/.pkg/CON) ficam numa pasta temporária que "
+                    "pode ter sido limpa, ou o arquivo foi movido. Sem o áudio, a exportação sai "
+                    "sem música.\n\nDeseja escolher o arquivo de áudio agora? "
+                    "(ou importe o pacote original de novo)"):
+                relink = filedialog.askopenfilename(
+                    title="Escolha o áudio da música",
+                    filetypes=[("Arquivos de Áudio", "*.mp3 *.wav *.ogg *.opus *.flac *.mogg")])
+            if relink:
+                # Áudio novo: stems e canais do .mogg antigo não valem mais
+                song.audio_path = None
+                song.audio_stems = []
+                song.source_mogg = {}
         self._apply_loaded_song(song)
+        if relink:
+            self._load_audio_file_smart(relink)
+
+    def _on_close_request(self):
+        """Fecha o estúdio; se houver exportação/importação em andamento, pergunta antes."""
+        if confirm_close_if_busy(self):
+            self.destroy()
 
     def _refresh_info_card_ui(self):
         g_count = len(self.song.guitar_notes)

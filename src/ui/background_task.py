@@ -142,6 +142,32 @@ def run_with_progress(owner, text, work, on_success, on_error):
     owner.after(POLL_MS, _poll)
 
 
+CLOSE_BUSY_MESSAGE = ("Uma operação (exportação, importação ou compilação de pacote) ainda está "
+                      "em andamento.\n\nFechar agora interrompe o trabalho e os arquivos de saída "
+                      "podem ficar incompletos.\n\nFechar mesmo assim?")
+
+
+def any_busy(widget) -> bool:
+    """True se a janela ou alguma janela filha tem um trabalho em segundo plano rodando."""
+    if getattr(widget, "_background_busy", False):
+        return True
+    try:
+        children = widget.winfo_children()
+    except Exception:
+        return False
+    return any(any_busy(c) for c in children)
+
+
+def confirm_close_if_busy(widget, ask=None) -> bool:
+    """Pergunta antes de fechar se há trabalho em andamento. True = pode fechar."""
+    if not any_busy(widget):
+        return True
+    if ask is None:
+        from tkinter import messagebox
+        ask = messagebox.askyesno
+    return bool(ask("Operação em andamento", CLOSE_BUSY_MESSAGE))
+
+
 def _report_unexpected(exc):
     try:
         from tkinter import messagebox

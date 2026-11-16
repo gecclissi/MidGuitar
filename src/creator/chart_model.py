@@ -332,6 +332,13 @@ class ChartSong:
         return song
 
 
+def missing_audio_files(song: ChartSong) -> List[str]:
+    """Áudios do projeto (mix e stems) que não existem mais no disco (ex.: o cache
+    temporário foi limpo ou o arquivo foi movido)."""
+    paths = ([song.audio_path] if song.audio_path else []) + list(song.audio_stems or [])
+    return [p for p in paths if not os.path.isfile(p)]
+
+
 PROJECT_FORMAT = "midguitar-project"
 PROJECT_VERSION = 1
 PROJECT_EXTENSION = ".mgproj"

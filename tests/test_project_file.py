@@ -54,9 +54,11 @@ dialog = pytest.importorskip("src.ui.creator_studio_dialog", reason="UI indispon
 
 @pytest.fixture
 def boxes(monkeypatch):
-    got = {"info": [], "error": []}
+    got = {"info": [], "error": [], "ask": []}
     monkeypatch.setattr(dialog.messagebox, "showinfo", lambda *a, **k: got["info"].append(a))
     monkeypatch.setattr(dialog.messagebox, "showerror", lambda *a, **k: got["error"].append(a))
+    # Áudio do projeto ausente: o estúdio pergunta se quer escolher outro (aqui: não)
+    monkeypatch.setattr(dialog.messagebox, "askyesno", lambda *a, **k: got["ask"].append(a) or False)
     return got
 
 

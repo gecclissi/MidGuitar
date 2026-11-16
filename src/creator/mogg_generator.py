@@ -82,8 +82,16 @@ def extract_ogg_from_mogg(mogg_path: str, output_ogg_path: str = None) -> str:
             header = fin.read(8)
             magic, ogg_offset = struct.unpack("<II", header)
             fin.seek(ogg_offset)
-            with open(output_ogg_path, "wb") as fout:
-                shutil.copyfileobj(fin, fout, length=65536)
+            # .tmp + replace: extração interrompida não fica no cache como se estivesse completa
+            tmp = output_ogg_path + ".tmp"
+            try:
+                with open(tmp, "wb") as fout:
+                    shutil.copyfileobj(fin, fout, length=65536)
+                os.replace(tmp, output_ogg_path)
+            except BaseException:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+                raise
         return output_ogg_path
     except Exception as e:
         print(f"[MoggGenerator] Erro ao extrair OGG de MOGG: {e}")
@@ -315,21 +323,16 @@ def create_unencrypted_mogg(source_audio_path: str, target_mogg_path: str) -> bo
 
         # 3. Escreve cabeçalho 0x0A + Seek Table + Stream OGG
         ogg_start_offset = 20 + 8 * mogg_entries
-        with open(target_mogg_path, "wb") as mogg_out:
-            mogg_out.write(struct.pack(
-                "<IIIII",
-                0x0A,               # Magic: unencrypted MOGG
-                ogg_start_offset,   # Offset onde começa o OggS
-                0x10,               # Versão da Seek Table
-                FRAME_INCREMENT,    # 20000 samples por entrada
-                mogg_entries        # Quantidade de entradas na tabela
-            ))
-            for b_off, s_off in zip(mogg_table_bytes, mogg_table_samples):
-                mogg_out.write(struct.pack("<II", b_off, s_off))
-
-            with open(ogg_path, "rb") as ogg_in:
-                shutil.copyfileobj(ogg_in, mogg_out, length=65536)
-
+        # Grava num .tmp e troca no fim: .mogg pela metade nunca fica no destino
+        tmp_mogg = target_mogg_path + ".tmp"
+        try:
+            _write_mogg_file(tmp_mogg, ogg_path, ogg_start_offset, mogg_entries,
+                             mogg_table_bytes, mogg_table_samples)
+            os.replace(tmp_mogg, target_mogg_path)
+        except BaseException:
+            if os.path.exists(tmp_mogg):
+                os.remove(tmp_mogg)
+            raise
         return os.path.exists(target_mogg_path)
     except Exception as e:
         print(f"[MoggGenerator] Erro ao gerar .mogg: {e}")
@@ -340,6 +343,25 @@ def create_unencrypted_mogg(source_audio_path: str, target_mogg_path: str) -> bo
                 os.remove(temp_ogg)
             except Exception:
                 pass
+
+
+def _write_mogg_file(target_mogg_path, ogg_path, ogg_start_offset, mogg_entries,
+                     mogg_table_bytes, mogg_table_samples):
+    """Cabeçalho 0x0A + tabela de busca + stream Ogg em `target_mogg_path`."""
+    with open(target_mogg_path, "wb") as mogg_out:
+        mogg_out.write(struct.pack(
+            "<IIIII",
+            0x0A,               # Magic: unencrypted MOGG
+            ogg_start_offset,   # Offset onde começa o OggS
+            0x10,               # Versão da Seek Table
+            FRAME_INCREMENT,    # 20000 samples por entrada
+            mogg_entries        # Quantidade de entradas na tabela
+        ))
+        for b_off, s_off in zip(mogg_table_bytes, mogg_table_samples):
+            mogg_out.write(struct.pack("<II", b_off, s_off))
+
+        with open(ogg_path, "rb") as ogg_in:
+            shutil.copyfileobj(ogg_in, mogg_out, length=65536)
 
 
 def analyze_audio_file(audio_path: str) -> dict:

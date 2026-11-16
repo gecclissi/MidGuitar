@@ -107,6 +107,16 @@ class MidGuitarApp(ctk.CTk):
         # Intercepta fechamento da janela
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        # Limpa o cache de áudio extraído (%TEMP%/midguitar_cache) acima do limite, sem travar a tela
+        def _clean_cache():
+            try:
+                from src.creator.mogg_import import cleanup_cache
+                cleanup_cache()
+            except Exception as e:
+                print(f"[MidGuitar] Limpeza do cache falhou: {e}")
+        import threading
+        threading.Thread(target=_clean_cache, name="midguitar-cache-cleanup", daemon=True).start()
+
     def _build_ui(self):
         from src.ui.tooltip import set_tooltip
 
@@ -772,6 +782,10 @@ class MidGuitarApp(ctk.CTk):
         self.monitor.log(time.strftime("%H:%M:%S"), "PANIC", "Todas as notas foram interrompidas.")
 
     def _on_close(self):
+        # Exportação/importação rodando (aqui ou no estúdio): pergunta antes de interromper
+        from src.ui.background_task import confirm_close_if_busy
+        if not confirm_close_if_busy(self):
+            return
         self.disconnect()
         self.audio.close()
         self.config["current_preset"] = self.current_preset_id
