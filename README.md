@@ -40,7 +40,7 @@ O **MidGuitar Studio** é uma central universal de instrumentos MIDI desenvolvid
 
 ## 🎵 Estúdio Criador & Conversor de Músicas (Rock Band 3, Rock Band 2, Pro Guitar & Keys, PS3, Xbox 360 & Clone Hero)
 
-O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fluxo fragmentado e complexo de ferramentas legadas da comunidade (REAPER, Magma v2, C3 CON Tools e Onyx).
+O MidGuitar conta com um **Estúdio Completo Integrado** que reúne num só app as etapas que antes exigiam várias ferramentas da comunidade (REAPER, Magma v2, C3 CON Tools e Onyx). Ele ainda **não** substitui essas ferramentas em tudo: os pacotes gerados foram conferidos com pacotes reais, mas ainda não foram testados tocando nos jogos. Veja o [status por destino](#-status-por-destino-o-que-já-foi-verificado) abaixo.
 
 ### ⏳ Como era o Processo Antigo vs 🚀 Como é Agora com o MidGuitar
 
@@ -49,11 +49,24 @@ O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fl
 | **Criação de Notas & Dificuldades** | Tinha que abrir o **REAPER**, configurar templates MIDI cheios de pistas e colocar **nota por nota à mão** durante dias para cada dificuldade. | **✨ Auto-Chart Inteligente:** Arraste o MP3 e crie todas as notas para **Guitarra, Baixo, Bateria, Teclado, Pro Guitar (6 cordas), Pro Bass, Pro Keys (25 teclas) e Vocais em 1 clique** nas **4 dificuldades (Easy, Medium, Hard e Expert)**, ou edite visualmente no **Mini-REAPER integrado**. |
 | **Modo PRO (Pro Guitar / Pro Keys)** | Mapear `PART REAL_GUITAR` (6 cordas x 17 casas com velocidades MIDI 100..117) e `PART REAL_KEYS_X/H/M/E` no REAPER exigia semanas de trabalho técnico. | **🎸🎹 Geração e Edição PRO Nativa:** Gera automaticamente acordes reais de 6 cordas (Power Chords, barre chords e solos com números de casas) e tríades/melodias reais de 25 teclas (C3..C5) em todas as 4 dificuldades! |
 | **Mecânica de Vocais & Regra Sem Letra** | Tinha que mapear manualmente notas de afinação (Pitch 36-84), marcadores de frase (Nota 105) e digitar cada sílaba. Sem letra, gerava notas mudas quebradas. | **🎤 Suporte Total a Vocais (.txt / .lrc / .srt):** Arraste ou cole a letra/legenda (`.txt`, `.lrc` ou `.srt`) para habilitar o microfone e sincronizar sílabas! **Se não houver letra, o Microfone fica desativado automaticamente (`vocal_parts 0`)**. |
-| **Áudio Multitrack `.mogg` Oficial** | Tinha que usar ferramentas externas para injetar o cabeçalho binário Harmonix `0x0A` no OGG Vorbis, senão a música ficava muda no PS3/Xbox. | **🔊 Gerador `.mogg` (`0x0A`) Nativo Integrado:** Converte qualquer MP3/WAV/FLAC em `.mogg` não-criptografado oficial com tabela de seek a cada 20.000 samples — toca perfeitamente no Rock Band 3 e Rock Band 2! |
-| **Conversão Multi-Plataforma** | Precisava de **Magma v2**, **C3 CON Tools** ou **Onyx** para converter entre jogos e consoles. | **⚡ Exportação Universal em 1 Clique:** Exporta nativamente para **Rock Band 3 (PS3/RPCS3 `BLUS30463`)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147`, Xbox 360 `45410869` & RB2 Deluxe)**, **Xbox 360 (`45410914`)**, **Clone Hero / YARG**. (PS4 / Rock Band 4 é **experimental e não verificado**: gera só a estrutura de arquivos, ainda não toca no RB4.) |
+| **Áudio Multitrack `.mogg` Oficial** | Tinha que usar ferramentas externas para injetar o cabeçalho binário Harmonix `0x0A` no OGG Vorbis, senão a música ficava muda no PS3/Xbox. | **🔊 Gerador `.mogg` (`0x0A`) Nativo Integrado:** Converte qualquer MP3/WAV/FLAC em `.mogg` não-criptografado com tabela de seek a cada 20.000 samples, no mesmo formato dos pacotes reais (ainda não testado tocando no jogo). |
+| **Conversão Multi-Plataforma** | Precisava de **Magma v2**, **C3 CON Tools** ou **Onyx** para converter entre jogos e consoles. | **⚡ Exportação pelo próprio app:** gera pacotes para **Rock Band 3 (PS3/RPCS3 `BLUS30463`)**, **Xbox 360 (CON `45410914`)** e **Clone Hero / YARG**, conferidos com pacotes reais mas **ainda não testados no jogo**. **Rock Band 2** (PS3 `BLUS30147` / Xbox 360 `45410869`) é **não verificado**, **PS4 / Rock Band 4** é **experimental** (ainda não toca no RB4) e **GHWT:DE** não é suportado. Veja o [status por destino](#-status-por-destino-o-que-já-foi-verificado). |
 | **Compilar Várias Músicas (Packs)** | Tinha que mesclar textos de `songs.dta` manualmente ou usar empacotadores com menus confusos em inglês. | **📦 Compilador de Mega Pacotes:** Selecione uma pasta com dezenas de músicas e o app compila tudo em um **único `songs.dta` unificado** e organizado em `USRDIR/<pasta do pacote>/songs/`, como os pacotes PS3 reais. |
 | **Capa do Álbum** | Tinha que redimensionar manualmente em editores de imagem para tamanhos exatos do console (320x176). | **🖼️ Tratamento Automático:** Suba qualquer JPG/PNG e o app gera o `ICON0.PNG` oficial para a XMB do PS3 e o `album.png` do Clone Hero. |
-| **Instalação no RPCS3 (RB3 e RB2)** | Tinha que caçar a pasta oculta `dev_hdd0/game/BLUS30463` ou `BLUS30147` na mão dentro do Windows. | **🚀 Scripts Automáticos de 1 Clique:** O app gera `INSTALAR_NO_RPCS3_AUTOMATICO.bat` (RB3) e `INSTALAR_NO_RB2_RPCS3.bat` (RB2) dentro da pasta. Dois cliques e instala sozinho! |
+| **Instalação no RPCS3 (RB3 e RB2)** | Tinha que caçar a pasta oculta `dev_hdd0/game/BLUS30463` ou `BLUS30147` na mão dentro do Windows. | **🚀 Scripts de Instalação:** O app gera `INSTALAR_NO_RPCS3_AUTOMATICO.bat` (RB3) e `INSTALAR_NO_RB2_RPCS3.bat` (RB2) dentro da pasta, que procuram o RPCS3 nas pastas usuais e copiam a música (ou pedem o caminho). |
+
+### ✅ Status por destino (o que já foi verificado)
+
+"Formato verificado" quer dizer que os testes automáticos comparam o que o MidGuitar gera com pacotes reais de músicas da comunidade. "Testado no jogo" quer dizer que alguém abriu e tocou a música no jogo ou no emulador — isso **ainda não foi feito** para nenhum destino. O roteiro para testar está em **[docs/TESTE_NO_JOGO.md](docs/TESTE_NO_JOGO.md)**.
+
+| Destino | Formato verificado | Testado no jogo |
+| :--- | :--- | :--- |
+| **Rock Band 3 — PS3 / RPCS3** (`.pkg`, `USRDIR`, `songs.dta`, `.mogg`, `.mid.edat`, `.png_ps3`) | ✅ Sim: idêntico byte a byte aos pacotes PS3 reais de referência | ⏳ Ainda não |
+| **Rock Band 3 — Xbox 360** (pacote CON `45410914`) | ✅ Sim: conferido com uma CON real | ⏳ Ainda não |
+| **Clone Hero / YARG** (pasta com `song.ini` e `notes.mid`) | ✅ Sim: importar e exportar uma música real não perde dados | ⏳ Ainda não |
+| **Rock Band 2** (PS3 `BLUS30147` / Xbox 360 `45410869`) | ❌ Não verificado (sem pacote de referência) | ⏳ Ainda não |
+| **PlayStation 4 / Rock Band 4** | ⚠️ Experimental: só a estrutura de arquivos; ainda não toca no RB4 | ❌ Não |
+| **GHWT:DE** (`.pak.xen` / `.fsb.xen`) | ❌ Não suportado (nem importa, nem exporta) | — |
 
 ---
 
@@ -63,7 +76,7 @@ O MidGuitar conta com um **Estúdio Completo Integrado** que substitui 100% o fl
    - **Opção A (Criar do Zero):** Arraste seu arquivo `.mp3`, sua letra/legenda opcional (`.txt`, `.lrc`, `.srt`) e capa (`.png`/`.jpg`) e clique em **GERAR TUDO AUTOMATICAMENTE**!
    - **Modos Solo Individuais e Kits Rápidos:** Selecione `⚡ Banda Completa`, `🎸 Kit RB2/GH` ou gere **APENAS 1 instrumento específico** com 1 clique: `🎸 Só Guitarra`, `🎸 Só Baixo`, `🥁 Só Bateria`, `🎹 Só Teclado`, `🎸 Só Pro Guitar`, `🎸 Só Pro Bass`, `🎹 Só Pro Keys` ou `🎤 Só Vocal`!
    - **Opção B (Importar de Fãs):** Aponte para qualquer pasta de música baixada (Chorus Encore, RhythmVerse, C3) para converter ou **Completar Instrumentos Faltantes** sem apagar as trilhas originais!
-   - Exporte em 1 clique para **Rock Band 3 (RPCS3/PS3)**, **Rock Band 2 (PS3/RPCS3 `BLUS30147` & Xbox 360 `45410869` — filtrando automaticamente trilhas Pro/Keys para evitar travamentos)**, **Xbox 360 (`45410914`)**, **Clone Hero / YARG**. A opção **PlayStation 4 (Rock Band 4)** é experimental e não verificada: gera só a estrutura de arquivos, ainda não toca no RB4. Mods do **GHWT:DE** usam outro formato (`.pak.xen`/`.fsb.xen`) e ainda não são suportados.
+   - Exporte para **Rock Band 3 (RPCS3/PS3)**, **Xbox 360 (`45410914`)** e **Clone Hero / YARG** (formatos verificados, ainda não testados no jogo) e para **Rock Band 2 (PS3/RPCS3 `BLUS30147` & Xbox 360 `45410869`, sem as trilhas Pro/Keys que o RB2 não conhece — não verificado)**. A opção **PlayStation 4 (Rock Band 4)** é experimental e não verificada: gera só a estrutura de arquivos, ainda não toca no RB4. Mods do **GHWT:DE** usam outro formato (`.pak.xen`/`.fsb.xen`) e ainda não são suportados.
 2. **📦 Compilador de Pacotes em Lote (Multi-Músicas PS3/CH)**:
    - Escaneia pastas com dezenas de músicas e compila todas juntas em um **Mega Pacote com um único `songs.dta` consolidado**, gerando `PARAM.SFO`, `ICON0.PNG` e instalador automático de 1 clique.
 3. **🎛️ Editor Visual de Notas (Mini-REAPER, Modo PRO, Auto-Chart & Simulador de Playtest)**:

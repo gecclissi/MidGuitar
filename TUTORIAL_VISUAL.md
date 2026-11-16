@@ -2,6 +2,8 @@
 
 Este é o **Tutorial Visual Ilustrado** do **MidGuitar**, projetado para que **qualquer pessoa (mesmo leiga, sem conhecimento de música ou edição de áudio)** consiga criar, editar, testar (Playtest) e exportar músicas completas para **PlayStation 3 (Rock Band 3 & Rock Band 2)**, **Xbox 360 (Rock Band 3 & Rock Band 2)**, **PC (Clone Hero / YARG)**. (A opção PlayStation 4 / Rock Band 4 é experimental e não verificada: ainda não toca no RB4.)
 
+> **Status honesto:** os formatos de PS3/RPCS3 (Rock Band 3) e do Xbox 360 (CON) foram conferidos com pacotes reais, mas **nenhuma música gerada foi testada tocando no jogo ainda**. O Rock Band 2 não foi verificado. Antes de confiar numa exportação, siga o roteiro de **[docs/TESTE_NO_JOGO.md](docs/TESTE_NO_JOGO.md)**.
+
 ---
 
 ## 🗺️ Fluxograma Completo do Processo (Do Zero até o Videogame)
@@ -113,15 +115,18 @@ Você pode exportar tanto pela **Aba 1** quanto pela **Aba 4** sem precisar baix
 ![Exportação de Pacotes](assets/tutorial/07_exportacao_jogos.png)
 
 ### 📌 Plataformas e Jogos Suportados:
-1. **🎸 Rock Band 3 — PlayStation 3 (Console HEN/CFW & Emulador RPCS3)**:
+
+> Formato verificado = comparado com pacotes reais pelos testes automáticos. **Nenhum destino foi testado tocando no jogo ainda**; o roteiro está em [docs/TESTE_NO_JOGO.md](docs/TESTE_NO_JOGO.md).
+
+1. **🎸 Rock Band 3 — PlayStation 3 (Console HEN/CFW & Emulador RPCS3)** — formato verificado (idêntico aos pacotes PS3 reais), ainda não testado no jogo:
    * Gera a estrutura completa `BLUS30463/USRDIR/` com `PARAM.SFO`, `ICON0.PNG`, `songs.dta` (com suporte a Pro Guitar, Pro Bass e Pro Keys), `.mid`, `.mogg` e `.png_ps3`, além do instalador `INSTALAR_NO_RPCS3_AUTOMATICO.bat`.
-2. **🎸 Rock Band 2 — PlayStation 3 & Xbox 360 (BLUS30147 / RB2 Deluxe)**:
-   * Gera pacote exclusivo com `songs.dta` no formato clássico (`format 4`) e **filtra automaticamente do arquivo MIDI as trilhas exclusivas do RB3** (`PART KEYS`, `PART REAL_GUITAR`, `PART REAL_BASS`, `PART REAL_KEYS`), garantindo 100% de compatibilidade sem travar o Rock Band 2!
-3. **🟢 Xbox 360 — Rock Band 3 & Rock Band 2 (Console RGH/JTAG, Pendrive Horizon & Emulador Xenia)**:
+2. **🎸 Rock Band 2 — PlayStation 3 & Xbox 360 (BLUS30147 / RB2 Deluxe)** — **não verificado** (sem pacote de referência, nunca testado no jogo):
+   * Gera pacote com `songs.dta` no formato clássico (`format 4`) e **tira do arquivo MIDI as trilhas exclusivas do RB3** (`PART KEYS`, `PART REAL_GUITAR`, `PART REAL_BASS`, `PART REAL_KEYS`), que o Rock Band 2 não conhece.
+3. **🟢 Xbox 360 — Rock Band 3 & Rock Band 2 (Console RGH/JTAG, Pendrive Horizon & Emulador Xenia)** — CON do RB3 conferida com uma CON real, ainda não testada no jogo; RB2 não verificado:
    * Gera a estrutura `Content/0000000000000000/45410914/` (RB3) ou `45410869/` (RB2) com textura `.png_xbox` com cabeçalho HMX legítimo.
 4. **🔵 PlayStation 4 — Rock Band 4 (EXPERIMENTAL, não verificado)**:
    * Gera só a estrutura de arquivos (`songs.dta`, `.mid`, `.mogg`, `project.gp4`). O RB4 exige arquivos binários (`.rbmid_ps4`, `.songdta_ps4`, `.moggsong`, `.png_ps4`) que o MidGuitar ainda não gera: **isto ainda não toca no Rock Band 4**.
-5. **🎮 PC — Clone Hero / YARG**:
+5. **🎮 PC — Clone Hero / YARG** — importar e exportar uma música real não perde dados; ainda não testado no jogo:
    * Gera a pasta pronta com `song.ini`, `notes.mid`, `album.png` (512x512) e `song.ogg`.
    * Os mods do *Guitar Hero World Tour: Definitive Edition* (`.pak.xen`/`.fsb.xen`) usam outro formato: **não são gerados nem importados**.
 
