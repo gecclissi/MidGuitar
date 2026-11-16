@@ -37,6 +37,8 @@ def build() -> int:
         f"--add-data=presets{sep}presets",
         f"--add-data=assets{sep}assets",  # inclui assets/tutorial (imagens do tutorial)
         f"--add-data=TUTORIAL_VISUAL.md{sep}.",
+        f"--add-data=LICENSE{sep}.",  # GPL v3: a licença acompanha o programa
+        f"--add-data=CREDITS.md{sep}.",
         f"--add-data=config.json{sep}.",  # só o padrão (somente leitura)
         "--collect-submodules=src",
         "--collect-all=customtkinter",

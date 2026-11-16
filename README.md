@@ -10,7 +10,7 @@
 [![Platform Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com)
 [![MIDI Standard](https://img.shields.io/badge/Standard-MIDI%201.0-FF6F00?style=for-the-badge)](https://www.midi.org/)
 [![UI CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter-1E293B?style=for-the-badge)](https://github.com/TomSchimansky/CustomTkinter)
-[![License MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+[![License GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=for-the-badge)](LICENSE)
 
 </div>
 
@@ -211,4 +211,4 @@ Transmitem exclusivamente no **Canal MIDI 10** (Percussão General MIDI):
 
 ## 📄 Licença
 
-Distribuído sob a licença **MIT**. Consulte `LICENSE` para mais informações.
+Distribuído sob a licença **GNU GPL v3** (veja `LICENSE`). Partes do formato de pacotes (.mogg criptografado, CON/STFS do Xbox 360, .mid.edat e .pkg do PS3, capas png_xbox/png_ps3) foram portadas ou baseadas no [Onyx Music Game Toolkit](https://github.com/mtolly/onyx) de Michael Tolly (GPL v3) e conferidas contra pacotes reais; veja `CREDITS.md`.
