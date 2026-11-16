@@ -10,6 +10,7 @@ Dados importados que o modelo não edita (song.passthrough_tracks e
 song.track_extras, ver passthrough.py) são regravados sem mudança.
 """
 
+import re
 from collections import defaultdict
 
 from mido import MidiFile, MidiTrack, Message, MetaMessage
@@ -57,12 +58,17 @@ def _note_ticks(tm: TempoMap, time_ms: float, duration_ms: float, min_ticks: int
     return start, end
 
 
-def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb3_tracks: bool = True) -> MidiFile:
+def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb3_tracks: bool = True,
+                      rock_band_only: bool = False, drum_mix: int = None) -> MidiFile:
     """
     Gera um MidiFile (Type 1) 100% compatível com Rock Band 3, Rock Band 2, Clone Hero e YARG.
     Se include_rb3_tracks=False (modo Rock Band 2 / Band Hero), omite trilhas exclusivas do RB3
     (PART KEYS, PART REAL_GUITAR, PART REAL_BASS, PART REAL_KEYS_X/H/M/E e, entre as
     importadas, HARM*, *_ANIM, GHL e ELITE_DRUMS) para evitar incompatibilidades.
+    rock_band_only=True (exportações Rock Band): das trilhas importadas, só repassa as que o
+    Rock Band conhece (passthrough.ROCK_BAND_TRACKS); GHL, ELITE_DRUMS, RHYTHM etc. ficam de fora.
+    drum_mix: grava/reescreve os eventos [mix <dif> drums<N>] da PART DRUMS para o layout de
+    canais de bateria do .mogg (0 = um par estéreo).
     """
     effective_dur = song.get_effective_duration_ms() if hasattr(song, "get_effective_duration_ms") else 180000
     if total_duration_ms is None or total_duration_ms == 180000:
@@ -169,6 +175,8 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb
     for raw in raw_tracks:
         if not include_rb3_tracks and pt.is_rb3_only_track(raw.get("name")):
             continue
+        if rock_band_only and not pt.is_rock_band_track(raw.get("name")):
+            continue
         track = MidiTrack()
         mid.tracks.append(track)
         if raw.get("name") is not None:
@@ -177,7 +185,33 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb
         track.append(MetaMessage('end_of_track', time=0))
 
     _build_events_track(events_track, song, tm, beat_grid, total_duration_ms, total_ticks, last_note_tick)
+    if drum_mix is not None:
+        for track in mid.tracks:
+            if any(m.type == "track_name" and m.name == "PART DRUMS" for m in track):
+                _apply_drum_mix(track, int(drum_mix))
     return mid
+
+
+_MIX_RE = re.compile(r"^\[mix\s+([0-3])\s+drums\d(\w*)\]$")
+
+
+def _apply_drum_mix(track: MidiTrack, mix: int):
+    """Faz os eventos [mix <dif> drums<N>] da trilha usarem o layout `mix` do .mogg.
+
+    Eventos existentes têm o número trocado (sufixos como 'd' do disco flip ficam);
+    dificuldades sem evento ganham um no início da trilha."""
+    seen = set()
+    for i, msg in enumerate(track):
+        if msg.type == "text":
+            m = _MIX_RE.match(msg.text.strip())
+            if m:
+                seen.add(int(m.group(1)))
+                track[i] = msg.copy(text="[mix %s drums%d%s]" % (m.group(1), mix, m.group(2)))
+    pos = 1 if len(track) and track[0].type == "track_name" else 0
+    for diff in range(4):
+        if diff not in seen:
+            track.insert(pos, MetaMessage("text", text="[mix %d drums%d]" % (diff, mix), time=0))
+            pos += 1
 
 
 def _beat_grid(tm: TempoMap, total_ticks: int) -> list:

@@ -35,6 +35,19 @@ _RB3_ONLY_MARKERS = ("GHL", "ELITE")
 _MS_DECIMALS = 3
 
 
+# Trilhas que o Rock Band 3 lê (RB3/PS3/Xbox/PS4); o resto (GHL, ELITE_DRUMS,
+# REAL_DRUMS_PS, RHYTHM, COOP, DRUMS_2X...) é só do Clone Hero/YARG e fica de fora
+ROCK_BAND_TRACKS = frozenset(EDITABLE_TRACKS) | {
+    "PART REAL_GUITAR_22", "PART REAL_BASS_22", "PART KEYS_ANIM_RH", "PART KEYS_ANIM_LH",
+    "HARM1", "HARM2", "HARM3", "BEAT", "EVENTS", "VENUE",
+}
+
+
+def is_rock_band_track(name: Optional[str]) -> bool:
+    """True para trilhas que o Rock Band 3 conhece (nome exato, sem diferenciar caixa)."""
+    return (name or "").strip().upper() in ROCK_BAND_TRACKS
+
+
 def is_rb3_only_track(name: Optional[str]) -> bool:
     """True para trilhas exclusivas do RB3 (ou de outros jogos) que o RB2 não lê."""
     up = (name or "").strip().upper()
