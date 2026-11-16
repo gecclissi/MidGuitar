@@ -334,6 +334,12 @@ class MiniReaperCanvas(tk.Frame):
         total_height = self.header_height + len(lanes) * self.lane_height
         self._draw_playhead(total_height)
 
+    def _is_in_current_difficulty(self, note) -> bool:
+        """Só a dificuldade visível é editada (overdrive e solo valem para todas)."""
+        if getattr(note, "lane", None) in ("overdrive", "solo"):
+            return True
+        return getattr(note, "difficulty", self.current_difficulty) == self.current_difficulty
+
     def _on_canvas_click(self, event):
         """Clique esquerdo: insere nota na posição clicada."""
         # Coordenada absoluta no Canvas levando em conta a rolagem
@@ -409,7 +415,7 @@ class MiniReaperCanvas(tk.Frame):
             # Verifica se já existe uma nota muito perto nessa mesma pista para evitar duplicatas
             notes = self._get_notes()
             for n in list(notes):
-                if n.lane == lane_key and abs(n.time_ms - time_ms) < 40:
+                if n.lane == lane_key and self._is_in_current_difficulty(n) and abs(n.time_ms - time_ms) < 40:
                     # Se clicou exatamente em cima, remove (toggle rápido)
                     notes.remove(n)
                     self.redraw()
@@ -497,7 +503,7 @@ class MiniReaperCanvas(tk.Frame):
             notes = self._get_notes()
             to_remove = None
             for n in notes:
-                if n.lane == lane_key:
+                if n.lane == lane_key and self._is_in_current_difficulty(n):
                     # Verifica se o clique está dentro do corpo ou cauda da nota
                     if n.time_ms - 50 <= click_ms <= n.time_ms + max(160, n.duration_ms) + 50:
                         to_remove = n

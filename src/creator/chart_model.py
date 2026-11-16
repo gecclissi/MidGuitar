@@ -168,12 +168,18 @@ class ChartSong:
             target_list.append(note_event)
             target_list.sort(key=lambda n: n.time_ms)
 
-    def remove_note_near(self, track: str, time_ms: int, lane: str, tolerance_ms: int = 80) -> bool:
-        """Remove nota próxima ao tempo e lane especificados."""
+    def remove_note_near(self, track: str, time_ms: int, lane: str, tolerance_ms: int = 80,
+                         difficulty: Optional[str] = None) -> bool:
+        """Remove nota próxima ao tempo e lane especificados.
+
+        Com `difficulty`, só remove nota dessa dificuldade (overdrive e solo valem para todas).
+        """
         target_list = getattr(self, f"{track}_notes", None)
         if target_list is None:
             return False
         for i, n in enumerate(target_list):
+            if difficulty is not None and n.lane not in ("overdrive", "solo")                     and getattr(n, "difficulty", difficulty) != difficulty:
+                continue
             if n.lane == lane and abs(n.time_ms - time_ms) <= tolerance_ms:
                 target_list.pop(i)
                 return True
