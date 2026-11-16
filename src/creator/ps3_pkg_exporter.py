@@ -1,215 +1,191 @@
 """
 Exportador de Pacotes PS3 / RPCS3 para Rock Band 3.
-Gera a estrutura completa de DLC para PS3 e Emulador RPCS3:
-- BLUS30463_00-CUSTOM/
-  - PARAM.SFO (arquivo de metadados binário oficial do PS3)
-  - ICON0.PNG (capa do álbum formatada para a XMB do PS3 e RPCS3)
-  - USRDIR/
-    - songs/
-      - songs.dta
-      - {shortname}/{shortname}.mid
+Gera a estrutura de DLC no mesmo layout dos pacotes PS3 reais (Magma C3):
+- PS3_RPCS3_<shortname>/
+  - PARAM.SFO (mesmos campos das referências: CATEGORY GD, PARENTAL_LEVEL,
+    PS3_SYSTEM_VER, TITLE, TITLE_ID BLUS30463, VERSION)
+  - ICON0.PNG (320x176 RGB)
+  - USRDIR/<pasta única>/songs/songs.dta
+  - USRDIR/<pasta única>/songs/{shortname}/{shortname}.mid / .mogg / gen/{shortname}_keep.png_ps3
   - package.conf (configuração para ferramentas de empacotamento PKG)
-  - INSTALAR_NO_RPCS3.bat (script automático de 1 clique para instalar no emulador)
-  - COMO_INSTALAR_NO_PS3.txt (passo a passo para console real e emulador)
+  - INSTALAR_NO_RPCS3_AUTOMATICO.bat (copia USRDIR/<pasta> para dev_hdd0/game/BLUS30463/USRDIR/)
+  - COMO_USAR_NO_PS3_E_RPCS3.txt
+
+Cada música (ou pacote) usa a sua própria pasta em USRDIR/, então instalar uma
+segunda música não sobrescreve o songs.dta da primeira.
 """
 
 import os
 import struct
-import shutil
 import hashlib
 from PIL import Image
 from src.creator.chart_model import ChartSong
-from src.creator.rb3_dta_exporter import generate_songs_dta_content
-from src.creator.midi_generator import generate_rbn_midi, save_midi
+from src.creator.rb3_dta_exporter import (RB3_PS3_TITLE_ID, ps3_folder_name, song_shortname,
+                                          stable_song_id, write_rb3_song_files, write_songs_dta)
 
-def generate_param_sfo(title: str, content_id: str, title_id: str = "BLUS30463") -> bytes:
+# Campos do PARAM.SFO como nos pacotes reais (iguais nas duas referências)
+SFO_CATEGORY = "GD"            # Game Data (dados extras do jogo)
+SFO_PARENTAL_LEVEL = 5
+SFO_PS3_SYSTEM_VER = "03.3000"
+SFO_VERSION = "01.00"
+SFO_TITLE_MAX = 128
+
+
+def _sfo_utf8(value: str, max_len: int) -> bytes:
+    """Texto UTF-8 terminado em zero, cortado sem quebrar caracteres multibyte."""
+    raw = (value or "").encode("utf-8")[:max_len - 1]
+    while raw:
+        try:
+            raw.decode("utf-8")
+            break
+        except UnicodeDecodeError:
+            raw = raw[:-1]
+    return raw + b"\x00"
+
+
+def generate_param_sfo(title: str, content_id: str = None, title_id: str = RB3_PS3_TITLE_ID) -> bytes:
     """
-    Gera um arquivo binário PARAM.SFO compatível com PS3 e RPCS3.
+    Gera um PARAM.SFO de dados de jogo (GD) igual ao dos pacotes PS3 reais do Rock Band.
+    Com title="Rock Band 3" o resultado é idêntico byte a byte às referências.
+    content_id é aceito por compatibilidade, mas não vai no SFO (os pacotes reais não
+    o têm; ele é usado no package.conf / .pkg).
     """
+    # (chave, formato, bytes, tamanho máximo); 0x0204 = texto UTF-8, 0x0404 = inteiro
     entries = [
-        ("CATEGORY", "DG", 0x0204),
-        ("CONTENT_ID", content_id, 0x0204),
-        ("TITLE", title[:127], 0x0204),
-        ("TITLE_ID", title_id, 0x0204),
-        ("VERSION", "01.00", 0x0204),
+        ("CATEGORY", 0x0204, _sfo_utf8(SFO_CATEGORY, 4), 4),
+        ("PARENTAL_LEVEL", 0x0404, struct.pack("<I", SFO_PARENTAL_LEVEL), 4),
+        ("PS3_SYSTEM_VER", 0x0204, _sfo_utf8(SFO_PS3_SYSTEM_VER, 8), 8),
+        ("TITLE", 0x0204, _sfo_utf8(title, SFO_TITLE_MAX), SFO_TITLE_MAX),
+        ("TITLE_ID", 0x0204, _sfo_utf8(title_id, 16), 16),
+        ("VERSION", 0x0204, _sfo_utf8(SFO_VERSION, 8), 8),
     ]
-    # SFO Header: magic (\x00PSF), version 1.1, key_table_offset, data_table_offset, entries_count
-    num_entries = len(entries)
-    entry_table_size = num_entries * 16
     header_size = 20
-    
-    # Monta a key table
     key_table = bytearray()
     key_offsets = []
-    for k, _, _ in entries:
+    for key, _fmt, _data, _max in entries:
         key_offsets.append(len(key_table))
-        key_table.extend(k.encode('utf-8') + b'\x00')
-    
-    # Alinhamento da key table
-    key_table_offset = header_size + entry_table_size
+        key_table.extend(key.encode("ascii") + b"\x00")
+    key_table_offset = header_size + 16 * len(entries)
+    while (key_table_offset + len(key_table)) % 4:
+        key_table.append(0)
     data_table_offset = key_table_offset + len(key_table)
-    # Alinha a 4 bytes
-    if data_table_offset % 4 != 0:
-        padding = 4 - (data_table_offset % 4)
-        key_table.extend(b'\x00' * padding)
-        data_table_offset += padding
 
-    # Monta a data table
     data_table = bytearray()
-    entry_records = []
-    for i, (k, val, fmt) in enumerate(entries):
-        val_bytes = val.encode('utf-8') + b'\x00'
-        data_len = len(val_bytes)
-        max_len = ((data_len + 3) // 4) * 4
-        # Pad data
-        val_bytes = val_bytes.ljust(max_len, b'\x00')
-        data_offset = len(data_table)
-        data_table.extend(val_bytes)
-        entry_records.append((key_offsets[i], fmt, data_len, max_len, data_offset))
+    records = bytearray()
+    for (_key, fmt, data, max_len), k_off in zip(entries, key_offsets):
+        records.extend(struct.pack("<HHIII", k_off, fmt, len(data), max_len, len(data_table)))
+        data_table.extend(data.ljust(max_len, b"\x00"))
 
-    # Cria header
-    header = struct.pack(
-        "<4sIIII",
-        b"\x00PSF",
-        0x00000101,
-        key_table_offset,
-        data_table_offset,
-        num_entries
-    )
-
-    # Cria tabela de entradas
-    entries_bytes = bytearray()
-    for k_off, fmt, d_len, m_len, d_off in entry_records:
-        entries_bytes.extend(struct.pack("<HHIII", k_off, fmt, d_len, m_len, d_off))
-
-    return header + entries_bytes + bytes(key_table) + bytes(data_table)
+    header = struct.pack("<4sIIII", b"\x00PSF", 0x00000101, key_table_offset,
+                         data_table_offset, len(entries))
+    return header + bytes(records) + bytes(key_table) + bytes(data_table)
 
 
-def export_ps3_pkg_structure(song: ChartSong, output_base_dir: str, audio_source_path: str = None, total_duration_ms: int = 180000) -> str:
-    """
-    Gera a pasta completa no padrão PS3 / RPCS3 pronta para empacotar ou copiar diretamente.
-    """
-    clean_shortname = "".join(c for c in f"{song.artist}_{song.title}" if c.isalnum()).lower()[:24] or "custom_song"
-    hash_id = hashlib.md5(clean_shortname.encode()).hexdigest().upper()[:8]
-    content_id = f"UP0006-BLUS30463_00-MG{hash_id}00001"
-    
-    pkg_folder_name = f"PS3_RPCS3_{clean_shortname}"
-    root_dir = os.path.join(output_base_dir, pkg_folder_name)
-    usrdir = os.path.join(root_dir, "USRDIR")
-    songs_dir = os.path.join(usrdir, "songs")
-    track_dir = os.path.join(songs_dir, clean_shortname)
-    os.makedirs(track_dir, exist_ok=True)
-
-    # 1. Gera PARAM.SFO
-    sfo_path = os.path.join(root_dir, "PARAM.SFO")
-    sfo_bytes = generate_param_sfo(f"RB3: {song.title} - {song.artist}", content_id)
-    with open(sfo_path, "wb") as f:
-        f.write(sfo_bytes)
-
-    # 2. Gera ICON0.PNG (320x176 - proporção clássica do PS3)
-    icon_path = os.path.join(root_dir, "ICON0.PNG")
-    if song.album_art_path and os.path.exists(song.album_art_path):
+def save_icon0(path: str, art_path: str = None, title: str = "", subtitle: str = ""):
+    """ICON0.PNG 320x176 RGB (como nas referências), da capa ou do ícone padrão."""
+    if art_path and os.path.exists(art_path):
         try:
-            im = Image.open(song.album_art_path).convert("RGBA")
+            im = Image.open(art_path).convert("RGB")
             im = im.resize((320, 176), Image.Resampling.LANCZOS)
-            im.save(icon_path, "PNG")
+            im.save(path, "PNG")
+            return
         except Exception as e:
             print(f"[PS3Exporter] Erro ao redimensionar capa: {e}")
-            _create_default_icon(icon_path, song.title, song.artist)
-    else:
-        _create_default_icon(icon_path, song.title, song.artist)
+    _create_default_icon(path, title, subtitle)
 
-    # 3. Gera songs.dta
-    dta_content = generate_songs_dta_content(song, clean_shortname)
-    dta_path = os.path.join(songs_dir, "songs.dta")
-    with open(dta_path, "w", encoding="utf-8") as f:
-        f.write(dta_content)
 
-    # 4. Gera {shortname}.mid
-    mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms)
-    mid_path = os.path.join(track_dir, f"{clean_shortname}.mid")
-    save_midi(mid, mid_path)
-
-    # 4.1 Gera o container oficial .mogg (0x0A) e copia os arquivos de áudio para a pasta da música no PS3
-    from src.creator.mogg_generator import create_unencrypted_mogg
-    primary_audio = audio_source_path or song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
-    if primary_audio and os.path.exists(primary_audio):
-        mogg_dest = os.path.join(track_dir, f"{clean_shortname}.mogg")
-        create_unencrypted_mogg(primary_audio, mogg_dest)
-
-    if song.audio_stems:
-        for stem_p in song.audio_stems:
-            if os.path.exists(stem_p):
-                fname = os.path.basename(stem_p)
-                dest_p = os.path.join(track_dir, fname)
-                try:
-                    shutil.copy2(stem_p, dest_p)
-                except Exception as e:
-                    print(f"[PS3Exporter] Erro ao copiar stem {fname}: {e}")
-    elif song.audio_path and os.path.exists(song.audio_path):
-        ext = os.path.splitext(song.audio_path)[1].lower()
-        dest_audio = os.path.join(track_dir, f"{clean_shortname}{ext}")
-        try:
-            shutil.copy2(song.audio_path, dest_audio)
-        except Exception as e:
-            print(f"[PS3Exporter] Erro ao copiar áudio: {e}")
-
-    # 5. Gera package.conf (para ferramentas que compilam PKG como make_package_npdrm)
-    conf_path = os.path.join(root_dir, "package.conf")
-    conf_content = f"""Content-ID = {content_id}
-k_licensee = 0x00000000000000000000000000000000
-DRMType = Free
-ContentType = GameExec
-PackageVersion = 01.00
-"""
-    with open(conf_path, "w", encoding="utf-8") as f:
-        f.write(conf_content)
-
-    # 6. Gera script de instalação em 1 clique para o RPCS3
-    bat_path = os.path.join(root_dir, "INSTALAR_NO_RPCS3_AUTOMATICO.bat")
-    bat_content = f"""@echo off
+def rpcs3_install_bat(folder: str, title_id: str, label: str) -> str:
+    """Script .bat que copia USRDIR\\<pasta> para dev_hdd0\\game\\<title_id>\\USRDIR\\<pasta>."""
+    return rf"""@echo off
 chcp 65001 > nul
 echo ============================================================
-echo   MidGuitar - Instalador de Músicas no RPCS3 (Rock Band 3)
+echo   MidGuitar - Instalador no RPCS3 ({title_id})
+echo   {label}
 echo ============================================================
 echo.
 echo Procurando a pasta do RPCS3 nas pastas usuais...
 set "RPCS3_FOUND="
 
 for %%D in (
-  "%USERPROFILE%\\Desktop\\rpcs3"
-  "%USERPROFILE%\\Downloads\\rpcs3"
-  "C:\\rpcs3"
-  "D:\\rpcs3"
-  "E:\\rpcs3"
-  "%APPDATA%\\rpcs3"
+  "%USERPROFILE%\Desktop\rpcs3"
+  "%USERPROFILE%\Downloads\rpcs3"
+  "C:\rpcs3"
+  "D:\rpcs3"
+  "E:\rpcs3"
+  "%APPDATA%\rpcs3"
 ) do (
-  if exist "%%~D\\dev_hdd0\\game\\BLUS30463\\USRDIR" (
-    set "RPCS3_FOUND=%%~D\\dev_hdd0\\game\\BLUS30463\\USRDIR"
+  if exist "%%~D\dev_hdd0\game\{title_id}\USRDIR" (
+    set "RPCS3_FOUND=%%~D\dev_hdd0\game\{title_id}\USRDIR"
   )
 )
 
 if not defined RPCS3_FOUND (
   echo Não encontrou o RPCS3 automaticamente.
-  echo Por favor, digite ou cole o caminho da pasta dev_hdd0\\game\\BLUS30463\\USRDIR do seu RPCS3:
+  echo Digite ou cole o caminho da pasta dev_hdd0\game\{title_id}\USRDIR do seu RPCS3:
   set /p RPCS3_FOUND="Caminho: "
 )
 
 if exist "%RPCS3_FOUND%" (
-  echo Copiando músicas para: %RPCS3_FOUND%\\songs
-  xcopy /E /I /Y "USRDIR\\songs" "%RPCS3_FOUND%\\songs"
+  echo Copiando para: %RPCS3_FOUND%\{folder}
+  xcopy /E /I /Y "%~dp0USRDIR\{folder}" "%RPCS3_FOUND%\{folder}"
   echo.
-  echo [SUCESSO!] Música {song.title} instalada com sucesso no RPCS3!
-  echo Abra o Rock Band 3 e aproveite!
+  echo [SUCESSO!] Instalado em %RPCS3_FOUND%\{folder}
+  echo Abra o jogo e aproveite!
 ) else (
-  echo Pasta não encontrada. Verifique se o jogo Rock Band 3 (BLUS30463) está instalado no emulador.
+  echo Pasta não encontrada. Verifique se o jogo ({title_id}) está instalado no emulador.
 )
 pause
 """
-    with open(bat_path, "w", encoding="utf-8") as f:
-        f.write(bat_content)
 
-    # 7. Instruções detalhadas
+
+def write_install_bat(path: str, folder: str, title_id: str, label: str):
+    with open(path, "w", encoding="utf-8", newline="\r\n") as f:
+        f.write(rpcs3_install_bat(folder, title_id, label))
+
+
+def package_conf(content_id: str) -> str:
+    return f"""Content-ID = {content_id}
+k_licensee = 0x00000000000000000000000000000000
+DRMType = Free
+ContentType = GameData
+PackageVersion = 01.00
+"""
+
+
+def export_ps3_pkg_structure(song: ChartSong, output_base_dir: str, audio_source_path: str = None, total_duration_ms: int = 180000) -> str:
+    """
+    Gera a pasta completa no padrão PS3 / RPCS3 pronta para empacotar ou copiar diretamente.
+    """
+    clean_shortname = song_shortname(song)
+    song_id = stable_song_id(song)
+    folder = ps3_folder_name(clean_shortname, song_id)
+    hash_id = hashlib.md5(folder.encode()).hexdigest().upper()[:8]
+    content_id = f"UP0006-{RB3_PS3_TITLE_ID}_00-MG{hash_id}00001"
+
+    root_dir = os.path.join(output_base_dir, f"PS3_RPCS3_{clean_shortname}")
+    songs_dir = os.path.join(root_dir, "USRDIR", folder, "songs")
+    os.makedirs(songs_dir, exist_ok=True)
+
+    # 1. PARAM.SFO e ICON0.PNG
+    with open(os.path.join(root_dir, "PARAM.SFO"), "wb") as f:
+        f.write(generate_param_sfo(f"RB3: {song.title} - {song.artist}", content_id))
+    save_icon0(os.path.join(root_dir, "ICON0.PNG"), song.album_art_path, song.title, song.artist)
+
+    # 2. Música: .mid, .mogg (multicanal), capa png_ps3 e songs.dta
+    dta_content, _layout = write_rb3_song_files(song, songs_dir, clean_shortname, song_id=song_id,
+                                                audio_source_path=audio_source_path,
+                                                total_duration_ms=total_duration_ms)
+    write_songs_dta(os.path.join(songs_dir, "songs.dta"), [dta_content])
+
+    # 3. package.conf (ferramentas que compilam PKG, como make_package_npdrm)
+    with open(os.path.join(root_dir, "package.conf"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(package_conf(content_id))
+
+    # 4. Instalador de 1 clique para o RPCS3
+    write_install_bat(os.path.join(root_dir, "INSTALAR_NO_RPCS3_AUTOMATICO.bat"), folder,
+                      RB3_PS3_TITLE_ID, f"Música: {song.title} - {song.artist}")
+
+    # 5. Instruções detalhadas
     info_path = os.path.join(root_dir, "COMO_USAR_NO_PS3_E_RPCS3.txt")
     info_content = f"""======================================================================
   MidGuitar Universal Studio - Pacote Rock Band 3 (PS3 & RPCS3)
@@ -218,53 +194,45 @@ pause
   Content-ID: {content_id}
 ======================================================================
 
-OPÇÃO 1: INSTALAR NO EMULADOR RPCS3 (MUITO FÁCIL)
+OPÇÃO 1: INSTALAR NO EMULADOR RPCS3
 ----------------------------------------------------------------------
-1. Você pode simplesmente dar dois cliques no arquivo:
-   'INSTALAR_NO_RPCS3_AUTOMATICO.bat' que criamos nesta pasta!
+1. Dê dois cliques em 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' nesta pasta.
 OU
-2. Copie manualmente a pasta 'USRDIR\\songs' desta pasta para:
-   [Sua Pasta RPCS3]\\dev_hdd0\\game\\BLUS30463\\USRDIR\\songs\\
+2. Copie manualmente a pasta 'USRDIR/{folder}' para:
+   [Sua Pasta RPCS3]/dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
 
-Ao abrir o Rock Band 3 no emulador, a música aparecerá imediatamente na lista!
+Cada música fica na própria pasta: instalar outra não apaga esta.
 
-
-OPÇÃO 2: INSTALAR NO CONSOLE PLAYSTATION 3 REAL (CFW / HEN)
+OPÇÃO 2: CONSOLE PLAYSTATION 3 (CFW / HEN)
 ----------------------------------------------------------------------
-Método A (Mais Rápido por FTP ou Pendrive / multiMAN):
-1. Conecte no seu PS3 via FTP (FileZilla) ou use o Gerenciador de Arquivos do multiMAN.
-2. Copie os arquivos de 'USRDIR/songs/' para:
-   /dev_hdd0/game/BLUS30463/USRDIR/songs/
+1. Via FTP ou multiMAN, copie 'USRDIR/{folder}' para:
+   /dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
+2. Ou gere um .pkg com 'make_package_npdrm' usando o 'package.conf' desta pasta.
 
-Método B (Gerar arquivo .PKG direto):
-1. Use qualquer empacotador comum de PKG (como 'make_package_npdrm' ou 'TrueAncestor PKG Repacker').
-2. Esta pasta já possui o 'PARAM.SFO', 'ICON0.PNG' e 'package.conf' 100% configurados!
-3. O instalador gera o arquivo .pkg para instalar pelo menu 'Package Manager' da XMB.
-
-======================================================================
-Gerado com amor pelo MidGuitar Universal Studio!
+Observação: o PS3 exige o MIDI criptografado (.mid.edat) e o arquivo
+gen/{clean_shortname}.milo_ps3; estas etapas ainda não são geradas.
 ======================================================================
 """
-    with open(info_path, "w", encoding="utf-8") as f:
+    with open(info_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(info_content)
 
     return root_dir
 
 
 def _create_default_icon(path: str, title: str, artist: str):
-    """Cria um ícone padrão bonito caso não haja imagem de capa."""
+    """Cria um ícone padrão (320x176 RGB) caso não haja imagem de capa."""
     try:
-        from PIL import ImageDraw, ImageFont
-        im = Image.new("RGBA", (320, 176), color=(24, 28, 36, 255))
+        from PIL import ImageDraw
+        im = Image.new("RGB", (320, 176), color=(24, 28, 36))
         draw = ImageDraw.Draw(im)
         # Borda decorativa
         draw.rectangle([(2, 2), (317, 173)], outline=(0, 200, 255), width=2)
         draw.rectangle([(6, 6), (313, 169)], outline=(30, 40, 55), width=1)
         # Texto
         draw.text((20, 35), "ROCK BAND 3 CUSTOM", fill=(0, 220, 255))
-        draw.text((20, 65), title[:25], fill=(255, 255, 255))
-        draw.text((20, 95), artist[:28], fill=(180, 180, 180))
-        draw.text((20, 135), "⚡ MidGuitar Universal Studio", fill=(100, 255, 100))
+        draw.text((20, 65), (title or "")[:25], fill=(255, 255, 255))
+        draw.text((20, 95), (artist or "")[:28], fill=(180, 180, 180))
+        draw.text((20, 135), "MidGuitar Universal Studio", fill=(100, 255, 100))
         im.save(path, "PNG")
     except Exception:
         pass

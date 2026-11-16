@@ -3,7 +3,7 @@ Exportador de Músicas para Xbox 360 (Rock Band 3 / RGH / JTAG / Horizon / Xenia
 Gera a estrutura de arquivos e diretórios oficial do Xbox 360:
 - songs/songs.dta
 - songs/{shortname}/{shortname}.mid
-- songs/{shortname}/{shortname}.ogg
+- songs/{shortname}/{shortname}.mogg (multicanal, 44100 Hz)
 - Content/0000000000000000/45410914/00000002/{shortname}/ (estrutura de pendrive formatado em FATX / Horizon)
 - COMO_INSTALAR_NO_XBOX360.txt (manual detalhado para console destravado e emulador Xenia)
 """
@@ -11,8 +11,7 @@ Gera a estrutura de arquivos e diretórios oficial do Xbox 360:
 import os
 import shutil
 from src.creator.chart_model import ChartSong
-from src.creator.rb3_dta_exporter import generate_songs_dta_content
-from src.creator.midi_generator import generate_rbn_midi, save_midi
+from src.creator.rb3_dta_exporter import song_shortname, write_rb3_song_files, write_songs_dta
 
 XBOX360_RB3_TITLE_ID = "45410914" # Title ID oficial do Rock Band 3 no Xbox 360
 
@@ -21,7 +20,7 @@ def export_xbox360_structure(song: ChartSong, output_base_dir: str, total_durati
     Exporta a música no padrão oficial do Xbox 360 (Rock Band 3).
     Gera tanto a pasta solta para Aurora/Freestyle/Xenia quanto a estrutura Content/ para pendrive.
     """
-    clean_shortname = "".join(c for c in f"{song.artist}_{song.title}" if c.isalnum()).lower()[:24] or "custom_song"
+    clean_shortname = song_shortname(song)
     folder_name = f"XBOX360_RB3_{clean_shortname}"
     root_dir = os.path.join(output_base_dir, folder_name)
 
@@ -34,44 +33,17 @@ def export_xbox360_structure(song: ChartSong, output_base_dir: str, total_durati
     content_dir = os.path.join(root_dir, "Content", "0000000000000000", XBOX360_RB3_TITLE_ID, "00000002", clean_shortname)
     os.makedirs(content_dir, exist_ok=True)
 
-    # 3. Gera songs.dta
-    dta_content = generate_songs_dta_content(song, clean_shortname)
-    dta_path = os.path.join(songs_dir, "songs.dta")
-    with open(dta_path, "w", encoding="utf-8") as f:
-        f.write(dta_content)
+    # 3. MIDI (só trilhas do Rock Band), .mogg multicanal e songs.dta coerente com ele
+    dta_content, _layout = write_rb3_song_files(song, songs_dir, clean_shortname,
+                                                total_duration_ms=total_duration_ms, with_art=False)
+    write_songs_dta(os.path.join(songs_dir, "songs.dta"), [dta_content])
 
-    # Copia dta também para dentro da estrutura content
-    with open(os.path.join(content_dir, "songs.dta"), "w", encoding="utf-8") as f:
-        f.write(dta_content)
-
-    # 4. Gera arquivo MIDI ({shortname}.mid)
-    mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms)
-    mid_path = os.path.join(track_dir, f"{clean_shortname}.mid")
-    save_midi(mid, mid_path)
-    shutil.copy2(mid_path, os.path.join(content_dir, f"{clean_shortname}.mid"))
-
-    # 5. Gera o container oficial .mogg (0x0A) e copia áudios
-    from src.creator.mogg_generator import create_unencrypted_mogg
-    primary_audio = song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
-    if primary_audio and os.path.exists(primary_audio):
-        mogg_dest1 = os.path.join(track_dir, f"{clean_shortname}.mogg")
-        if create_unencrypted_mogg(primary_audio, mogg_dest1):
-            shutil.copy2(mogg_dest1, os.path.join(content_dir, f"{clean_shortname}.mogg"))
-
-    if song.audio_stems:
-        for stem_p in song.audio_stems:
-            if os.path.exists(stem_p):
-                fname = os.path.basename(stem_p)
-                dest1 = os.path.join(track_dir, fname)
-                dest2 = os.path.join(content_dir, fname)
-                shutil.copy2(stem_p, dest1)
-                shutil.copy2(stem_p, dest2)
-    elif song.audio_path and os.path.exists(song.audio_path):
-        ext = os.path.splitext(song.audio_path)[1].lower()
-        dest_audio1 = os.path.join(track_dir, f"{clean_shortname}{ext}")
-        dest_audio2 = os.path.join(content_dir, f"{clean_shortname}{ext}")
-        shutil.copy2(song.audio_path, dest_audio1)
-        shutil.copy2(song.audio_path, dest_audio2)
+    # 4. Cópia para a estrutura Content (pendrive / Horizon)
+    write_songs_dta(os.path.join(content_dir, "songs.dta"), [dta_content])
+    for ext in (".mid", ".mogg"):
+        src = os.path.join(track_dir, f"{clean_shortname}{ext}")
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(content_dir, f"{clean_shortname}{ext}"))
 
     # 6. Manual passo a passo para o usuário
     readme_path = os.path.join(root_dir, "COMO_INSTALAR_NO_XBOX360.txt")

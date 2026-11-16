@@ -4,15 +4,14 @@ Gera a estrutura oficial para custom songs no PlayStation 4:
 - sce_sys/param.sfo (metadados do PS4 com CUSA02084 / CUSA02901)
 - songs/songs.dta
 - songs/{shortname}/{shortname}.mid
-- songs/{shortname}/{shortname}.ogg
+- songs/{shortname}/{shortname}.mogg (multicanal, 44100 Hz)
 - COMO_INSTALAR_NO_PS4.txt (guia passo a passo para consoles com GoldHEN / PS4 HEN)
 """
 
 import os
 import shutil
 from src.creator.chart_model import ChartSong
-from src.creator.rb3_dta_exporter import generate_songs_dta_content
-from src.creator.midi_generator import generate_rbn_midi, save_midi
+from src.creator.rb3_dta_exporter import song_shortname, write_rb3_song_files, write_songs_dta
 
 PS4_RB4_TITLE_ID = "CUSA02084" # Rock Band 4 US
 PS4_RB4_RIVALS_ID = "CUSA02901" # Rock Band 4 Rivals
@@ -21,7 +20,7 @@ def export_ps4_structure(song: ChartSong, output_base_dir: str, total_duration_m
     """
     Exporta a música no padrão do PlayStation 4 para Rock Band 4 e YARG.
     """
-    clean_shortname = "".join(c for c in f"{song.artist}_{song.title}" if c.isalnum()).lower()[:24] or "custom_song"
+    clean_shortname = song_shortname(song)
     folder_name = f"PS4_RB4_{clean_shortname}"
     root_dir = os.path.join(output_base_dir, folder_name)
 
@@ -32,34 +31,10 @@ def export_ps4_structure(song: ChartSong, output_base_dir: str, total_duration_m
     os.makedirs(sce_dir, exist_ok=True)
     os.makedirs(track_dir, exist_ok=True)
 
-    # 2. Gera songs.dta
-    dta_content = generate_songs_dta_content(song, clean_shortname)
-    dta_path = os.path.join(songs_dir, "songs.dta")
-    with open(dta_path, "w", encoding="utf-8") as f:
-        f.write(dta_content)
-
-    # 3. Gera MIDI compatível
-    mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms)
-    mid_path = os.path.join(track_dir, f"{clean_shortname}.mid")
-    save_midi(mid, mid_path)
-
-    # 4. Gera o container .mogg e copia áudios
-    from src.creator.mogg_generator import create_unencrypted_mogg
-    primary_audio = song.audio_path or (song.audio_stems[0] if song.audio_stems else None)
-    if primary_audio and os.path.exists(primary_audio):
-        mogg_dest = os.path.join(track_dir, f"{clean_shortname}.mogg")
-        create_unencrypted_mogg(primary_audio, mogg_dest)
-
-    if song.audio_stems:
-        for stem_p in song.audio_stems:
-            if os.path.exists(stem_p):
-                fname = os.path.basename(stem_p)
-                dest = os.path.join(track_dir, fname)
-                shutil.copy2(stem_p, dest)
-    elif song.audio_path and os.path.exists(song.audio_path):
-        ext = os.path.splitext(song.audio_path)[1].lower()
-        dest_audio = os.path.join(track_dir, f"{clean_shortname}{ext}")
-        shutil.copy2(song.audio_path, dest_audio)
+    # 2. MIDI (só trilhas do Rock Band), .mogg multicanal e songs.dta coerente com ele
+    dta_content, _layout = write_rb3_song_files(song, songs_dir, clean_shortname,
+                                                total_duration_ms=total_duration_ms, with_art=False)
+    write_songs_dta(os.path.join(songs_dir, "songs.dta"), [dta_content])
 
     # 5. Gera arquivo de configuração GPAC / orbis-pub-cmd
     gpac_content = f"""<?xml version="1.0" encoding="utf-8" standalone="yes"?>

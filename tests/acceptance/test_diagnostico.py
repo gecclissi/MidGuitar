@@ -361,7 +361,7 @@ def _small_song(tmp_path):
     return s
 
 
-@pytest.mark.xfail(strict=True, reason="PS3: .mid solto (sem .mid.edat), sem milo/png_ps3, layout USRDIR/songs (deveria ser USRDIR/<pasta>/songs)")
+@pytest.mark.xfail(strict=True, reason="PS3: .mid solto (sem .mid.edat); .mid.edat fica para o passo 3B")
 def test_ps3_export_passes_validator(tmp_path):
     from src.creator.ps3_pkg_exporter import export_ps3_pkg_structure
     from src.creator.validation import validate_export
@@ -392,14 +392,12 @@ def test_clonehero_export_from_scratch_validates(tmp_path):
     assert not [i for i in validate_export(folder, "clonehero") if i.level == "error"]
 
 
-@pytest.mark.xfail(strict=True, reason="songs.dta do RB3 usa (drum_solo (seq 96 ...)); o formato real é (seqs (kick.cue ...))")
 def test_rb3_dta_drum_solo_format():
     from src.creator.rb3_dta_exporter import generate_songs_dta_content
     assert "kick.cue" in generate_songs_dta_content(_drum_song(), "x")
 
 
 @need(JOE)
-@pytest.mark.xfail(strict=True, reason="multitrack: DTA declara 8 canais, mas o .mogg é feito só do 1º áudio (2 canais)")
 def test_rb3_multistem_mogg_channels_match_dta(joe_song, tmp_path):
     from src.creator.rb3_dta_exporter import export_rb3_song_package
     from src.creator.validation import validate_export
@@ -422,7 +420,9 @@ def test_pack_compilers_two_songs(tmp_path):
     ch = compile_clone_hero_pack([a, b], "Pack CH", str(tmp_path / "ch"))
     assert len(os.listdir(ch)) == 2
     ps3 = compile_ps3_song_pack([a, b], "Pack PS3", str(tmp_path / "ps3"))
-    dta = open(os.path.join(ps3, "USRDIR", "songs", "songs.dta"), encoding="utf-8").read()
+    dtas = glob.glob(os.path.join(ps3, "USRDIR", "*", "songs", "songs.dta"))
+    assert len(dtas) == 1
+    dta = open(dtas[0], encoding="utf-8").read()
     assert len(parse_dta(dta)) == 2
 
 

@@ -1836,7 +1836,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         add_step(
             "6", "Como Jogar no PlayStation 3 Real (Videogame com HEN ou CFW)",
             "• Copie a pasta gerada para um pendrive FAT32 ou envie por FTP (FileZilla).\n"
-            "• Cole a pasta 'USRDIR/songs' no diretório do jogo no PS3: /dev_hdd0/game/BLUS30463/USRDIR/songs/.\n"
+            "• Copie a pasta que está dentro de 'USRDIR' (uma por música ou pacote) para /dev_hdd0/game/BLUS30463/USRDIR/.\n"
             "• Inicie o Rock Band 3 no console e divirta-se!"
         )
 
@@ -2571,7 +2571,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             "Sucesso Rock Band 2!",
             f"🎸 Pacote para Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 & RB2 Deluxe) gerado com sucesso em:\n{pkg_dir}\n\n"
             f"• No RPCS3 (PC): Dê 2 cliques em 'INSTALAR_NO_RB2_RPCS3.bat' dentro da pasta!\n"
-            f"• No PS3 Real: Copie USRDIR/songs para /dev_hdd0/game/BLUS30147/USRDIR/songs/\n"
+            f"• No PS3 Real: Copie a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30147/USRDIR/\n"
             f"• No Xbox 360: Use a pasta 'Xbox360_Content/0000000000000000/45410869/'",
             pkg_dir, "rb2"
         )
@@ -2590,7 +2590,7 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             "Sucesso PS3 / RPCS3!",
             f"Estrutura PS3 / RPCS3 gerada com sucesso em:\n{pkg_dir}\n\n"
             f"• Para instalar no RPCS3: Execute o arquivo 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' dentro da pasta!\n"
-            f"• Para PS3 Real: Copie a pasta USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/",
+            f"• Para PS3 Real: Copie a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/",
             pkg_dir, "rb3_ps3"
         )
 
