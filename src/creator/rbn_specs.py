@@ -123,6 +123,11 @@ DRUM_FILLS = [120, 121, 122, 123, 124] # Ativação de Roll / Fill para ativar O
 # -------------------------------------------------------------------------
 # TECLADO TRADICIONAL & PRO KEYS (PART KEYS / PART REAL_KEYS_X)
 # -------------------------------------------------------------------------
+# Notas abertas do Clone Hero/YARG ([ENHANCED_OPENS] na trilha): uma nota abaixo do verde
+# de cada dificuldade, só em PART GUITAR / PART BASS. O Rock Band não tem nota aberta.
+OPEN_NOTES = {"Expert": 95, "Hard": 83, "Medium": 71, "Easy": 59}
+ENHANCED_OPENS_TEXT = "[ENHANCED_OPENS]"
+
 KEYS_5LANE = FRET_NOTES     # Teclado 5 botões usa as mesmas notas da guitarra
 KEYS_OVERDRIVE = 116
 KEYS_SOLO_MARKER = 103

@@ -63,7 +63,7 @@ def test_chart_forced_tap_and_open(chart_song):
     assert (1440, 95) in ons      # N 7 -> open (ENHANCED_OPENS)
     assert any(m.type == "text" and m.text == "[ENHANCED_OPENS]" for m in guitar)
     lanes = {n.lane for n in chart_song.guitar_notes}
-    assert lanes <= {"green", "red", "yellow", "blue", "orange", "overdrive"}
+    assert lanes <= {"green", "red", "yellow", "blue", "orange", "overdrive", "open"}
 
 
 def test_chart_drums_use_canonical_lanes(chart_song):

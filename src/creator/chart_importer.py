@@ -10,7 +10,8 @@ import configparser
 import mido
 from mido import MidiFile
 from src.creator.chart_model import ChartSong, NoteEvent, TextEvent
-from src.creator.rbn_specs import FRET_NOTES, DRUM_NOTES, TICKS_PER_BEAT
+from src.creator.rbn_specs import (FRET_NOTES, DRUM_NOTES, TICKS_PER_BEAT, OPEN_NOTES,
+                                   ENHANCED_OPENS_TEXT)
 from src.creator.tempo_map import TempoMap, TempoChange, TimeSigChange
 
 # song.ini: ranking de dificuldade -> atributo do ChartSong
@@ -574,8 +575,14 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
 
     open_insts = set()
     for inst, diff, lane, tick, sustain_ticks in pending_notes:
+        if lane == "open" and inst in ("guitar", "bass"):
+            # Open (N 7): lane "open" do modelo (nota abaixo do verde no MIDI do CH)
+            start_ms, dur_ms = span_ms(tick, sustain_ticks)
+            song.add_note(inst, NoteEvent(time_ms=start_ms, lane="open", duration_ms=max(120, dur_ms),
+                                          difficulty=diff))
+            open_insts.add(inst)
+            continue
         if lane == "open":
-            # Open (N 7): nota abaixo do verde, com [ENHANCED_OPENS] na trilha
             pitch = FRET_NOTES[diff]["green"] - 1
             pt.add_extra_note(extras_for(inst), tm, tick, tick + max(1, sustain_ticks), pitch, 100, 0)
             open_insts.add(inst)
@@ -583,7 +590,7 @@ def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
         start_ms, dur_ms = span_ms(tick, sustain_ticks)
         song.add_note(inst, NoteEvent(time_ms=start_ms, lane=lane, duration_ms=max(120, dur_ms), difficulty=diff))
     for inst in sorted(open_insts):
-        pt.add_extra_event(extras_for(inst), tm, 0, mido.MetaMessage("text", text="[ENHANCED_OPENS]"))
+        pt.add_extra_event(extras_for(inst), tm, 0, mido.MetaMessage("text", text=ENHANCED_OPENS_TEXT))
 
     # Forçadas (N 5 inverte o HOPO natural) e tap (N 6, marcador 104)
     hopo_threshold = resolution * 65 / 192
@@ -673,6 +680,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
 
     inv_fret_notes = _inverse_map(FRET_NOTES)
     inv_drum_notes = _inverse_map(DRUM_NOTES)
+    inv_open = {pitch: diff for diff, pitch in OPEN_NOTES.items()}
     song.passthrough_tracks = []
     song.track_extras = {}
 
@@ -708,12 +716,20 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
 
         phrase_ends = []
         sung = []
+        # Notas abertas (95/83/71/59) só valem com [ENHANCED_OPENS] na guitarra/baixo
+        opens_on = upper in ("PART GUITAR", "PART BASS") and any(
+            m.type == "text" and m.text.strip() == ENHANCED_OPENS_TEXT for _t, m in others)
         for start, end, pitch, vel, ch in sorted(notes):
             t_ms, d_ms = _ms_span(tm, start, end)
             consumed = False
             if upper in _FIVE_LANE_TRACKS or upper == "PART DRUMS":
                 inv = inv_drum_notes if upper == "PART DRUMS" else inv_fret_notes
-                if ch == 0 and pitch in inv:
+                if opens_on and ch == 0 and pitch in inv_open:
+                    song_list = song.bass_notes if upper == "PART BASS" else song.guitar_notes
+                    song_list.append(NoteEvent(time_ms=t_ms, lane="open", duration_ms=d_ms,
+                                               difficulty=inv_open[pitch], velocity=vel))
+                    consumed = True
+                elif ch == 0 and pitch in inv:
                     lane, diff = inv[pitch]
                     attr = "drum" if upper == "PART DRUMS" else _FIVE_LANE_TRACKS[upper]
                     getattr(song, f"{attr}_notes").append(NoteEvent(

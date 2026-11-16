@@ -10,7 +10,9 @@ Dados importados que o modelo não edita (song.passthrough_tracks e
 song.track_extras, ver passthrough.py) são regravados sem mudança.
 """
 
+import copy
 import re
+from typing import Optional
 from collections import defaultdict
 
 from mido import MidiFile, MidiTrack, Message, MetaMessage
@@ -19,7 +21,7 @@ from src.creator.tempo_map import TempoMap
 from src.creator import passthrough as pt
 from src.creator.rbn_specs import (
     TICKS_PER_BEAT,
-    FRET_NOTES, DRUM_NOTES, BEAT_BAR_DOWNBEAT, BEAT_OFFBEAT,
+    FRET_NOTES, DRUM_NOTES, OPEN_NOTES, ENHANCED_OPENS_TEXT, BEAT_BAR_DOWNBEAT, BEAT_OFFBEAT,
     GUITAR_OVERDRIVE, DRUM_OVERDRIVE, KEYS_OVERDRIVE,
     VOCAL_PHRASE_MARKER, VOCAL_OVERDRIVE, VOCAL_TALKIE
 )
@@ -56,6 +58,37 @@ def _note_ticks(tm: TempoMap, time_ms: float, duration_ms: float, min_ticks: int
     start = max(0, tm.ms_to_tick(time_ms))  # tempo negativo vira 0 (deltas nunca negativos)
     end = max(start + min_ticks, tm.ms_to_tick(time_ms + duration_ms))
     return start, end
+
+
+# Guitarra/baixo com a nota aberta do Clone Hero (uma nota abaixo do verde)
+_FRET_NOTES_WITH_OPEN = {d: dict(m, open=OPEN_NOTES[d]) for d, m in FRET_NOTES.items()}
+
+
+def _opens_for_target(notes: list, rock_band_only: bool) -> list:
+    """Rock Band não tem nota aberta: vira verde (como a CON do Onyx/RB3); a que cairia
+    em cima de um verde já existente na mesma dificuldade é descartada."""
+    if not rock_band_only or not any(n.lane == "open" for n in notes):
+        return notes
+    greens = {(n.difficulty, n.time_ms) for n in notes if n.lane == "green"}
+    out = []
+    for n in notes:
+        if n.lane == "open":
+            if (n.difficulty, n.time_ms) in greens:
+                continue
+            n = copy.copy(n)
+            n.lane = "green"
+            greens.add((n.difficulty, n.time_ms))
+        out.append(n)
+    return out
+
+
+def _without_opens_marker(extras: Optional[dict]) -> Optional[dict]:
+    """Tira o texto [ENHANCED_OPENS] do passthrough (sem notas abertas ele não tem função)."""
+    if not extras:
+        return extras
+    keep = [e for e in extras.get("events", [])
+            if not (e[1].get("type") == "text" and str(e[1].get("text", "")).strip() == ENHANCED_OPENS_TEXT)]
+    return dict(extras, events=keep)
 
 
 def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb3_tracks: bool = True,
@@ -148,8 +181,15 @@ def generate_rbn_midi(song: ChartSong, total_duration_ms: int = None, include_rb
             last_note_tick = last if last_note_tick is None else max(last_note_tick, last)
 
     # PISTAS 3..6: instrumentos de 5 lanes / bateria
-    add_track('PART GUITAR', _build_instrument_track, song.guitar_notes, FRET_NOTES, GUITAR_OVERDRIVE, tm)
-    add_track('PART BASS', _build_instrument_track, song.bass_notes, FRET_NOTES, GUITAR_OVERDRIVE, tm)
+    fret_map = FRET_NOTES if rock_band_only else _FRET_NOTES_WITH_OPEN
+    if rock_band_only:
+        for tname in ("PART GUITAR", "PART BASS"):
+            if tname in extras_by_track:
+                extras_by_track = dict(extras_by_track, **{tname: _without_opens_marker(extras_by_track[tname])})
+    add_track('PART GUITAR', _build_instrument_track, _opens_for_target(song.guitar_notes, rock_band_only),
+              fret_map, GUITAR_OVERDRIVE, tm)
+    add_track('PART BASS', _build_instrument_track, _opens_for_target(song.bass_notes, rock_band_only),
+              fret_map, GUITAR_OVERDRIVE, tm)
     add_track('PART DRUMS', _build_instrument_track, song.drum_notes, DRUM_NOTES, DRUM_OVERDRIVE, tm)
     if include_rb3_tracks:
         add_track('PART KEYS', _build_instrument_track, song.keys_notes, FRET_NOTES, KEYS_OVERDRIVE, tm)

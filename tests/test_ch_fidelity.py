@@ -208,7 +208,7 @@ def test_synthetic_roundtrip_survives_project_json(synthetic, tmp_path):
 
 def test_markers_are_not_model_notes(synthetic):
     _src, song = synthetic
-    assert {n.lane for n in song.guitar_notes} <= {"green", "red", "yellow", "blue", "orange"}
+    assert {n.lane for n in song.guitar_notes} <= {"green", "red", "yellow", "blue", "orange", "open"}
     assert {n.lane for n in song.drum_notes} == {"kick", "yellow", "snare"}
     assert len(song.vocal_notes) == 3
     assert [v.is_phrase_end for v in song.vocal_notes] == [False, True, True]
@@ -251,3 +251,38 @@ def test_joe_dassin_import_export_is_lossless(joe_song, tmp_path):
     out_path = str(tmp_path / "notes.mid")
     generate_rbn_midi(song).save(out_path)
     _assert_same(MidiFile(os.path.join(JOE, "notes.mid")), MidiFile(out_path))
+
+
+def test_open_notes_become_lane_and_export_per_target(tmp_path):
+    """[ENHANCED_OPENS]: 95/83/71/59 viram a lane "open"; o Clone Hero regrava no mesmo
+    pitch (sem duplicar) e o Rock Band converte em verde."""
+    from src.creator.chart_importer import import_song_from_folder
+    from src.creator.midi_generator import generate_rbn_midi
+    mid = MidiFile(ticks_per_beat=480, type=1)
+    t = MidiTrack()
+    t.append(MetaMessage("track_name", name="PART BASS", time=0))
+    t.append(MetaMessage("text", text="[ENHANCED_OPENS]", time=0))
+    for tick, pitch in ((480, 95), (1000, 83), (1500, 96), (2000, 71), (2500, 59)):
+        t.append(Message("note_on", note=pitch, velocity=100, time=tick - sum(
+            m.time for m in t)))
+        t.append(Message("note_off", note=pitch, velocity=0, time=20))
+    mid.tracks.append(t)
+    folder = tmp_path / "s"
+    folder.mkdir()
+    mid.save(str(folder / "notes.mid"))
+    (folder / "song.ini").write_text("[song]\nname=a\nartist=b\n", encoding="utf-8")
+    song = import_song_from_folder(str(folder))
+    lanes = sorted((n.difficulty, n.lane) for n in song.bass_notes)
+    assert lanes == [("Easy", "open"), ("Expert", "green"), ("Expert", "open"),
+                     ("Hard", "open"), ("Medium", "open")]
+
+    def pitches(m):
+        tr = next(x for x in m.tracks if x.name == "PART BASS")
+        return sorted(x.note for x in tr if x.type == "note_on" and x.velocity > 0), tr
+
+    ch, tr = pitches(generate_rbn_midi(song))
+    assert ch == [59, 71, 83, 95, 96]
+    assert any(m.type == "text" and m.text == "[ENHANCED_OPENS]" for m in tr)
+    rb, tr = pitches(generate_rbn_midi(song, rock_band_only=True))
+    assert rb == [60, 72, 84, 96, 96]
+    assert not any(m.type == "text" and m.text == "[ENHANCED_OPENS]" for m in tr)

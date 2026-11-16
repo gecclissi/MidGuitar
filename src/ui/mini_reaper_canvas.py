@@ -17,6 +17,7 @@ LANE_COLORS = {
     "kick": "#FB923C",
     "snare": "#EF4444",
     "purple": "#C084FC",
+    "open": "#C084FC",
     "overdrive": "#A855F7",
     "solo": "#F59E0B",
     "vocal_high": "#F472B6",
@@ -33,6 +34,9 @@ LANE_NAMES_GUITAR = [
     ("overdrive", "⭐ Overdrive"),
     ("solo", "⚡ Solo"),
 ]
+
+# Guitarra/baixo: ganha a lane de nota aberta (Clone Hero/YARG); no Rock Band ela vira verde
+LANE_NAMES_GUITAR_OPEN = LANE_NAMES_GUITAR[:5] + [("open", "Aberta (Clone Hero; no RB vira verde)")] + LANE_NAMES_GUITAR[5:]
 
 LANE_NAMES_PRO_GUITAR = [
     ("green", "Corda 6 - Mi Grave (E2)"),
@@ -140,6 +144,8 @@ class MiniReaperCanvas(tk.Frame):
             return LANE_NAMES_PRO_GUITAR
         elif self.current_track == "pro_keys":
             return LANE_NAMES_PRO_KEYS
+        if self.current_track in ("guitar", "bass"):
+            return LANE_NAMES_GUITAR_OPEN
         return LANE_NAMES_GUITAR
 
     def _get_notes(self) -> List[NoteEvent]:

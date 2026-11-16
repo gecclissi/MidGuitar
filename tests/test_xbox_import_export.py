@@ -202,9 +202,8 @@ def ref_copy(tmp_path_factory):
 @needs_ref
 def test_reference_con_matches_clone_hero_version(ref_copy):
     """A CON e a pasta Clone Hero são a mesma música: notas iguais por trilha e
-    dificuldade (tempo exato), exceto as notas abertas do baixo, que o CH grava como
-    nota 95/83 (ENHANCED_OPENS) e o importador de MIDI ainda ignora, enquanto a CON
-    (RB3 não tem nota aberta) as tem convertidas em notas comuns pelo Onyx."""
+    dificuldade (tempo exato). As notas abertas do baixo do CH (95/83, ENHANCED_OPENS)
+    entram como lane "open"; na CON (RB3 não tem nota aberta) são notas verdes."""
     con = import_song_from_folder(ref_copy)
     ch = import_song_from_folder(REF_CH)
     total = 0
@@ -213,9 +212,6 @@ def test_reference_con_matches_clone_hero_version(ref_copy):
             a = sorted(n.time_ms for n in getattr(con, track + "_notes") if n.difficulty == diff)
             b = sorted(n.time_ms for n in getattr(ch, track + "_notes") if n.difficulty == diff)
             total += len(a)
-            if track == "bass" and diff in ("Hard", "Expert"):
-                assert len(a) - len(b) == {"Hard": 2, "Expert": 113}[diff]
-                continue
             assert len(a) == len(b), (track, diff)
             assert all(abs(x - y) <= TOL_MS for x, y in zip(a, b)), (track, diff)
     assert total > 10000
