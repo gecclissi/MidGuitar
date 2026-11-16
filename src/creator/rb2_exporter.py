@@ -2,7 +2,8 @@
 Exportador Oficial para Rock Band 2 (PS3 / RPCS3 BLUS30147, Xbox 360 45410869 e Rock Band 2 Deluxe).
 Gera a estrutura de arquivos e diretórios com especificações nativas da engine do Rock Band 2:
 - songs.dta (format 4, version 1, game_origin rb2, sem blocos de teclado para não travar o RB2)
-- {shortname}.mid (MIDI RBN compatível com RB2)
+- {shortname}.mid.edat no PS3 (MIDI RBN cifrado; fórmula do Onyx, não verificada) e
+  {shortname}.mid solto no Xbox 360
 - {shortname}.mogg (Container de áudio multicanal Harmonix 0x0A)
 - PARAM.SFO e ICON0.PNG para PlayStation 3 / RPCS3 (Title ID: BLUS30147)
 - Content/0000000000000000/45410869/00000002/ para Xbox 360 (Title ID: 45410869)
@@ -146,9 +147,15 @@ def export_rb2_song_package(song: ChartSong, output_base_dir: str, audio_source_
     # 4. Gera {shortname}.mid estritamente compatível com Rock Band 2 (sem trilhas Pro/Keys do RB3)
     mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms, include_rb3_tracks=False,
                             rock_band_only=True, drum_mix=0 if song.drum_notes else None)
-    mid_path = os.path.join(track_dir, f"{clean_shortname}.mid")
-    save_midi(mid, mid_path)
-    shutil.copy2(mid_path, os.path.join(x360_content_dir, f"{clean_shortname}.mid"))
+    # PS3: .mid.edat cifrado para a pasta em USRDIR (fórmula do Onyx para o RB2, NÃO
+    # VERIFICADA: não há pacote RB2 de referência). Xbox 360: .mid solto.
+    import io
+    from src.creator.edat import write_rock_band_mid_edat
+    buf = io.BytesIO()
+    mid.save(file=buf)
+    write_rock_band_mid_edat(buf.getvalue(), os.path.join(track_dir, f"{clean_shortname}.mid.edat"),
+                             folder, game="rb2")
+    save_midi(mid, os.path.join(x360_content_dir, f"{clean_shortname}.mid"))
 
     # 4.1 Salva capa 512x512 (album.png) na pasta da faixa
     from src.creator.clonehero_exporter import _create_default_album_art

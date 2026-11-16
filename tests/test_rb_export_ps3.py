@@ -210,7 +210,16 @@ def _with_passthrough(song):
 
 
 def _track_names(mid_path):
-    return {t.name for t in mido.MidiFile(mid_path).tracks}
+    return {t.name for t in _open_mid(mid_path).tracks}
+
+
+def _open_mid(path):
+    """MIDI solto ou .mid.edat (decifrado com a chave da pasta em USRDIR)."""
+    if path.endswith(".edat"):
+        import io
+        from src.creator.edat import read_rock_band_mid_edat
+        return mido.MidiFile(file=io.BytesIO(read_rock_band_mid_edat(path, installed=True)))
+    return mido.MidiFile(path)
 
 
 def test_rock_band_exports_drop_clone_hero_tracks(tmp_path):
@@ -218,15 +227,17 @@ def test_rock_band_exports_drop_clone_hero_tracks(tmp_path):
     from src.creator.rb3_dta_exporter import export_rb3_song_package
     s = _with_passthrough(_song())
     mid = glob.glob(os.path.join(export_rb3_song_package(s, str(tmp_path / "a")),
-                                 "USRDIR", "*", "songs", "*", "*.mid"))[0]
+                                 "USRDIR", "*", "songs", "*", "*.mid.edat"))[0]
     names = _track_names(mid)
     assert not names & set(_CH_ONLY)
     assert set(_RB_KEEP) | {"BEAT", "EVENTS", "PART DRUMS"} <= names
-    drums = next(t for t in mido.MidiFile(mid).tracks if t.name == "PART DRUMS")
+    drums = next(t for t in _open_mid(mid).tracks if t.name == "PART DRUMS")
     mixes = sorted(m.text for m in drums if m.type == "text" and m.text.startswith("[mix"))
     assert mixes == ["[mix %d drums0]" % d for d in range(4)]
-    mid2 = glob.glob(os.path.join(export_rb2_song_package(s, str(tmp_path / "b")),
-                                  "USRDIR", "*", "songs", "*", "*.mid"))[0]
+    rb2 = export_rb2_song_package(s, str(tmp_path / "b"))
+    mid2 = glob.glob(os.path.join(rb2, "USRDIR", "*", "songs", "*", "*.mid.edat"))[0]
+    assert not glob.glob(os.path.join(rb2, "USRDIR", "*", "songs", "*", "*.mid"))
+    assert glob.glob(os.path.join(rb2, "Xbox360_Content", "**", "*.mid"), recursive=True)
     names2 = _track_names(mid2)
     assert not names2 & set(_CH_ONLY) and "HARM1" not in names2 and "VENUE" in names2
 

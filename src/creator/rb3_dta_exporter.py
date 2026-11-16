@@ -355,7 +355,7 @@ def export_rb3_song_package(song: ChartSong, output_base_dir: str, audio_source_
     """
     Exporta a estrutura completa de arquivos para Rock Band 3 (layout dos pacotes PS3 reais):
     USRDIR/<pasta única>/songs/songs.dta
-    USRDIR/<pasta única>/songs/{shortname}/{shortname}.mid
+    USRDIR/<pasta única>/songs/{shortname}/{shortname}.mid.edat (cifrado para a pasta única)
     USRDIR/<pasta única>/songs/{shortname}/{shortname}.mogg (0x0A, multicanal com stems)
     USRDIR/<pasta única>/songs/{shortname}/gen/{shortname}_keep.png_ps3
     Retorna o diretório base criado.
@@ -370,7 +370,8 @@ def export_rb3_song_package(song: ChartSong, output_base_dir: str, audio_source_
 
     dta_content, _layout = write_rb3_song_files(song, songs_dir, clean_shortname, song_id=song_id,
                                                 audio_source_path=audio_source_path,
-                                                total_duration_ms=total_duration_ms)
+                                                total_duration_ms=total_duration_ms,
+                                                edat_folder=folder)
     write_songs_dta(os.path.join(songs_dir, "songs.dta"), [dta_content])
 
     readme_path = os.path.join(rb3_root, "COMO_JOGAR_NO_RB3.txt")
@@ -381,7 +382,7 @@ Música: {song.title} - {song.artist}
 
 Estrutura gerada (igual à dos pacotes PS3 reais):
 - USRDIR/{folder}/songs/songs.dta (Definições Harmonix)
-- USRDIR/{folder}/songs/{clean_shortname}/{clean_shortname}.mid (Trilhas RBN)
+- USRDIR/{folder}/songs/{clean_shortname}/{clean_shortname}.mid.edat (Trilhas RBN cifradas para o PS3)
 - USRDIR/{folder}/songs/{clean_shortname}/{clean_shortname}.mogg (Áudio Harmonix 0x0A, 44100 Hz)
 - USRDIR/{folder}/songs/{clean_shortname}/gen/{clean_shortname}_keep.png_ps3 (Capa)
 
@@ -391,7 +392,7 @@ Como jogar no RPCS3 (Emulador de PS3):
    (cada música fica na própria pasta e não sobrescreve as outras)
 2. Inicie o Rock Band 3 e a música aparecerá na biblioteca.
 
-Observação: o PS3 exige o MIDI criptografado (.mid.edat); esta etapa ainda não é gerada.
+Observação: o .mid.edat é cifrado com a chave da pasta '{folder}'; não renomeie a pasta.
 ============================================================
 """
     with open(readme_path, "w", encoding="utf-8", newline="\n") as f:

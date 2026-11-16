@@ -31,6 +31,8 @@ class TargetProfile:
     require_beat: bool
     require_end_markers: bool
     forbid_tracks: FrozenSet[str] = frozenset()
+    # .mid.edat conferido contra pacotes reais (RB2: só a fórmula do Onyx, sem referência)
+    edat_verified: bool = True
 
 
 _RB2_FORBIDDEN = frozenset(["PART KEYS"] + _REAL_TRACKS)
@@ -39,8 +41,9 @@ PROFILES: Dict[str, TargetProfile] = {
     "clonehero": TargetProfile("clonehero", "Clone Hero", True,
                                KNOWN_TRACKS | CLONEHERO_EXTRA_TRACKS, False, False),
     "rb3_ps3": TargetProfile("rb3_ps3", "Rock Band 3 (PS3/RPCS3)", True, KNOWN_TRACKS, True, True),
+    # .mid.edat do RB2 não verificado: nenhuma referência de RB2 disponível
     "rb2": TargetProfile("rb2", "Rock Band 2", False, KNOWN_TRACKS - _RB2_FORBIDDEN, True, True,
-                         _RB2_FORBIDDEN),
+                         _RB2_FORBIDDEN, edat_verified=False),
     "xbox360": TargetProfile("xbox360", "Rock Band 3 (Xbox 360)", False, KNOWN_TRACKS, True, True),
     "ps4": TargetProfile("ps4", "Rock Band 4 (PS4)", True, KNOWN_TRACKS, True, True),
 }

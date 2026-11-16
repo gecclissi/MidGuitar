@@ -51,6 +51,9 @@ EDAT_DEBUG_DATA_FLAG = 0x80000000
 RB3_FLAGS = 0x0C
 RB3_BLOCK_SIZE = 0x4000
 RB3_CONTENT_PREFIX = "UP8802-BLUS30463_00-"
+# RB2: NÃO VERIFICADO (não há .mid.edat de RB2 de referência). Segue o Onyx
+# (NPData.hs, rb2CustomMidEdatConfig): mesma klicensee do RB3, content id do RB1/RB2.
+RB2_CONTENT_PREFIX = "UP0006-BLUS30050_00-"
 _RB_KLIC_PREFIX = b"Ih38rtW1ng3r"
 _RB_KLIC_SUFFIX = b"10025250"
 
@@ -64,9 +67,10 @@ def rock_band_klic(folder: str) -> bytes:
     return hashlib.md5(_RB_KLIC_PREFIX + folder.encode("utf-8") + _RB_KLIC_SUFFIX).digest()
 
 
-def rb3_content_id(folder: str) -> str:
-    """Content id que os pacotes RB3 de referência usam no .mid.edat."""
-    cid = RB3_CONTENT_PREFIX + folder
+def rb3_content_id(folder: str, game: str = "rb3") -> str:
+    """Content id que os pacotes RB3 de referência usam no .mid.edat.
+    game="rb2": prefixo do Onyx para customs do RB2 (não verificado)."""
+    cid = (RB2_CONTENT_PREFIX if game == "rb2" else RB3_CONTENT_PREFIX) + folder
     if len(cid.encode("utf-8")) > 0x30:
         raise EdatError("Content id longo demais (máx. 48 bytes): %s" % cid)
     return cid
@@ -316,9 +320,10 @@ def read_rock_band_mid_edat(path: str, extra_folders: Iterable[str] = (),
     return plain
 
 
-def write_rock_band_mid_edat(midi_bytes: bytes, dest_path: str, folder: str):
-    """Grava <s>.mid.edat para a pasta USRDIR/<folder> (klic e content id do RB3)."""
-    data = encrypt_edat(midi_bytes, os.path.basename(dest_path), rb3_content_id(folder),
+def write_rock_band_mid_edat(midi_bytes: bytes, dest_path: str, folder: str, game: str = "rb3"):
+    """Grava <s>.mid.edat para a pasta USRDIR/<folder> (klic e content id do RB3).
+    game="rb2": content id do RB2 segundo o Onyx; NÃO VERIFICADO (sem referência)."""
+    data = encrypt_edat(midi_bytes, os.path.basename(dest_path), rb3_content_id(folder, game),
                         rock_band_klic(folder))
     with open(dest_path, "wb") as f:
         f.write(data)

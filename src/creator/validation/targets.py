@@ -263,9 +263,13 @@ def _validate_edat(folder, edat, s, profile, key, midi_tracks, check_midi=True) 
                       "O .mid.edat não abre com a chave desta pasta: %s" % e, loc)]
     except Exception as e:
         return [Issue("error", "PS3_BAD_EDAT", "Não foi possível decifrar o .mid.edat: %s" % e, loc)]
-    if not check_midi:
-        return []
     issues: List[Issue] = []
+    if not getattr(profile, "edat_verified", True):
+        issues.append(Issue("warning", "PS3_EDAT_UNVERIFIED",
+                            "O .mid.edat de %s segue a fórmula do Onyx, mas não foi conferido "
+                            "com um pacote real" % profile.label, loc))
+    if not check_midi:
+        return issues
     tmp = tempfile.mkdtemp(prefix="mg_edat_")
     try:
         mid = os.path.join(tmp, s + ".mid")
