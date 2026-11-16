@@ -29,6 +29,7 @@ def build():
         "--collect-all=PIL",
         "--collect-all=soundfile",
         "--collect-all=tkinterdnd2",
+        "--collect-all=Crypto",           # pycryptodome (AES/CMAC do .mid.edat)
         "src/main.py"
     ]
 
