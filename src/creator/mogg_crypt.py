@@ -275,17 +275,30 @@ def _ctr_keystream(key: bytes, nonce: bytes, length: int) -> np.ndarray:
 
 
 def read_mogg_header(data: bytes) -> dict:
-    """Campos do cabeçalho Harmonix: versão, início do Ogg, tabela de busca e dados de cripto."""
+    """Campos do cabeçalho Harmonix: versão, início do Ogg, tabela de busca e dados de cripto.
+
+    Cabeçalho truncado ou com valores absurdos levanta MoggCryptError (nunca struct.error)."""
+    try:
+        return _read_mogg_header(data)
+    except struct.error as e:
+        raise MoggCryptError("cabeçalho .mogg truncado: %s" % e)
+
+
+def _read_mogg_header(data: bytes) -> dict:
     if len(data) < 20:
         raise MoggCryptError("arquivo curto demais para ser .mogg")
     version, ogg_offset, map_version, buffer_size, entries = struct.unpack_from("<iIIII", data, 0)
     pos = 20 + 8 * entries
+    if pos > len(data):
+        raise MoggCryptError("tabela de busca do .mogg maior que o arquivo")
     info = {"version": version, "ogg_offset": ogg_offset, "map_version": map_version,
             "buffer_size": buffer_size, "entries": entries,
             "seek_table": data[20:pos]}
     if version == 0x0A:
         return info
     info["nonce"] = data[pos:pos + 16]
+    if len(info["nonce"]) != 16:
+        raise MoggCryptError("cabeçalho .mogg truncado (nonce)")
     pos += 16
     if version >= 0x0C:
         seed1, seed2 = struct.unpack_from("<QQ", data, pos)
@@ -294,6 +307,8 @@ def read_mogg_header(data: bytes) -> dict:
         info["seed1"] = seed1 & _M32
         info["seed2"] = seed2 & _M32
         info["file_key"] = data[pos:pos + 16]
+        if len(info["file_key"]) != 16:
+            raise MoggCryptError("cabeçalho .mogg truncado (chave)")
         pos += 16
         if version == 0x11:
             pos += 8

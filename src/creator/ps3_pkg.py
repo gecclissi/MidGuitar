@@ -94,6 +94,16 @@ class PkgItem:
         return "PkgItem(%r, 0x%08X, %d)" % (self.name, self.flags, self.size)
 
 
+def _read_exact(f, size: int) -> bytes:
+    """Lê exatamente `size` bytes; arquivo cortado vira PkgError (nunca dado incompleto)."""
+    if size < 0:
+        raise PkgError("Tamanho inválido no .pkg")
+    data = f.read(size)
+    if len(data) != size:
+        raise PkgError("Arquivo .pkg truncado")
+    return data
+
+
 class PkgInfo:
     """Cabeçalho, metadados e itens de um .pkg de debug."""
 
@@ -113,15 +123,24 @@ class PkgInfo:
             self.content_id = self.header[0x30:0x60].split(b"\x00", 1)[0].decode("ascii", "replace")
             self.qa_digest = self.header[0x60:0x70]
             self.klicensee = self.header[0x70:0x80]
-            self.digest1 = f.read(0x40)
+            file_size = os.fstat(f.fileno()).st_size
+            if self.metadata_size < 0x40 or self.metadata_offset + self.metadata_size > file_size:
+                raise PkgError("Metadados do .pkg inválidos ou truncados")
+            if self.data_offset + self.item_count * 0x20 > file_size:
+                raise PkgError("Tabela de itens do .pkg truncada")
+            self.digest1 = _read_exact(f, 0x40)
             f.seek(self.metadata_offset)
-            meta_raw = f.read(self.metadata_size - 0x40)
+            meta_raw = _read_exact(f, self.metadata_size - 0x40)
             self.metadata_raw = meta_raw
-            self.digest2 = f.read(0x40)
+            self.digest2 = _read_exact(f, 0x40)
             self.metadata: Dict[int, bytes] = {}
             pos = 0
             for _ in range(self.metadata_count):
+                if pos + 8 > len(meta_raw):
+                    raise PkgError("Metadados do .pkg truncados")
                 mid, ln = struct.unpack(">II", meta_raw[pos:pos + 8])
+                if pos + 8 + ln > len(meta_raw):
+                    raise PkgError("Metadados do .pkg truncados")
                 self.metadata[mid] = meta_raw[pos + 8:pos + 8 + ln]
                 pos += 8 + ln
             self.items: List[PkgItem] = []
@@ -129,12 +148,14 @@ class PkgInfo:
             for i in range(self.item_count):
                 name_off, name_size, d_off, d_size, flags, _pad = struct.unpack(
                     ">IIQQII", table[i * 0x20:(i + 1) * 0x20])
+                if name_size > 0x1000:
+                    raise PkgError("Nome de item do .pkg inválido")
                 name = self.read_data(f, name_off, name_size).decode("utf-8", "replace")
                 self.items.append(PkgItem(name, flags, d_off, d_size))
 
     def read_data(self, f, offset: int, size: int) -> bytes:
         f.seek(self.data_offset + offset)
-        return keystream_xor(f.read(size), self.qa_digest, offset)
+        return keystream_xor(_read_exact(f, size), self.qa_digest, offset)
 
     def digests_ok(self) -> bool:
         d1, d2 = _digests(self.header, self.metadata_raw)
@@ -175,12 +196,18 @@ def extract_pkg(path: str, out_dir: str,
             if want is not None and not want(item.name):
                 continue
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            with open(dest, "wb") as o:
-                done = 0
-                while done < item.size:
-                    n = min(chunk, item.size - done)
-                    o.write(info.read_data(f, item.offset + done, n))
-                    done += n
+            tmp = dest + ".tmp"
+            try:
+                with open(tmp, "wb") as o:
+                    done = 0
+                    while done < item.size:
+                        n = min(chunk, item.size - done)
+                        o.write(info.read_data(f, item.offset + done, n))
+                        done += n
+                os.replace(tmp, dest)
+            except BaseException:
+                _remove_quietly(tmp)
+                raise
             written.append(dest)
     return written
 
@@ -284,6 +311,23 @@ def build_pkg(src_dir: str, pkg_path: str, content_id: str,
     digest1, digest2 = _digests(header, metadata)
 
     tmp = pkg_path + ".tmp"
+    try:
+        _write_pkg_body(tmp, header, digest1, metadata, digest2, index, qa, entries, sizes, records)
+        os.replace(tmp, pkg_path)
+    except BaseException:
+        _remove_quietly(tmp)
+        raise
+    return pkg_path
+
+
+def _remove_quietly(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _write_pkg_body(tmp, header, digest1, metadata, digest2, index, qa, entries, sizes, records):
     with open(tmp, "wb") as out:
         out.write(header + digest1 + metadata + digest2)
         out.write(keystream_xor(index, qa, 0))
@@ -305,5 +349,3 @@ def build_pkg(src_dir: str, pkg_path: str, content_id: str,
             if pad:
                 out.write(keystream_xor(bytes(pad), qa, off + done))
         out.write(bytes(PKG_TRAILER))
-    os.replace(tmp, pkg_path)
-    return pkg_path

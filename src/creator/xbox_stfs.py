@@ -614,62 +614,79 @@ def build_con(src_dir: str, con_path: str, display_name: str, description: str =
         first += blocks
     entries += bytes(_ENTRY_SIZE)
 
-    with open(con_path, "wb") as out:
-        out.write(bytes(0xB000))
+    # Grava num .tmp e só troca no fim: erro no meio não deixa CON corrompida no destino
+    tmp = con_path + ".tmp"
+    try:
+        with open(tmp, "wb") as out:
+            out.write(bytes(0xB000))
 
-        def write_block(n: int, data: bytes, has_next: bool):
-            data = data.ljust(BLOCK, b"\x00")
-            out.seek(_real_offset(lay["D"][n]))
-            out.write(data)
-            rec = (hashlib.sha1(data).digest() + bytes((STATUS_USED,))
-                   + (struct.pack(">I", n + 1)[1:] if has_next else b"\xff\xff\xff"))
-            t, r = divmod(n, 0xAA)
-            l0_tables[t][r * _HASH_RECORD:(r + 1) * _HASH_RECORD] = rec
+            def write_block(n: int, data: bytes, has_next: bool):
+                data = data.ljust(BLOCK, b"\x00")
+                out.seek(_real_offset(lay["D"][n]))
+                out.write(data)
+                rec = (hashlib.sha1(data).digest() + bytes((STATUS_USED,))
+                       + (struct.pack(">I", n + 1)[1:] if has_next else b"\xff\xff\xff"))
+                t, r = divmod(n, 0xAA)
+                l0_tables[t][r * _HASH_RECORD:(r + 1) * _HASH_RECORD] = rec
 
-        for i in range(list_blocks):
-            write_block(i, bytes(entries[i * BLOCK:(i + 1) * BLOCK]), i + 1 < list_blocks)
-        n = list_blocks
-        for _parent, _name, path, size in plan:
-            if not path:
-                continue
-            count = _blocks_for(size)
-            with open(path, "rb") as f:
-                for i in range(count):
-                    write_block(n, f.read(BLOCK), i + 1 < count)
-                    n += 1
+            for i in range(list_blocks):
+                write_block(i, bytes(entries[i * BLOCK:(i + 1) * BLOCK]), i + 1 < list_blocks)
+            n = list_blocks
+            for _parent, _name, path, size in plan:
+                if not path:
+                    continue
+                count = _blocks_for(size)
+                with open(path, "rb") as f:
+                    for i in range(count):
+                        data = f.read(BLOCK)
+                        if len(data) != min(BLOCK, size - i * BLOCK):
+                            raise StfsError("Arquivo mudou de tamanho durante o empacotamento: %s"
+                                            % path)
+                        write_block(n, data, i + 1 < count)
+                        n += 1
+                    if f.read(1):
+                        raise StfsError("Arquivo mudou de tamanho durante o empacotamento: %s"
+                                        % path)
 
-        # tabelas de hash: nível 0, depois 1 (hash das tabelas 0) e 2
-        hashes = {"L0": [hashlib.sha1(bytes(t)).digest() for t in l0_tables]}
-        for t, real in zip(l0_tables, lay["L0"]):
-            out.seek(_real_offset(real))
-            out.write(bytes(t))
-        for level, lower in (("L1", "L0"), ("L2", "L1")):
-            hashes[level] = []
-            for ti, real in enumerate(lay[level]):
-                table = bytearray(BLOCK)
-                for j, sha in enumerate(hashes[lower][ti * 0xAA:(ti + 1) * 0xAA]):
-                    table[j * _HASH_RECORD:j * _HASH_RECORD + 20] = sha
-                covered = total if level == "L2" else min(0xAA * 0xAA, total - 0xAA * 0xAA * ti)
-                table[0xFF0:0xFF4] = struct.pack(">i", covered)
-                hashes[level].append(hashlib.sha1(bytes(table)).digest())
+            # tabelas de hash: nível 0, depois 1 (hash das tabelas 0) e 2
+            hashes = {"L0": [hashlib.sha1(bytes(t)).digest() for t in l0_tables]}
+            for t, real in zip(l0_tables, lay["L0"]):
                 out.seek(_real_offset(real))
-                out.write(bytes(table))
-        out.seek(0, os.SEEK_END)
-        size = out.tell()
-        if size % BLOCK:
-            out.write(bytes(BLOCK - size % BLOCK))
-            size += BLOCK - size % BLOCK
-        top = hashes["L0"][0] if total < 0xAA else (
-            hashes["L1"][0] if total < 0xAA * 0xAA else hashes["L2"][0])
+                out.write(bytes(t))
+            for level, lower in (("L1", "L0"), ("L2", "L1")):
+                hashes[level] = []
+                for ti, real in enumerate(lay[level]):
+                    table = bytearray(BLOCK)
+                    for j, sha in enumerate(hashes[lower][ti * 0xAA:(ti + 1) * 0xAA]):
+                        table[j * _HASH_RECORD:j * _HASH_RECORD + 20] = sha
+                    covered = total if level == "L2" else min(0xAA * 0xAA, total - 0xAA * 0xAA * ti)
+                    table[0xFF0:0xFF4] = struct.pack(">i", covered)
+                    hashes[level].append(hashlib.sha1(bytes(table)).digest())
+                    out.seek(_real_offset(real))
+                    out.write(bytes(table))
+            out.seek(0, os.SEEK_END)
+            size = out.tell()
+            if size % BLOCK:
+                out.write(bytes(BLOCK - size % BLOCK))
+                size += BLOCK - size % BLOCK
+            top = hashes["L0"][0] if total < 0xAA else (
+                hashes["L1"][0] if total < 0xAA * 0xAA else hashes["L2"][0])
 
-        header = bytearray(0xB000)
-        header[0x22C:0x971A] = _metadata_bytes(display_name, description, title_id, title_name,
-                                               thumbnail, title_thumbnail, list_blocks, total,
-                                               size - 0xB000, top)
-        header[0x32C:0x340] = hashlib.sha1(bytes(header[0x344:0xB000])).digest()
-        header[0:4] = b"CON "
-        header[4:0x1AC] = _KV_CERTIFICATE
-        header[0x1AC:0x22C] = con_signature(bytes(header[0x22C:0x344]))
-        out.seek(0)
-        out.write(bytes(header))
+            header = bytearray(0xB000)
+            header[0x22C:0x971A] = _metadata_bytes(display_name, description, title_id, title_name,
+                                                   thumbnail, title_thumbnail, list_blocks, total,
+                                                   size - 0xB000, top)
+            header[0x32C:0x340] = hashlib.sha1(bytes(header[0x344:0xB000])).digest()
+            header[0:4] = b"CON "
+            header[4:0x1AC] = _KV_CERTIFICATE
+            header[0x1AC:0x22C] = con_signature(bytes(header[0x22C:0x344]))
+            out.seek(0)
+            out.write(bytes(header))
+        os.replace(tmp, con_path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
     return con_path
