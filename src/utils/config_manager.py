@@ -1,6 +1,9 @@
 import json
 import os
+import shutil
 import sys
+
+APP_DATA_FOLDER = "MidGuitar"
 
 def get_bundle_dir() -> str:
     """Retorna o diretório onde os recursos empacotados pelo PyInstaller residem (_MEIPASS ou código fonte)."""
@@ -14,6 +17,43 @@ def get_user_dir() -> str:
         return os.path.dirname(sys.executable)
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+def get_user_data_dir() -> str:
+    """Pasta gravável das configurações do usuário.
+
+    No .exe é %APPDATA%\\MidGuitar (a pasta do programa pode estar em "Arquivos de Programas",
+    onde o Windows não deixa gravar). Rodando pelo código-fonte continua sendo a raiz do projeto.
+    A variável de ambiente MIDGUITAR_USER_DIR troca a pasta (testes).
+    """
+    override = os.environ.get("MIDGUITAR_USER_DIR")
+    if override:
+        base = override
+    elif getattr(sys, 'frozen', False):
+        appdata = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+        base = os.path.join(appdata, APP_DATA_FOLDER)
+    else:
+        return get_user_dir()
+    try:
+        os.makedirs(base, exist_ok=True)
+    except OSError as e:
+        print(f"[ConfigManager] Não foi possível criar {base}: {e}")
+        return get_user_dir()
+    return base
+
+
+def _migrate_legacy_config(new_path: str) -> None:
+    """Copia o config.json antigo (gravado ao lado do .exe) para a pasta nova, uma vez só."""
+    if os.path.exists(new_path):
+        return
+    legacy = os.path.join(get_user_dir(), "config.json")
+    if os.path.abspath(legacy) == os.path.abspath(new_path) or not os.path.exists(legacy):
+        return
+    try:
+        shutil.copy2(legacy, new_path)
+        print(f"[ConfigManager] config.json migrado de {legacy} para {new_path}")
+    except OSError as e:
+        print(f"[ConfigManager] Falha ao migrar config.json antigo: {e}")
+
+
 def get_asset_path(relative_path: str) -> str:
     """Localiza um arquivo de asset (ícone, som, etc.) no diretório do usuário ou no bundle."""
     # 1. Tenta no diretório do usuário
@@ -26,11 +66,20 @@ def get_asset_path(relative_path: str) -> str:
         return bundle_path
     return user_path
 
+def get_writable_config_path() -> str:
+    """Onde o config.json é gravado."""
+    return os.path.join(get_user_data_dir(), "config.json")
+
+
 def get_config_path() -> str:
-    # Para leitura, verifica usuário depois bundle
-    user_path = os.path.join(get_user_dir(), "config.json")
+    # Para leitura: pasta do usuário (migrando o config antigo do lado do .exe), depois o bundle
+    user_path = get_writable_config_path()
+    _migrate_legacy_config(user_path)
     if os.path.exists(user_path):
         return user_path
+    legacy = os.path.join(get_user_dir(), "config.json")
+    if os.path.exists(legacy):
+        return legacy
     bundle_path = os.path.join(get_bundle_dir(), "config.json")
     if os.path.exists(bundle_path):
         return bundle_path
@@ -39,11 +88,20 @@ def get_config_path() -> str:
 def get_presets_dirs() -> list[str]:
     """Retorna lista de diretórios onde presets podem existir."""
     dirs = []
+    data_dir = get_user_data_dir()
+    if os.path.abspath(data_dir) != os.path.abspath(get_user_dir()):
+        # No .exe os presets editados vão para %APPDATA%\MidGuitar\presets (gravável)
+        data_p = os.path.join(data_dir, "presets")
+        try:
+            os.makedirs(data_p, exist_ok=True)
+            dirs.append(data_p)
+        except OSError:
+            pass
     user_p = os.path.join(get_user_dir(), "presets")
     if os.path.exists(user_p):
         dirs.append(user_p)
     bundle_p = os.path.join(get_bundle_dir(), "presets")
-    if os.path.exists(bundle_p) and bundle_p != user_p:
+    if os.path.exists(bundle_p) and bundle_p not in dirs:
         dirs.append(bundle_p)
     if not dirs:
         os.makedirs(user_p, exist_ok=True)
@@ -78,8 +136,8 @@ def load_config() -> dict:
     return DEFAULT_CONFIG.copy()
 
 def save_config(config: dict) -> bool:
-    # Sempre salva no diretório do usuário/executável
-    path = os.path.join(get_user_dir(), "config.json")
+    # Sempre salva na pasta gravável do usuário (%APPDATA%\MidGuitar no .exe)
+    path = get_writable_config_path()
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)

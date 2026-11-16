@@ -32,7 +32,7 @@ from src.ui.mini_reaper_canvas import MiniReaperCanvas
 from src.ui.tooltip import set_tooltip
 from src.ui.key_strum_config_dialog import KeyStrumConfigDialog, DEFAULT_KEYS, KEY_NAMES_FRIENDLY
 from src.ui.lyrics_manager_dialog import LyricsManagerDialog
-from src.utils.config_manager import save_config
+from src.utils.config_manager import get_asset_path, save_config
 from src.ui.background_task import run_sync, run_with_progress
 
 # Executor dos trabalhos pesados (exportação, abrir pacote, compilar pacote).
@@ -1853,12 +1853,15 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         ctk.CTkLabel(scroll_frame, text=intro_text, font=ctk.CTkFont(size=11), text_color="#E2E8F0", justify="left").pack(anchor="w", padx=16, pady=2)
 
         def _open_visual_tutorial():
-            tut_path = os.path.abspath("TUTORIAL_VISUAL.md")
-            if os.path.exists(tut_path):
-                try:
-                    os.startfile(tut_path)
-                except Exception:
-                    pass
+            # Procura ao lado do .exe / na raiz do projeto e depois dentro do bundle
+            tut_path = get_asset_path("TUTORIAL_VISUAL.md")
+            if not os.path.exists(tut_path):
+                messagebox.showwarning("Tutorial Visual", f"Não encontrei o tutorial em:\n{tut_path}")
+                return
+            try:
+                os.startfile(tut_path)
+            except Exception as e:
+                messagebox.showerror("Tutorial Visual", f"Não foi possível abrir o tutorial:\n{e}")
 
         btn_tut = ctk.CTkButton(
             scroll_frame,
