@@ -109,6 +109,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 self._import_folder_path(p)
                 return
             ext = os.path.splitext(p)[1].lower()
+            if ext in [".pkg", ".edat"]:
+                self._import_folder_path(p)
+                return
             if ext in [".mp3", ".wav", ".ogg", ".flac", ".mogg"]:
                 self._load_audio_file_smart(p)
                 loaded_audio = True
@@ -356,6 +359,14 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         btn_browse.pack(side="right")
         set_tooltip(btn_browse, "Abre a janela para selecionar a pasta da música no seu computador")
 
+        btn_pkg = ctk.CTkButton(
+            sel_row, text="📦 Abrir .pkg", width=110, height=30,
+            fg_color="#334155", hover_color="#475569",
+            command=self._on_browse_import_pkg
+        )
+        btn_pkg.pack(side="right", padx=(0, 8))
+        set_tooltip(btn_pkg, "Importa um pacote .pkg de PS3 (customs do Rock Band) ou um .mid.edat")
+
         btn_open_proj = ctk.CTkButton(
             sel_row, text="📂 Abrir Projeto", width=120, height=30,
             fg_color="#334155", hover_color="#475569",
@@ -517,11 +528,28 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             return
         self._import_folder_path(folder)
 
+    def _on_browse_import_pkg(self):
+        path = filedialog.askopenfilename(
+            title="Selecione o pacote PS3 (.pkg) ou o MIDI cifrado (.mid.edat)",
+            filetypes=[("Pacote PS3 / MIDI cifrado", "*.pkg *.edat"), ("Todos os arquivos", "*.*")],
+        )
+        if not path:
+            return
+        self._import_folder_path(path)
+
     def _import_folder_path(self, folder: str):
         self.folder_entry.delete(0, "end")
         self.folder_entry.insert(0, folder)
 
-        self._apply_loaded_song(import_song_from_folder(folder))
+        try:
+            song = import_song_from_folder(folder)
+        except Exception as e:
+            messagebox.showerror("Erro na importação", f"Não foi possível importar:\n{folder}\n\n{e}")
+            return
+        self._apply_loaded_song(song)
+        warnings = getattr(song, "import_warnings", None) or []
+        if warnings:
+            messagebox.showwarning("Importado com avisos", "\n\n".join(warnings))
 
     def _apply_loaded_song(self, song: ChartSong):
         """Troca a música do estúdio (importada ou aberta de um projeto) e atualiza a tela."""
@@ -2586,11 +2614,15 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         if not out_dir:
             return
         pkg_dir = export_ps3_pkg_structure(self.song, out_dir)
+        pkgs = sorted(f for f in os.listdir(pkg_dir) if f.lower().endswith(".pkg"))
+        pkg_line = f"Pacote pronto: {pkgs[0]}\n\n" if pkgs else ""
         self._show_export_result(
             "Sucesso PS3 / RPCS3!",
-            f"Estrutura PS3 / RPCS3 gerada com sucesso em:\n{pkg_dir}\n\n"
-            f"• Para instalar no RPCS3: Execute o arquivo 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' dentro da pasta!\n"
-            f"• Para PS3 Real: Copie a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/",
+            f"Pacote PS3 / RPCS3 gerado com sucesso em:\n{pkg_dir}\n\n{pkg_line}"
+            f"• RPCS3: menu File > Install Packages/Raps/Edats e escolha o .pkg\n"
+            f"• PS3 com HEN/CFW: copie o .pkg para um pendrive e instale pelo Package Manager\n"
+            f"• Ou copie à mão a pasta que está dentro de USRDIR para /dev_hdd0/game/BLUS30463/USRDIR/ "
+            f"(sem renomear: o .mid.edat depende do nome dela)",
             pkg_dir, "rb3_ps3"
         )
 

@@ -114,6 +114,10 @@ class ChartSong:
     tempo_track_name: Optional[str] = None
     # Chaves do song.ini importado que o MidGuitar não usa (regravadas na exportação)
     ini_extra: Dict[str, str] = field(default_factory=dict)
+    # song_id lido do songs.dta de um pacote Rock Band importado (None se não houver)
+    dta_song_id: Optional[int] = None
+    # Avisos da importação para a interface mostrar (ex.: .mogg criptografado sem áudio)
+    import_warnings: List[str] = field(default_factory=list)
 
     def get_tempo_map(self) -> TempoMap:
         """Devolve o mapa de tempo efetivo da música.
@@ -187,7 +191,7 @@ class ChartSong:
         "lyrics_raw", "album_art_path",
         "diff_guitar", "diff_bass", "diff_drums", "diff_keys", "diff_vocals",
         "diff_pro_guitar", "diff_pro_bass", "diff_pro_keys", "diff_band",
-        "tempo_track_name",
+        "tempo_track_name", "dta_song_id",
     )
     _NOTE_LISTS = (
         ("guitar_notes", NoteEvent), ("bass_notes", NoteEvent), ("drum_notes", NoteEvent),

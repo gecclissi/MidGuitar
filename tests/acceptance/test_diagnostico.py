@@ -308,24 +308,24 @@ def test_bpm_detection_click_128(tmp_path):
 # Importação de consoles — quebrado
 # ---------------------------------------------------------------------------
 @need(GORILLAZ)
-@pytest.mark.xfail(strict=True, reason="importador não lê .mid.edat (NPD): pasta PS3 extraída carrega 0 notas")
 def test_ps3_extracted_folder_imports_notes(copy_ref):
     song = import_song_from_folder(ps3_song_dir(copy_ref(GORILLAZ)))
     assert song.guitar_notes or song.drum_notes or song.bass_notes
 
 
 @need(FIVESOS)
-@pytest.mark.xfail(strict=True, reason="importador lê songs.dta com regex de 1 linha; DTA real (C3/Onyx) tem chaves entre aspas e quebras de linha")
 def test_ps3_songs_dta_metadata_is_read(copy_ref):
     song = import_song_from_folder(ps3_song_dir(copy_ref(FIVESOS)))
     assert song.title == "Ghost of You"
 
 
 @need(GORILLAZ)
-@pytest.mark.xfail(strict=True, reason=".mogg criptografado: importador aponta audio_path para um *_extracted.ogg que não existe")
 def test_ps3_import_audio_path_exists(copy_ref):
     song = import_song_from_folder(ps3_song_dir(copy_ref(GORILLAZ)))
     assert song.audio_path is None or os.path.exists(song.audio_path)
+    # .mogg criptografado: sem áudio, com aviso para a interface
+    assert song.audio_path is None
+    assert any("criptografado" in w for w in song.import_warnings)
 
 
 @need(XBOX_CON)
@@ -336,10 +336,11 @@ def test_xbox_con_import(copy_ref):
 
 
 @need(PKG_FILE)
-@pytest.mark.xfail(strict=True, reason="não há leitor de .pkg do PS3")
 def test_ps3_pkg_file_import(copy_ref):
+    # Andromeda não tem guitarra: bateria, baixo, teclado, vocal e pro
     song = import_song_from_folder(copy_ref(PKG_FILE))
-    assert song.guitar_notes
+    assert song.drum_notes and song.bass_notes and song.keys_notes and song.vocal_notes
+    assert song.title == "Andromeda (feat. D.R.A.M.)"
 
 
 @need(PAVLO)

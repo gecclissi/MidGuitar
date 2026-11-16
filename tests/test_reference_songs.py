@@ -68,14 +68,15 @@ def _has_any_notes(snapshot):
 
 
 def _rb3_song_folders(ref):
-    """Pastas songs/<dir>/ (abaixo de um songs.dta) que têm um .mid simples legível."""
+    """Pastas songs/<dir>/ (abaixo de um songs.dta) com .mid ou .mid.edat."""
     found = []
     for dirpath, _dirs, files in os.walk(ref):
         if "songs.dta" not in (f.lower() for f in files):
             continue
         for name in sorted(os.listdir(dirpath)):
             sub = os.path.join(dirpath, name)
-            if os.path.isdir(sub) and any(f.lower().endswith(".mid") for f in os.listdir(sub)):
+            if os.path.isdir(sub) and any(f.lower().endswith((".mid", ".mid.edat"))
+                                          for f in os.listdir(sub)):
                 found.append(sub)
     return found
 

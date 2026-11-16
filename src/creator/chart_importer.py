@@ -42,8 +42,19 @@ def parse_song_ini(ini_path: str) -> dict:
 def import_song_from_folder(folder_path: str) -> ChartSong:
     """
     Importa uma pasta completa de música contendo notes.mid, song.ini e áudio.
+
+    Também aceita um .pkg do PS3, a raiz de um pacote PS3 extraído (PARAM.SFO + USRDIR),
+    a pasta songs/ de um pacote Rock Band e arquivos soltos (.mid, .mid.edat, .chart):
+    nesses casos a pasta da primeira música é localizada automaticamente.
     """
+    if os.path.isfile(folder_path):
+        if folder_path.lower().endswith(".pkg"):
+            return import_song_from_pkg(folder_path)
+        folder_path = os.path.dirname(os.path.abspath(folder_path))
+    warnings = []
+    folder_path = _resolve_song_dir(folder_path, warnings)
     song = ChartSong()
+    song.import_warnings.extend(warnings)
 
     # 1. Busca song.ini
     ini_file = os.path.join(folder_path, "song.ini")
@@ -70,25 +81,15 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         # Chaves que o modelo não usa (preview_end_time, pro_drums, diff_*_real...) voltam na exportação
         song.ini_extra = {k: v for k, v in meta.items() if k not in INI_MANAGED_KEYS}
     else:
-        # 1.1 Busca songs.dta caso seja uma pasta de Rock Band 2 / 3
-        dta_candidates = [os.path.join(folder_path, "songs.dta"), os.path.join(os.path.dirname(folder_path), "songs.dta")]
-        for dta_p in dta_candidates:
+        # 1.1 songs.dta de Rock Band 2 / 3 (formato real: multi-linha, chaves entre aspas)
+        for dta_p in [os.path.join(folder_path, "songs.dta"),
+                      os.path.join(os.path.dirname(folder_path), "songs.dta")]:
             if os.path.exists(dta_p):
                 try:
-                    import re
-                    with open(dta_p, "r", encoding="utf-8", errors="ignore") as df:
-                        dta_txt = df.read()
-                    m_name = re.search(r'\(name\s+"([^"]+)"\)', dta_txt)
-                    m_art = re.search(r'\(artist\s+"([^"]+)"\)', dta_txt)
-                    m_alb = re.search(r'\(album_name\s+"([^"]+)"\)', dta_txt)
-                    m_yr = re.search(r'\(year_released\s+(\d+)\)', dta_txt)
-                    if m_name: song.title = m_name.group(1)
-                    if m_art: song.artist = m_art.group(1)
-                    if m_alb: song.album = m_alb.group(1)
-                    if m_yr: song.year = int(m_yr.group(1))
+                    _apply_songs_dta(song, dta_p, os.path.basename(folder_path))
                     break
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[ChartImporter] Erro ao ler songs.dta {dta_p}: {e}")
 
     # 1.2 Busca imagem de capa (album.png, cover.png, ICON0.PNG)
     for f in os.listdir(folder_path):
@@ -102,13 +103,21 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         f_lower = f.lower()
         full_p = os.path.join(folder_path, f)
         if f_lower.endswith(".mogg"):
-            from src.creator.mogg_generator import extract_ogg_from_mogg, extraction_cache_dir
+            from src.creator.mogg_generator import (extract_ogg_from_mogg, extraction_cache_dir,
+                                                    is_mogg_file)
+            if not is_mogg_file(full_p):
+                # .mogg criptografado (0x0B/0x0D...): sem áudio por enquanto, com aviso
+                song.import_warnings.append(
+                    f"O áudio '{f}' está criptografado e ainda não pode ser importado. "
+                    "A música foi carregada sem áudio: escolha um MP3/OGG/WAV antes de exportar.")
+                continue
             # Extrai para um cache temporário: nunca grava ao lado da pasta de origem
             extracted_ogg = os.path.join(extraction_cache_dir(folder_path), f"{os.path.splitext(f)[0]}_extracted.ogg")
-            if extract_ogg_from_mogg(full_p, extracted_ogg):
-                song.audio_stems.append(extracted_ogg)
+            result = extract_ogg_from_mogg(full_p, extracted_ogg)
+            if result and result != full_p and os.path.exists(result):
+                song.audio_stems.append(result)
                 if not song.audio_path:
-                    song.audio_path = extracted_ogg
+                    song.audio_path = result
         elif f_lower.endswith((".ogg", ".mp3", ".wav", ".flac", ".opus")):
             song.audio_stems.append(full_p)
             stem_base = os.path.splitext(f_lower)[0]
@@ -144,12 +153,30 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
                 chart_file = os.path.join(folder_path, f)
                 break
 
+    edat_file = None
+    if not os.path.exists(mid_file):
+        for f in sorted(os.listdir(folder_path)):
+            if f.lower().endswith(".mid.edat"):
+                edat_file = os.path.join(folder_path, f)
+                break
+
     if os.path.exists(mid_file):
         try:
             mid = MidiFile(mid_file)
             _parse_midi_into_song(mid, song)
         except Exception as e:
             print(f"[ChartImporter] Erro ao analisar MIDI {mid_file}: {e}")
+    elif edat_file:
+        # .mid.edat do PS3: decifra em memória (klicensee verificada pelos hashes do NPD)
+        try:
+            import io
+            from src.creator.edat import read_rock_band_mid_edat
+            mid = MidiFile(file=io.BytesIO(read_rock_band_mid_edat(edat_file)))
+            _parse_midi_into_song(mid, song)
+        except Exception as e:
+            song.import_warnings.append(
+                f"Não foi possível decifrar '{os.path.basename(edat_file)}': {e}")
+            print(f"[ChartImporter] Erro ao decifrar {edat_file}: {e}")
     elif os.path.exists(chart_file):
         try:
             _parse_chart_file_into_song(chart_file, song)
@@ -169,6 +196,143 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
             recalculate_track_difficulties(song, [inst_key])
 
     return song
+
+
+_CHART_FILE_EXTS = (".mid", ".mid.edat", ".chart")
+
+# rank do songs.dta -> atributo de dificuldade (0-6) do ChartSong
+_DTA_RANK_ATTRS = {
+    "drum": "diff_drums", "guitar": "diff_guitar", "bass": "diff_bass",
+    "vocals": "diff_vocals", "keys": "diff_keys", "real_guitar": "diff_pro_guitar",
+    "real_bass": "diff_pro_bass", "real_keys": "diff_pro_keys", "band": "diff_band",
+}
+
+
+def _has_chart_files(folder: str) -> bool:
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return False
+    return any(n.lower() in ("song.ini", "notes.mid", "notes.chart") or n.lower().endswith(_CHART_FILE_EXTS)
+               for n in names if os.path.isfile(os.path.join(folder, n)))
+
+
+def find_rb_song_dirs(root: str) -> list:
+    """Pastas songs/<s>/ com .mid ou .mid.edat abaixo de `root` (pacote RB / PS3)."""
+    found = []
+    for dirpath, dirnames, files in os.walk(root):
+        dirnames.sort()
+        if "songs.dta" not in (f.lower() for f in files):
+            continue
+        for name in sorted(os.listdir(dirpath)):
+            sub = os.path.join(dirpath, name)
+            if os.path.isdir(sub) and any(f.lower().endswith((".mid", ".mid.edat"))
+                                          for f in os.listdir(sub)):
+                found.append(sub)
+    return found
+
+
+def _resolve_song_dir(folder: str, warnings: list) -> str:
+    """Aponta para a pasta da música quando `folder` é a raiz de um pacote ou songs/."""
+    if not os.path.isdir(folder) or _has_chart_files(folder):
+        return folder
+    dirs = find_rb_song_dirs(folder)
+    if not dirs:
+        return folder
+    if len(dirs) > 1:
+        warnings.append(f"O pacote tem {len(dirs)} músicas; só a primeira "
+                        f"('{os.path.basename(dirs[0])}') foi importada.")
+    return dirs[0]
+
+
+def import_song_from_pkg(pkg_path: str) -> ChartSong:
+    """Importa a (primeira) música de um .pkg de debug do PS3 (customs do Rock Band).
+    O pacote é extraído numa pasta temporária; o .mid.edat é decifrado em memória."""
+    from src.creator.mogg_generator import extraction_cache_dir
+    from src.creator.ps3_pkg import extract_pkg
+    cache = os.path.join(extraction_cache_dir(os.path.abspath(pkg_path)), "pkg")
+    # .milo_ps3 (animações) não é usado na importação
+    extract_pkg(pkg_path, cache, want=lambda name: not name.lower().endswith(".milo_ps3"))
+    return import_song_from_folder(cache)
+
+
+def _dta_fields(entry: list, key: str):
+    for item in entry:
+        if isinstance(item, list) and item and item[0] == key:
+            return item[1:]
+    return None
+
+
+def _dta_first(entry: list, key: str):
+    v = _dta_fields(entry, key)
+    return v[0] if v else None
+
+
+def _read_dta_text(path: str) -> str:
+    """songs.dta em UTF-8 ou latin1, conforme `(encoding ...)` (padrão do RB3: latin1)."""
+    import re
+    with open(path, "rb") as f:
+        raw = f.read()
+    m = re.search(rb"\(\s*'?encoding'?\s+'?(\w+)'?\s*\)", raw)
+    enc = m.group(1).decode("ascii").lower() if m else "latin1"
+    if enc in ("utf8", "utf-8"):
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+    return raw.decode("latin-1")
+
+
+def _apply_songs_dta(song: ChartSong, dta_path: str, song_dir_name: str):
+    """Lê título, artista, álbum, ano, gênero, ranks, preview e song_id do songs.dta."""
+    from src.creator.validation.dta_parser import parse_dta
+    from src.creator.rb3_dta_exporter import RANK_TIERS
+    entries = [e for e in parse_dta(_read_dta_text(dta_path)) if isinstance(e, list) and e]
+    if not entries:
+        return
+    entry = entries[0]
+    for e in entries:
+        song_f = _dta_fields(e, "song") or []
+        name = next((x[1] for x in song_f
+                     if isinstance(x, list) and len(x) > 1 and x[0] == "name"), None)
+        parts = [p for p in str(name or "").replace("\\", "/").split("/") if p]
+        if (len(parts) >= 2 and parts[-2] == song_dir_name) or str(e[0]) == song_dir_name:
+            entry = e
+            break
+
+    def text(key, default):
+        v = _dta_first(entry, key)
+        return str(v).replace("\\q", '"') if v is not None and str(v).strip() else default
+
+    song.title = text("name", song.title)
+    song.artist = text("artist", song.artist)
+    song.album = text("album_name", song.album)
+    song.charter = text("author", song.charter)
+    genre = _dta_first(entry, "genre")
+    if genre:
+        song.genre = str(genre).replace("_", " ").title()
+    year = _dta_first(entry, "year_released")
+    if isinstance(year, int):
+        song.year = year
+    sid = _dta_first(entry, "song_id")
+    if isinstance(sid, int):
+        song.dta_song_id = sid
+    preview = _dta_fields(entry, "preview")
+    if preview and isinstance(preview[0], int):
+        song.preview_start_ms = max(0, preview[0])
+    length = _dta_first(entry, "song_length")
+    if isinstance(length, int) and length > 0:
+        song.duration_ms = length
+    gender = _dta_first(entry, "vocal_gender")
+    if gender:
+        song.ini_extra["vocal_gender"] = str(gender)
+    for item in _dta_fields(entry, "rank") or []:
+        if not (isinstance(item, list) and len(item) > 1 and isinstance(item[1], int)):
+            continue
+        inst, value = str(item[0]), item[1]
+        attr = _DTA_RANK_ATTRS.get(inst)
+        if attr and value > 0 and inst in RANK_TIERS:
+            setattr(song, attr, sum(1 for th in RANK_TIERS[inst] if value >= th))
 
 
 def _parse_chart_file_into_song(chart_path: str, song: ChartSong):
