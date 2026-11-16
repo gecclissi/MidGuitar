@@ -35,7 +35,7 @@ Na tela inicial do MidGuitar você tem acesso imediato aos controles ao vivo, in
 
 ## 🗂️ 2. Navegação pelas 5 Abas do Estúdio Universal
 
-O estúdio organiza todo o fluxo de trabalho em **5 abas claras e diretas**, substituindo completamente programas complexos como *REAPER + RBN2 Tools*, *Magma v2*, *C3 CON Tools*, *EOF* e *Onyx*:
+O estúdio organiza todo o fluxo de trabalho em **5 abas claras e diretas**, reunindo num só lugar etapas que antes exigiam programas como *REAPER + RBN2 Tools*, *Magma v2*, *C3 CON Tools*, *EOF* e *Onyx* (veja o status por destino e o que já foi testado no jogo em [docs/TESTE_NO_JOGO.md](docs/TESTE_NO_JOGO.md)):
 
 ![Navegação do Estúdio](assets/tutorial/02_estudio_navegacao_geral.png)
 

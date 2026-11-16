@@ -599,7 +599,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
             # Mantém o cache de áudio extraído (%TEMP%/midguitar_cache) abaixo do limite
             try:
                 from src.creator.mogg_import import cleanup_cache
-                cleanup_cache()
+                # nunca apaga o áudio da música que está aberta agora
+                current = [self.song.audio_path] + list(self.song.audio_stems or [])
+                cleanup_cache(keep=[p for p in current if p])
             except Exception as e:  # limpeza nunca impede a importação
                 print(f"[CreatorStudio] Limpeza do cache falhou: {e}")
             return import_song_from_folder(folder)
