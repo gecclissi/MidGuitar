@@ -16,6 +16,12 @@ KNOWN_TRACKS: FrozenSet[str] = frozenset([
 ] + _REAL_TRACKS)
 
 
+# Trilhas que só o Clone Hero / YARG usam (GH Live, Elite Drums, Pro Drums do Phase Shift)
+CLONEHERO_EXTRA_TRACKS: FrozenSet[str] = frozenset([
+    "PART GUITAR GHL", "PART BASS GHL", "PART ELITE_DRUMS", "PART REAL_DRUMS_PS",
+])
+
+
 @dataclass(frozen=True)
 class TargetProfile:
     name: str
@@ -30,7 +36,8 @@ class TargetProfile:
 _RB2_FORBIDDEN = frozenset(["PART KEYS"] + _REAL_TRACKS)
 
 PROFILES: Dict[str, TargetProfile] = {
-    "clonehero": TargetProfile("clonehero", "Clone Hero", True, KNOWN_TRACKS, False, False),
+    "clonehero": TargetProfile("clonehero", "Clone Hero", True,
+                               KNOWN_TRACKS | CLONEHERO_EXTRA_TRACKS, False, False),
     "rb3_ps3": TargetProfile("rb3_ps3", "Rock Band 3 (PS3/RPCS3)", True, KNOWN_TRACKS, True, True),
     "rb2": TargetProfile("rb2", "Rock Band 2", False, KNOWN_TRACKS - _RB2_FORBIDDEN, True, True,
                          _RB2_FORBIDDEN),

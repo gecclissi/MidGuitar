@@ -33,8 +33,9 @@ _ACCEPTED_NOTES.update(range(12, 16))   # animação
 _ACCEPTED_NOTES.update([104, 126])      # tap e faixa de tremolo/trill/roll
 _EXTRA_ACCEPTED = {
     "PART DRUMS": set(range(24, 52)),    # animação / hi-hat aberto
-    "PART GUITAR": set(range(40, 60)),   # animação da mão do braço
-    "PART BASS": set(range(40, 60)),
+    # animação da mão do braço + notas abertas [ENHANCED_OPENS] do Clone Hero (59/71/83/95)
+    "PART GUITAR": set(range(40, 60)) | {71, 83},
+    "PART BASS": set(range(40, 60)) | {71, 83},
 }
 
 
@@ -210,7 +211,12 @@ def _scan_track(c: _Collector, name: str, track) -> None:
     active: Dict[int, int] = {}
     for tk, m in events:
         if _is_note_on(m):
-            if m.note in active:
+            if m.note in active and active[m.note] == tk:
+                # mesma nota repetida no mesmo tick: customs reais fazem isso e os jogos aceitam
+                c.group("warning", "MIDI_DUPLICATE_NOTE", name, tk,
+                        "Nota repetida no mesmo tick (altura %d)" % m.note,
+                        "{n} notas repetidas no mesmo tick")
+            elif m.note in active:
                 c.group("error", "MIDI_OVERLAPPING_NOTE", name, tk,
                         "Nota sobreposta (altura %d já ativa)" % m.note,
                         "{n} notas sobrepostas (altura já ativa)")

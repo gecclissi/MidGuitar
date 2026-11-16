@@ -211,3 +211,31 @@ def test_note_on_before_note_off_at_same_tick_is_not_overlap(tmp_path):
                         mido.Message("note_off", note=96, velocity=0, time=480)])
     p = _write_mid(tmp_path, _full([t]))
     assert "MIDI_OVERLAPPING_NOTE" not in _plain(validate_midi(p, PROFILES["rb3_ps3"]))
+
+
+# --- Calibração com custom real (Joe Dassin - Salut les amoureux, Clone Hero/YARG) ---
+
+def test_same_tick_duplicate_note_is_warning_not_error(tmp_path):
+    # customs reais repetem a mesma nota no mesmo tick (os jogos aceitam)
+    t = mido.MidiTrack([mido.MetaMessage("track_name", name="PART DRUMS"),
+                        mido.Message("note_on", note=97, velocity=96, time=0),
+                        mido.Message("note_on", note=97, velocity=96, time=0),
+                        mido.Message("note_off", note=97, velocity=0, time=60),
+                        mido.Message("note_off", note=97, velocity=0, time=0)])
+    codes = _codes(validate_midi(_write_mid(tmp_path, _full([t])), PROFILES["rb3_ps3"]))
+    assert ("MIDI_DUPLICATE_NOTE", "warning") in codes
+    assert not any(c == "MIDI_OVERLAPPING_NOTE" for c, _ in codes)
+
+
+def test_clone_hero_extra_tracks_are_known_for_clonehero(tmp_path):
+    extra = [_trk(n, notes=[(0, 120, 96, 100)]) for n in
+             ("PART GUITAR GHL", "PART BASS GHL", "PART ELITE_DRUMS", "PART REAL_DRUMS_PS")]
+    p = _write_mid(tmp_path, _full(extra))
+    assert "MIDI_UNKNOWN_TRACK" not in [c for c, _ in _codes(validate_midi(p, PROFILES["clonehero"]))]
+    assert "MIDI_UNKNOWN_TRACK" in [c for c, _ in _codes(validate_midi(p, PROFILES["rb3_ps3"]))]
+
+
+def test_enhanced_open_notes_are_accepted_on_guitar_and_bass(tmp_path):
+    notes = [(i * 240, i * 240 + 120, pitch, 100) for i, pitch in enumerate((59, 71, 83, 95))]
+    p = _write_mid(tmp_path, _full([_trk("PART GUITAR", notes=notes), _trk("PART BASS", notes=notes)]))
+    assert "MIDI_NOTE_OUT_OF_RANGE" not in [c for c, _ in _codes(validate_midi(p, PROFILES["clonehero"]))]

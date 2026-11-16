@@ -283,8 +283,11 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
             if msg.type == 'track_name':
                 track_name = msg.name.strip().upper()
             elif msg.type == 'text':
-                ms = int(round(tm.tick_to_ms(current_tick)))
-                song.events.append(TextEvent(time_ms=ms, text=msg.text))
+                # Só a trilha EVENTS tem seções/marcadores da música; textos de VENUE
+                # (luzes/câmera) e de animação das PART não são eventos da música.
+                if track_name == "EVENTS":
+                    ms = int(round(tm.tick_to_ms(current_tick)))
+                    song.events.append(TextEvent(time_ms=ms, text=msg.text))
             elif msg.type == 'lyrics':
                 recent_lyrics[current_tick] = msg.text
             elif msg.type == 'note_on' and msg.velocity > 0:
@@ -295,7 +298,10 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                     start_ms = int(round(tm.tick_to_ms(start_tick)))
                     duration_ms = max(100, int(round(tm.tick_to_ms(current_tick) - tm.tick_to_ms(start_tick))))
 
-                    if "VOCAL" in track_name:
+                    # Nomes EXATOS: customs reais trazem trilhas extras (PART GUITAR GHL,
+                    # PART ELITE_DRUMS, PART REAL_GUITAR_22, PART KEYS_ANIM_RH, HARM1...)
+                    # que não podem ser misturadas nas trilhas editadas pelo MidGuitar.
+                    if track_name == "PART VOCALS":
                         from src.creator.chart_model import VocalNote
                         # Notas cantadas estão entre 36 e 84 (C2 a C6)
                         if 36 <= msg.note <= 84:
@@ -308,14 +314,14 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                                 lyric=syl,
                                 is_phrase_end=False
                             ))
-                    elif "REAL_GUITAR" in track_name or "REAL_BASS" in track_name:
+                    elif track_name in ("PART REAL_GUITAR", "PART REAL_BASS"):
                         from src.creator.chart_model import ProGuitarNote
                         from src.creator.rbn_specs import PRO_GUITAR_STRING_BASE
                         for diff, base_p in PRO_GUITAR_STRING_BASE.items():
                             if base_p <= msg.note <= base_p + 5:
                                 str_idx = msg.note - base_p
                                 fret_num = max(0, min(22, on_vel - 100)) if on_vel >= 100 else 0
-                                target_list = song.pro_bass_notes if "REAL_BASS" in track_name else song.pro_guitar_notes
+                                target_list = song.pro_bass_notes if track_name == "PART REAL_BASS" else song.pro_guitar_notes
                                 target_list.append(ProGuitarNote(
                                     time_ms=start_ms,
                                     string_idx=str_idx,
@@ -324,7 +330,7 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                                     difficulty=diff
                                 ))
                                 break
-                    elif "REAL_KEYS" in track_name:
+                    elif track_name in ("PART REAL_KEYS_X", "PART REAL_KEYS_H", "PART REAL_KEYS_M", "PART REAL_KEYS_E"):
                         from src.creator.chart_model import ProKeysNote
                         if 48 <= msg.note <= 72:
                             pk_diff = "Expert"
@@ -340,19 +346,19 @@ def _parse_midi_into_song(mid: MidiFile, song: ChartSong):
                                 duration_ms=duration_ms,
                                 difficulty=pk_diff
                             ))
-                    elif "GUITAR" in track_name:
+                    elif track_name == "PART GUITAR":
                         if msg.note in inv_fret_notes:
                             lane, diff = inv_fret_notes[msg.note]
                             song.guitar_notes.append(NoteEvent(time_ms=start_ms, lane=lane, duration_ms=duration_ms, difficulty=diff))
-                    elif "BASS" in track_name:
+                    elif track_name == "PART BASS":
                         if msg.note in inv_fret_notes:
                             lane, diff = inv_fret_notes[msg.note]
                             song.bass_notes.append(NoteEvent(time_ms=start_ms, lane=lane, duration_ms=duration_ms, difficulty=diff))
-                    elif "DRUM" in track_name:
+                    elif track_name == "PART DRUMS":
                         if msg.note in inv_drum_notes:
                             lane, diff = inv_drum_notes[msg.note]
                             song.drum_notes.append(NoteEvent(time_ms=start_ms, lane=lane, duration_ms=duration_ms, difficulty=diff))
-                    elif "KEYS" in track_name:
+                    elif track_name == "PART KEYS":
                         if msg.note in inv_fret_notes:
                             lane, diff = inv_fret_notes[msg.note]
                             song.keys_notes.append(NoteEvent(time_ms=start_ms, lane=lane, duration_ms=duration_ms, difficulty=diff))
