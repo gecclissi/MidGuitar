@@ -243,6 +243,47 @@ def _song_paths(songs_dir: str, entry: list):
     return key, os.path.join(songs_dir, key)
 
 
+def _validate_edat(folder, edat, s, profile, key, midi_tracks, check_midi=True) -> List[Issue]:
+    """Confere o .mid.edat: magic NPD, hashes com a klicensee da pasta em USRDIR e,
+    decifrado, as mesmas regras do MIDI solto."""
+    import shutil
+    import tempfile
+    from src.creator.edat import EdatError, read_rock_band_mid_edat
+    loc = _rel(folder, edat)
+    try:
+        with open(edat, "rb") as f:
+            if f.read(4) != b"NPD\x00":
+                return [Issue("error", "PS3_BAD_EDAT", "O .mid.edat não começa com NPD", loc)]
+    except OSError as e:
+        return [Issue("error", "PS3_BAD_EDAT", "Não foi possível ler o .mid.edat: %s" % e, loc)]
+    try:
+        midi_bytes = read_rock_band_mid_edat(edat, installed=True)
+    except EdatError as e:
+        return [Issue("error", "PS3_BAD_EDAT",
+                      "O .mid.edat não abre com a chave desta pasta: %s" % e, loc)]
+    except Exception as e:
+        return [Issue("error", "PS3_BAD_EDAT", "Não foi possível decifrar o .mid.edat: %s" % e, loc)]
+    if not check_midi:
+        return []
+    issues: List[Issue] = []
+    tmp = tempfile.mkdtemp(prefix="mg_edat_")
+    try:
+        mid = os.path.join(tmp, s + ".mid")
+        with open(mid, "wb") as f:
+            f.write(midi_bytes)
+        for i in _guard(validate_midi, mid, profile):
+            iloc = i.location
+            if iloc == s + ".mid" or iloc.startswith(s + ".mid "):
+                iloc = loc + iloc[len(s + ".mid"):]
+            issues.append(Issue(i.level, i.code, i.message, iloc))
+        tracks = midi_track_names(mid)
+        if tracks:
+            midi_tracks[key] = tracks
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return issues
+
+
 def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_channels):
     key = str(entry[0])
     s, sdir = _song_paths(songs_dir, entry)
@@ -253,14 +294,8 @@ def _validate_song_files(folder, songs_dir, entry, profile, midi_tracks, mogg_ch
     edat = os.path.join(sdir, s + ".mid.edat")
     mid = os.path.join(sdir, s + ".mid")
     if os.path.isfile(edat):
-        try:
-            with open(edat, "rb") as f:
-                if f.read(4) != b"NPD\x00":
-                    issues.append(Issue("error", "PS3_BAD_EDAT",
-                                        "O .mid.edat não começa com NPD", _rel(folder, edat)))
-        except OSError as e:
-            issues.append(Issue("error", "PS3_BAD_EDAT",
-                                "Não foi possível ler o .mid.edat: %s" % e, _rel(folder, edat)))
+        issues.extend(_validate_edat(folder, edat, s, profile, key, midi_tracks,
+                                     check_midi=not os.path.isfile(mid)))
     else:
         issues.append(Issue("error", "PS3_MISSING_EDAT",
                             "Faltando %s.mid.edat" % s, _rel(folder, edat)))

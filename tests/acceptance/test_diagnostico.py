@@ -361,7 +361,6 @@ def _small_song(tmp_path):
     return s
 
 
-@pytest.mark.xfail(strict=True, reason="PS3: .mid solto (sem .mid.edat); .mid.edat fica para o passo 3B")
 def test_ps3_export_passes_validator(tmp_path):
     from src.creator.ps3_pkg_exporter import export_ps3_pkg_structure
     from src.creator.validation import validate_export

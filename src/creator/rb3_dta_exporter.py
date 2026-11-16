@@ -50,8 +50,16 @@ def rank_value(instrument: str, tier: int, has_notes: bool) -> int:
     return RANK_TIERS[instrument][min(tier, 6) - 1]
 
 
+def _ascii_alnum(text: str) -> str:
+    """Só letras/dígitos ASCII (acentos viram a letra base): nomes de arquivo e pasta do
+    console e content id do PS3 não aceitam outros caracteres."""
+    import unicodedata
+    plain = unicodedata.normalize("NFKD", text or "")
+    return "".join(c for c in plain if c.isascii() and c.isalnum())
+
+
 def song_shortname(song: ChartSong, limit: int = 24, default: str = "custom_song") -> str:
-    return "".join(c for c in f"{song.artist}_{song.title}" if c.isalnum()).lower()[:limit] or default
+    return _ascii_alnum(f"{song.artist}_{song.title}").lower()[:limit] or default
 
 
 def stable_song_id(song: ChartSong, salt: str = "") -> int:
@@ -64,7 +72,7 @@ def stable_song_id(song: ChartSong, salt: str = "") -> int:
 
 def ps3_folder_name(shortname: str, song_id: int, limit: int = 27) -> str:
     """Pasta única em USRDIR/ (como o Magma C3: prefixo + id + nome, até 27 caracteres)."""
-    name = "MG%d%s" % (song_id % 100000000, "".join(c for c in shortname if c.isalnum()).upper())
+    name = "MG%d%s" % (song_id % 100000000, _ascii_alnum(shortname).upper())
     return name[:limit]
 
 
@@ -275,8 +283,12 @@ def generate_songs_dta_content(song: ChartSong, shortname: str, song_id: int = N
 def write_rb3_song_files(song: ChartSong, songs_dir: str, shortname: str,
                          song_id: int = None, audio_source_path: str = None,
                          total_duration_ms: int = 180000, with_art: bool = True,
-                         multitrack: bool = True) -> Tuple[str, Optional[AudioLayout]]:
+                         multitrack: bool = True,
+                         edat_folder: Optional[str] = None) -> Tuple[str, Optional[AudioLayout]]:
     """Grava songs/<s>/<s>.mid, <s>.mogg e gen/<s>_keep.png_ps3 dentro de `songs_dir`.
+
+    Com `edat_folder` (a pasta em USRDIR/), grava <s>.mid.edat cifrado para o PS3 no
+    lugar do .mid solto (klicensee e content id derivados dessa pasta).
 
     Devolve (bloco do songs.dta, layout do .mogg ou None se não houver áudio).
     O songs.dta em si é gravado por quem chama (um bloco por música do pacote)."""
@@ -291,7 +303,15 @@ def write_rb3_song_files(song: ChartSong, songs_dir: str, shortname: str,
     drum_mix = layout.drum_mix if layout is not None else 0
     mid = generate_rbn_midi(song, total_duration_ms=total_duration_ms,
                             rock_band_only=True, drum_mix=drum_mix if song.drum_notes else None)
-    save_midi(mid, os.path.join(track_dir, f"{shortname}.mid"))
+    if edat_folder:
+        import io
+        from src.creator.edat import write_rock_band_mid_edat
+        buf = io.BytesIO()
+        mid.save(file=buf)
+        write_rock_band_mid_edat(buf.getvalue(), os.path.join(track_dir, f"{shortname}.mid.edat"),
+                                 edat_folder)
+    else:
+        save_midi(mid, os.path.join(track_dir, f"{shortname}.mid"))
 
     # 3. Capa do álbum (gen/<s>_keep.png_ps3), da capa da música ou a padrão
     has_art = None   # sem png_ps3 (Xbox/PS4): album_art segue a existência da capa

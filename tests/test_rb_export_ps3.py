@@ -340,11 +340,29 @@ def test_joe_dassin_ps3_export(tmp_path):
     assert abs(_field(e, "song_length")[1] - 245541) < 100
     mogg = glob.glob(os.path.join(os.path.dirname(dta), "*", "*.mogg"))[0]
     assert read_mogg_info(mogg).channels == 12
-    mid = glob.glob(os.path.join(os.path.dirname(dta), "*", "*.mid"))[0]
-    names = _track_names(mid)
+    import io
+    from src.creator.edat import read_rock_band_mid_edat
+    assert not glob.glob(os.path.join(os.path.dirname(dta), "*", "*.mid"))
+    edat = glob.glob(os.path.join(os.path.dirname(dta), "*", "*.mid.edat"))[0]
+    mid = mido.MidiFile(file=io.BytesIO(read_rock_band_mid_edat(edat, installed=True)))
+    names = {t.name for t in mid.tracks}
     assert not names & {"PART GUITAR GHL", "PART BASS GHL", "PART ELITE_DRUMS", "PART RHYTHM"}
+    # Validador: só o aviso do .milo_ps3 (animações) que ainda não geramos
+    assert [(i.level, i.code) for i in validate_export(root, "rb3_ps3")] == [
+        ("warning", "PS3_MISSING_MILO")]
+
+    # .pkg -> extração -> importação: tempos das notas preservados (±2 ms)
+    from src.creator.chart_importer import import_song_from_folder
+    pkg = glob.glob(os.path.join(root, "*.pkg"))[0]
+    back = import_song_from_folder(pkg)
+    for track in ("guitar", "bass", "drum", "keys", "pro_guitar", "pro_bass", "pro_keys"):
+        for diff in ("Expert", "Hard", "Medium", "Easy"):
+            a = sorted(n.time_ms for n in getattr(song, track + "_notes") if n.difficulty == diff)
+            b = sorted(n.time_ms for n in getattr(back, track + "_notes") if n.difficulty == diff)
+            assert len(a) == len(b), (track, diff)
+            assert all(abs(x - y) <= 2 for x, y in zip(a, b)), (track, diff)
+    va = sorted(n.time_ms for n in song.vocal_notes)
+    vb = sorted(n.time_ms for n in back.vocal_notes)
+    assert len(va) == len(vb) and all(abs(x - y) <= 2 for x, y in zip(va, vb))
+    assert back.title == "Salut les amoureux"
     assert {"HARM1", "HARM2", "HARM3", "VENUE", "PART REAL_GUITAR_22"} <= names
-    issues = validate_export(root, "rb3_ps3")
-    errors = {i.code for i in issues if i.level == "error"}
-    assert errors == {"PS3_MISSING_EDAT", "PS3_PLAIN_MID"}
-    assert "PS3_MISSING_ART" not in {i.code for i in issues}

@@ -1,4 +1,6 @@
 """Testes da validação por destino (validate_export / detect_target)."""
+import os
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -42,12 +44,38 @@ def test_clonehero_export_has_no_errors(song, out):
     assert detect_target(d) == "clonehero"
 
 
-def test_ps3_export_flags_missing_edat(song, out):
-    # Fase 3/4 vai inverter este teste
+def test_ps3_export_has_edat_and_no_errors(song, out):
     d = export_ps3_pkg_structure(song, out)
-    codes = {i.code for i in validate_export(d, "rb3_ps3")}
-    assert "PS3_MISSING_EDAT" in codes and "PS3_PLAIN_MID" in codes
+    issues = validate_export(d, "rb3_ps3")
+    assert [i for i in issues if i.level == "error"] == []
+    assert {i.code for i in issues} == {"PS3_MISSING_MILO"}
     assert detect_target(d) == "rb3_ps3"
+
+
+def _only_edat(d):
+    import glob
+    return glob.glob(os.path.join(d, "USRDIR", "*", "songs", "*", "*.mid.edat"))[0]
+
+
+def test_ps3_edat_in_renamed_folder_is_flagged(song, out):
+    import shutil
+    d = export_ps3_pkg_structure(song, out)
+    usr = os.path.join(d, "USRDIR")
+    old = os.listdir(usr)[0]
+    shutil.move(os.path.join(usr, old), os.path.join(usr, "OUTRAPASTA"))
+    codes = {i.code for i in validate_export(d, "rb3_ps3")}
+    assert "PS3_BAD_EDAT" in codes
+
+
+def test_ps3_corrupted_edat_is_flagged(song, out):
+    d = export_ps3_pkg_structure(song, out)
+    p = _only_edat(d)
+    data = bytearray(open(p, "rb").read())
+    data[0x200] ^= 0xFF
+    with open(p, "wb") as f:
+        f.write(bytes(data))
+    codes = {i.code for i in validate_export(d, "rb3_ps3")}
+    assert "PS3_BAD_EDAT" in codes
 
 
 def test_xbox_export_flags_no_con(song, out):

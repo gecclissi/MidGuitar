@@ -2,11 +2,12 @@
 Exportador de Pacotes PS3 / RPCS3 para Rock Band 3.
 Gera a estrutura de DLC no mesmo layout dos pacotes PS3 reais (Magma C3):
 - PS3_RPCS3_<shortname>/
+  - <shortname>.pkg (pacote de debug instalável no RPCS3 e no PS3 com HEN/CFW)
   - PARAM.SFO (mesmos campos das referências: CATEGORY GD, PARENTAL_LEVEL,
     PS3_SYSTEM_VER, TITLE, TITLE_ID BLUS30463, VERSION)
   - ICON0.PNG (320x176 RGB)
   - USRDIR/<pasta única>/songs/songs.dta
-  - USRDIR/<pasta única>/songs/{shortname}/{shortname}.mid / .mogg / gen/{shortname}_keep.png_ps3
+  - USRDIR/<pasta única>/songs/{shortname}/{shortname}.mid.edat / .mogg / gen/{shortname}_keep.png_ps3
   - package.conf (configuração para ferramentas de empacotamento PKG)
   - INSTALAR_NO_RPCS3_AUTOMATICO.bat (copia USRDIR/<pasta> para dev_hdd0/game/BLUS30463/USRDIR/)
   - COMO_USAR_NO_PS3_E_RPCS3.txt
@@ -17,9 +18,10 @@ segunda música não sobrescreve o songs.dta da primeira.
 
 import os
 import struct
-import hashlib
 from PIL import Image
 from src.creator.chart_model import ChartSong
+from src.creator.edat import rb3_content_id
+from src.creator.ps3_pkg import build_pkg
 from src.creator.rb3_dta_exporter import (RB3_PS3_TITLE_ID, ps3_folder_name, song_shortname,
                                           stable_song_id, write_rb3_song_files, write_songs_dta)
 
@@ -143,6 +145,17 @@ def write_install_bat(path: str, folder: str, title_id: str, label: str):
         f.write(rpcs3_install_bat(folder, title_id, label))
 
 
+# Itens da raiz que vão para o .pkg (o resto é só para quem copia a pasta à mão)
+PKG_ROOT_ITEMS = ["ICON0.PNG", "PARAM.SFO", "USRDIR"]
+
+
+def build_ps3_package(root_dir: str, folder: str, pkg_name: str) -> str:
+    """Gera <root_dir>/<pkg_name>.pkg com PARAM.SFO, ICON0.PNG e USRDIR/<folder>."""
+    pkg_path = os.path.join(root_dir, pkg_name + ".pkg")
+    build_pkg(root_dir, pkg_path, rb3_content_id(folder), include=PKG_ROOT_ITEMS)
+    return pkg_path
+
+
 def package_conf(content_id: str) -> str:
     return f"""Content-ID = {content_id}
 k_licensee = 0x00000000000000000000000000000000
@@ -159,8 +172,8 @@ def export_ps3_pkg_structure(song: ChartSong, output_base_dir: str, audio_source
     clean_shortname = song_shortname(song)
     song_id = stable_song_id(song)
     folder = ps3_folder_name(clean_shortname, song_id)
-    hash_id = hashlib.md5(folder.encode()).hexdigest().upper()[:8]
-    content_id = f"UP0006-{RB3_PS3_TITLE_ID}_00-MG{hash_id}00001"
+    # Como nas referências: o content id do .pkg e do .mid.edat é o prefixo do RB3 + a pasta
+    content_id = rb3_content_id(folder)
 
     root_dir = os.path.join(output_base_dir, f"PS3_RPCS3_{clean_shortname}")
     songs_dir = os.path.join(root_dir, "USRDIR", folder, "songs")
@@ -171,11 +184,15 @@ def export_ps3_pkg_structure(song: ChartSong, output_base_dir: str, audio_source
         f.write(generate_param_sfo(f"RB3: {song.title} - {song.artist}", content_id))
     save_icon0(os.path.join(root_dir, "ICON0.PNG"), song.album_art_path, song.title, song.artist)
 
-    # 2. Música: .mid, .mogg (multicanal), capa png_ps3 e songs.dta
+    # 2. Música: .mid.edat, .mogg (multicanal), capa png_ps3 e songs.dta
     dta_content, _layout = write_rb3_song_files(song, songs_dir, clean_shortname, song_id=song_id,
                                                 audio_source_path=audio_source_path,
-                                                total_duration_ms=total_duration_ms)
+                                                total_duration_ms=total_duration_ms,
+                                                edat_folder=folder)
     write_songs_dta(os.path.join(songs_dir, "songs.dta"), [dta_content])
+
+    # 2.1 Pacote .pkg pronto para instalar
+    pkg_path = build_ps3_package(root_dir, folder, clean_shortname)
 
     # 3. package.conf (ferramentas que compilam PKG, como make_package_npdrm)
     with open(os.path.join(root_dir, "package.conf"), "w", encoding="utf-8", newline="\n") as f:
@@ -194,23 +211,27 @@ def export_ps3_pkg_structure(song: ChartSong, output_base_dir: str, audio_source
   Content-ID: {content_id}
 ======================================================================
 
-OPÇÃO 1: INSTALAR NO EMULADOR RPCS3
+OPÇÃO 1: INSTALAR O .PKG (MAIS FÁCIL)
 ----------------------------------------------------------------------
-1. Dê dois cliques em 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' nesta pasta.
-OU
-2. Copie manualmente a pasta 'USRDIR/{folder}' para:
-   [Sua Pasta RPCS3]/dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
+- RPCS3: menu File > Install Packages/Raps/Edats e escolha
+  '{os.path.basename(pkg_path)}'.
+- PS3 com HEN/CFW: copie '{os.path.basename(pkg_path)}' para a raiz de um pendrive
+  (FAT32) e instale pelo Package Manager > Install Package Files.
+
+OPÇÃO 2: COPIAR A PASTA À MÃO
+----------------------------------------------------------------------
+- RPCS3: dê dois cliques em 'INSTALAR_NO_RPCS3_AUTOMATICO.bat' ou copie a pasta
+  'USRDIR/{folder}' para:
+  [Sua Pasta RPCS3]/dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
+- PS3 (CFW / HEN): via FTP ou multiMAN, copie 'USRDIR/{folder}' para:
+  /dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
 
 Cada música fica na própria pasta: instalar outra não apaga esta.
+Não renomeie a pasta '{folder}': o .mid.edat é cifrado com uma chave
+derivada desse nome e deixa de abrir se ela mudar.
 
-OPÇÃO 2: CONSOLE PLAYSTATION 3 (CFW / HEN)
-----------------------------------------------------------------------
-1. Via FTP ou multiMAN, copie 'USRDIR/{folder}' para:
-   /dev_hdd0/game/{RB3_PS3_TITLE_ID}/USRDIR/{folder}/
-2. Ou gere um .pkg com 'make_package_npdrm' usando o 'package.conf' desta pasta.
-
-Observação: o PS3 exige o MIDI criptografado (.mid.edat) e o arquivo
-gen/{clean_shortname}.milo_ps3; estas etapas ainda não são geradas.
+Observação: o arquivo gen/{clean_shortname}.milo_ps3 (animações de palco)
+ainda não é gerado; o jogo usa as animações padrão.
 ======================================================================
 """
     with open(info_path, "w", encoding="utf-8", newline="\n") as f:

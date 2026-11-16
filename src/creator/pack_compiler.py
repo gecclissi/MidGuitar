@@ -15,10 +15,11 @@ from typing import List, Tuple
 
 from src.creator.chart_model import ChartSong
 from src.creator.chart_importer import import_song_from_folder
-from src.creator.rb3_dta_exporter import (RB3_PS3_TITLE_ID, song_shortname, stable_song_id,
-                                          write_rb3_song_files, write_songs_dta)
-from src.creator.ps3_pkg_exporter import (generate_param_sfo, package_conf, save_icon0,
-                                          write_install_bat)
+from src.creator.rb3_dta_exporter import (RB3_PS3_TITLE_ID, _ascii_alnum, song_shortname,
+                                          stable_song_id, write_rb3_song_files, write_songs_dta)
+from src.creator.edat import rb3_content_id
+from src.creator.ps3_pkg_exporter import (build_ps3_package, generate_param_sfo, package_conf,
+                                          save_icon0, write_install_bat)
 
 def scan_folder_for_songs(root_dir: str) -> List[Tuple[str, ChartSong]]:
     """
@@ -60,12 +61,12 @@ def compile_ps3_song_pack(
     """
     Compila múltiplas músicas em um único pacote consolidado para PS3 e RPCS3.
     Layout dos pacotes reais: USRDIR/<pasta única do pacote>/songs/songs.dta (uma entrada
-    por música) + songs/<s>/<s>.mid / .mogg / gen/<s>_keep.png_ps3.
+    por música) + songs/<s>/<s>.mid.edat / .mogg / gen/<s>_keep.png_ps3, e um .pkg de debug.
     """
     clean_pack_name = "".join(c for c in pack_name if c.isalnum() or c in " _-").strip() or "MegaPack_RB3"
     pack_id_str = hashlib.md5(clean_pack_name.encode()).hexdigest().upper()[:8]
-    content_id = f"UP0006-{RB3_PS3_TITLE_ID}_00-PK{pack_id_str}0001"
-    folder = ("MGPK" + pack_id_str + "".join(c for c in clean_pack_name if c.isalnum()).upper())[:27]
+    folder = ("MGPK" + pack_id_str + _ascii_alnum(clean_pack_name).upper())[:27]
+    content_id = rb3_content_id(folder)
 
     pack_root = os.path.join(output_base_dir, f"PS3_PACK_{clean_pack_name}")
     songs_dir = os.path.join(pack_root, "USRDIR", folder, "songs")
@@ -99,13 +100,15 @@ def compile_ps3_song_pack(
             song_id = stable_song_id(song, salt="%s#%d" % (shortname, salt))
         used_ids.add(song_id)
 
-        dta_block, layout = write_rb3_song_files(song, songs_dir, shortname, song_id=song_id)
+        dta_block, layout = write_rb3_song_files(song, songs_dir, shortname, song_id=song_id,
+                                                 edat_folder=folder)
         if layout is None:
             print(f"[PackCompiler] Aviso: '{song.title}' não tem áudio; o pacote sai sem {shortname}.mogg")
         dta_blocks.append(dta_block)
 
     # Salva o arquivo songs.dta unificado com todas as músicas juntas
     write_songs_dta(os.path.join(songs_dir, "songs.dta"), dta_blocks)
+    build_ps3_package(pack_root, folder, _ascii_alnum(clean_pack_name) or "pacote")
 
     # 3. package.conf para compiladores PKG
     with open(os.path.join(pack_root, "package.conf"), "w", encoding="utf-8", newline="\n") as f:
