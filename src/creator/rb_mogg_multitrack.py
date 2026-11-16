@@ -174,14 +174,42 @@ def _write_multitrack_ogg(groups: Dict[str, List[str]], dest_ogg: str, work_dir:
     return channels
 
 
+def _same_paths(a, b) -> bool:
+    norm = lambda ps: sorted(os.path.normcase(os.path.abspath(p)) for p in ps or [] if p)
+    return norm(a) == norm(b)
+
+
+def source_mogg_for_export(song, audio_source_path: str = None) -> Optional[dict]:
+    """song.source_mogg quando o áudio da música ainda é o do .mogg importado
+    (mesmo mix, mesmos stems e o Ogg multicanal ainda no cache); senão None."""
+    src = getattr(song, "source_mogg", None) or {}
+    ogg, mix = src.get("ogg"), src.get("mix")
+    if not (ogg and mix and src.get("tracks") and os.path.isfile(ogg)):
+        return None
+    if audio_source_path and not _same_paths([audio_source_path], [mix]):
+        return None
+    if not _same_paths([getattr(song, "audio_path", None)], [mix]):
+        return None
+    if not _same_paths(getattr(song, "audio_stems", None), src.get("stems")):
+        return None
+    return src
+
+
 def build_rb_mogg(song, dest_mogg: str, audio_source_path: str = None, multitrack: bool = True,
                   charted: Optional[Dict[str, bool]] = None) -> Optional[AudioLayout]:
     """Gera `dest_mogg` (0x0A, Vorbis 44100 Hz) e devolve o layout de canais.
 
     Com 2+ stems e multitrack=True: .mogg multicanal; senão, mix estéreo (os stems
-    são somados quando não há mix). None se não houver áudio."""
+    são somados quando não há mix). Áudio vindo de um .mogg importado (song.source_mogg)
+    e multitrack=True: mantém os canais e o layout originais. None se não houver áudio."""
     from src.creator.mogg_generator import create_unencrypted_mogg
     charted = charted if charted is not None else charted_instruments(song)
+    source = source_mogg_for_export(song, audio_source_path) if multitrack else None
+    if source is not None:
+        # .mogg importado: os canais originais vão sem regravar, com o layout do songs.dta
+        from src.creator.mogg_import import audio_layout_from_source
+        if create_unencrypted_mogg(source["ogg"], dest_mogg):
+            return audio_layout_from_source(source, charted)
     stems = _existing(getattr(song, "audio_stems", None))
     mix = audio_source_path or getattr(song, "audio_path", None)
     mix = mix if mix and os.path.isfile(mix) else None

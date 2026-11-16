@@ -2022,11 +2022,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
     def _load_audio_file_smart(self, f: str):
         """Carrega áudio, extrai Artista - Título do nome do arquivo e detecta BPM e duração reais!"""
         if f.lower().endswith(".mogg"):
-            from src.creator.mogg_generator import extract_ogg_from_mogg, extraction_cache_dir
-            extracted = os.path.join(extraction_cache_dir(os.path.dirname(os.path.abspath(f))),
-                                     os.path.splitext(os.path.basename(f))[0] + "_extracted.ogg")
-            if extract_ogg_from_mogg(f, extracted):
-                f = extracted
+            # Cache temporário com tamanho + data do .mogg no nome; criptografado sem suporte fica como está
+            from src.creator.mogg_generator import extract_ogg_from_mogg
+            f = extract_ogg_from_mogg(f) or f
 
         self.audio_entry.delete(0, "end")
         self.audio_entry.insert(0, f)

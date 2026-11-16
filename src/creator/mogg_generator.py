@@ -44,14 +44,35 @@ def extract_ogg_from_mogg(mogg_path: str, output_ogg_path: str = None) -> str:
     """
     Remove o cabeçalho Harmonix 0x0A de um arquivo .mogg e salva o stream .ogg puro
     para que o Pygame e o analisador de áudio possam reproduzi-lo no Mini-REAPER.
+    .mogg criptografado de versão suportada (mogg_crypt) é descriptografado; os demais
+    são devolvidos sem extração (nunca vira áudio de lixo).
     """
     if not is_mogg_file(mogg_path):
-        return mogg_path
+        # .mogg criptografado: só as versões verificadas (mogg_crypt); as demais ficam como estão
+        from src.creator.mogg_crypt import MoggCryptError, is_supported_encrypted_mogg
+        if not is_supported_encrypted_mogg(mogg_path):
+            return mogg_path
+        from src.creator.mogg_crypt import decrypt_mogg
+        if output_ogg_path is None:
+            from src.creator.mogg_import import file_cache_key
+            base_dir = extraction_cache_dir(os.path.dirname(os.path.abspath(mogg_path)))
+            base_name = os.path.splitext(os.path.basename(mogg_path))[0]
+            output_ogg_path = os.path.join(base_dir, "%s_%s_extracted.ogg" % (base_name, file_cache_key(mogg_path)))
+        try:
+            decrypt_mogg(mogg_path, ogg_out_path=output_ogg_path)
+            return output_ogg_path
+        except (MoggCryptError, OSError) as e:
+            print(f"[MoggGenerator] Não foi possível descriptografar {mogg_path}: {e}")
+            if os.path.exists(output_ogg_path):
+                os.remove(output_ogg_path)
+            return mogg_path
 
     if output_ogg_path is None:
         base_dir = extraction_cache_dir(os.path.dirname(os.path.abspath(mogg_path)))
         base_name = os.path.splitext(os.path.basename(mogg_path))[0]
-        output_ogg_path = os.path.join(base_dir, f"{base_name}_extracted.ogg")
+        # Tamanho + data do .mogg no nome: um .mogg trocado não reaproveita o cache velho
+        from src.creator.mogg_import import file_cache_key
+        output_ogg_path = os.path.join(base_dir, f"{base_name}_{file_cache_key(mogg_path)}_extracted.ogg")
 
     if os.path.exists(output_ogg_path) and os.path.getsize(output_ogg_path) > 1024:
         return output_ogg_path

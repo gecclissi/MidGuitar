@@ -226,4 +226,6 @@ def test_reference_pkg_import_matches_decrypted_midi(name, tmp_path):
         [t.get("name") for t in direct.passthrough_tracks]
     assert {"HARM1", "HARM2", "HARM3"} <= {t.get("name") for t in song.passthrough_tracks}
     assert song.title not in ("", "Nova Música") and song.dta_song_id
-    assert song.audio_path is None and any("criptografado" in w for w in song.import_warnings)
+    # .mogg criptografado descriptografado: mix + stems + canais originais para reexportar
+    assert song.audio_path and os.path.exists(song.audio_path) and song.import_warnings == []
+    assert song.source_mogg["channels"] >= 9 and len(song.audio_stems) >= 4

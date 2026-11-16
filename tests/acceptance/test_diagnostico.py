@@ -271,13 +271,23 @@ def test_unencrypted_mogg_roundtrip(tmp_path):
 
 
 @need(GORILLAZ)
-def test_encrypted_mogg_is_not_extracted_as_garbage(copy_ref):
+def test_encrypted_mogg_is_decrypted_not_garbage(copy_ref):
     from src.creator.mogg_generator import extract_ogg_from_mogg
     song_dir = ps3_song_dir(copy_ref(GORILLAZ))
     mogg = glob.glob(os.path.join(song_dir, "*.mogg"))[0]
     out = mogg + ".ogg"
-    assert extract_ogg_from_mogg(mogg, out) == mogg
-    assert not os.path.exists(out)
+    assert extract_ogg_from_mogg(mogg, out) == out
+    info = sf.info(out)
+    assert info.channels == 10 and abs(info.duration - 202.919) < 0.5
+    # Versão sem suporte (0x0E): devolve o .mogg sem gravar lixo
+    data = bytearray(open(mogg, "rb").read())
+    data[0] = 0x0E
+    other = mogg[:-5] + "_v14.mogg"
+    with open(other, "wb") as f:
+        f.write(bytes(data))
+    out2 = other + ".ogg"
+    assert extract_ogg_from_mogg(other, out2) == other
+    assert not os.path.exists(out2)
 
 
 @need(JOE)
@@ -322,10 +332,10 @@ def test_ps3_songs_dta_metadata_is_read(copy_ref):
 @need(GORILLAZ)
 def test_ps3_import_audio_path_exists(copy_ref):
     song = import_song_from_folder(ps3_song_dir(copy_ref(GORILLAZ)))
-    assert song.audio_path is None or os.path.exists(song.audio_path)
-    # .mogg criptografado: sem áudio, com aviso para a interface
-    assert song.audio_path is None
-    assert any("criptografado" in w for w in song.import_warnings)
+    # .mogg criptografado (0x0D): descriptografado para mix estéreo + stems no cache
+    assert song.audio_path and os.path.exists(song.audio_path)
+    assert sf.info(song.audio_path).channels == 2
+    assert not any("criptografado" in w for w in song.import_warnings)
 
 
 @need(XBOX_CON)

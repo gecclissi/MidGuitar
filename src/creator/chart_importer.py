@@ -55,6 +55,7 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
     folder_path = _resolve_song_dir(folder_path, warnings)
     song = ChartSong()
     song.import_warnings.extend(warnings)
+    dta_layout = {}   # canais do .mogg declarados no songs.dta (tracks, pans, vols)
 
     # 1. Busca song.ini
     ini_file = os.path.join(folder_path, "song.ini")
@@ -86,7 +87,7 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
                       os.path.join(os.path.dirname(folder_path), "songs.dta")]:
             if os.path.exists(dta_p):
                 try:
-                    _apply_songs_dta(song, dta_p, os.path.basename(folder_path))
+                    dta_layout = _apply_songs_dta(song, dta_p, os.path.basename(folder_path)) or {}
                     break
                 except Exception as e:
                     print(f"[ChartImporter] Erro ao ler songs.dta {dta_p}: {e}")
@@ -103,21 +104,8 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         f_lower = f.lower()
         full_p = os.path.join(folder_path, f)
         if f_lower.endswith(".mogg"):
-            from src.creator.mogg_generator import (extract_ogg_from_mogg, extraction_cache_dir,
-                                                    is_mogg_file)
-            if not is_mogg_file(full_p):
-                # .mogg criptografado (0x0B/0x0D...): sem áudio por enquanto, com aviso
-                song.import_warnings.append(
-                    f"O áudio '{f}' está criptografado e ainda não pode ser importado. "
-                    "A música foi carregada sem áudio: escolha um MP3/OGG/WAV antes de exportar.")
-                continue
-            # Extrai para um cache temporário: nunca grava ao lado da pasta de origem
-            extracted_ogg = os.path.join(extraction_cache_dir(folder_path), f"{os.path.splitext(f)[0]}_extracted.ogg")
-            result = extract_ogg_from_mogg(full_p, extracted_ogg)
-            if result and result != full_p and os.path.exists(result):
-                song.audio_stems.append(result)
-                if not song.audio_path:
-                    song.audio_path = result
+            _import_mogg_audio(song, full_p, folder_path, dta_layout)
+            continue
         elif f_lower.endswith((".ogg", ".mp3", ".wav", ".flac", ".opus")):
             song.audio_stems.append(full_p)
             stem_base = os.path.splitext(f_lower)[0]
@@ -245,14 +233,46 @@ def _resolve_song_dir(folder: str, warnings: list) -> str:
     return dirs[0]
 
 
+def _import_mogg_audio(song: ChartSong, mogg_path: str, folder_path: str, dta_layout: dict):
+    """Descriptografa o .mogg (se preciso) para o cache: mix em audio_path, stems por
+    instrumento e o Ogg multicanal em song.source_mogg. Versão sem suporte: sem áudio + aviso."""
+    from src.creator.mogg_crypt import MoggCryptError, mogg_version
+    from src.creator.mogg_import import mogg_cache_dir, prepare_mogg_audio
+    name = os.path.basename(mogg_path)
+    if song.audio_path:
+        return
+    try:
+        audio = prepare_mogg_audio(mogg_path, mogg_cache_dir(), dta_layout)
+    except MoggCryptError as e:
+        version = mogg_version(mogg_path)
+        song.import_warnings.append(
+            f"O áudio '{name}' está criptografado (versão {version}) e não pôde ser importado ({e}). "
+            "A música foi carregada sem áudio: escolha um MP3/OGG/WAV antes de exportar.")
+        return
+    except Exception as e:
+        song.import_warnings.append(f"Não foi possível ler o áudio '{name}': {e}")
+        print(f"[ChartImporter] Erro ao importar {mogg_path}: {e}")
+        return
+    song.audio_path = audio["mix"]
+    song.audio_stems.extend(p for p in audio["stems"] if p not in song.audio_stems)
+    song.source_mogg = dict(audio)
+
+
 def import_song_from_pkg(pkg_path: str) -> ChartSong:
     """Importa a (primeira) música de um .pkg de debug do PS3 (customs do Rock Band).
     O pacote é extraído numa pasta temporária; o .mid.edat é decifrado em memória."""
     from src.creator.mogg_generator import extraction_cache_dir
     from src.creator.ps3_pkg import extract_pkg
-    cache = os.path.join(extraction_cache_dir(os.path.abspath(pkg_path)), "pkg")
+    from src.creator.mogg_import import file_cache_key
+    # Tamanho + data do .pkg na pasta: um .pkg trocado no mesmo caminho não reaproveita o cache
+    cache = os.path.join(extraction_cache_dir(os.path.abspath(pkg_path)),
+                         "pkg_" + file_cache_key(pkg_path))
     # .milo_ps3 (animações) não é usado na importação
-    extract_pkg(pkg_path, cache, want=lambda name: not name.lower().endswith(".milo_ps3"))
+    done = os.path.join(cache, ".extraido")
+    if not os.path.isfile(done):
+        extract_pkg(pkg_path, cache, want=lambda name: not name.lower().endswith(".milo_ps3"))
+        with open(done, "w", encoding="utf-8") as f:
+            f.write(pkg_path)
     return import_song_from_folder(cache)
 
 
@@ -333,6 +353,8 @@ def _apply_songs_dta(song: ChartSong, dta_path: str, song_dir_name: str):
         attr = _DTA_RANK_ATTRS.get(inst)
         if attr and value > 0 and inst in RANK_TIERS:
             setattr(song, attr, sum(1 for th in RANK_TIERS[inst] if value >= th))
+    from src.creator.mogg_import import layout_from_dta_song
+    return layout_from_dta_song(_dta_fields(entry, "song"))
 
 
 def _parse_chart_file_into_song(chart_path: str, song: ChartSong):

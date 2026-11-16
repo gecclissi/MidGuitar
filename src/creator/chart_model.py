@@ -118,6 +118,10 @@ class ChartSong:
     dta_song_id: Optional[int] = None
     # Avisos da importação para a interface mostrar (ex.: .mogg criptografado sem áudio)
     import_warnings: List[str] = field(default_factory=list)
+    # Áudio multicanal de um .mogg importado (mogg_import.prepare_mogg_audio): Ogg original,
+    # mix, stems e layout de canais do songs.dta. A exportação Rock Band reaproveita os canais
+    # enquanto o áudio e os stems da música forem os mesmos da importação.
+    source_mogg: Dict[str, Any] = field(default_factory=dict)
 
     def get_tempo_map(self) -> TempoMap:
         """Devolve o mapa de tempo efetivo da música.
@@ -209,6 +213,8 @@ class ChartSong:
         data["passthrough_tracks"] = self.passthrough_tracks
         data["track_extras"] = self.track_extras
         data["ini_extra"] = dict(self.ini_extra)
+        if self.source_mogg:
+            data["source_mogg"] = dict(self.source_mogg)
         if self.tempo_map is not None:
             data["tempo_map"] = self.tempo_map.to_dict()
         return data
@@ -229,6 +235,7 @@ class ChartSong:
         song.passthrough_tracks = list(data.get("passthrough_tracks", []))
         song.track_extras = dict(data.get("track_extras", {}))
         song.ini_extra = dict(data.get("ini_extra", {}))
+        song.source_mogg = dict(data.get("source_mogg") or {})
         tm = data.get("tempo_map")
         song.tempo_map = TempoMap.from_dict(tm) if tm else None
         return song
