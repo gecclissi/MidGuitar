@@ -43,16 +43,21 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
     """
     Importa uma pasta completa de música contendo notes.mid, song.ini e áudio.
 
-    Também aceita um .pkg do PS3, a raiz de um pacote PS3 extraído (PARAM.SFO + USRDIR),
-    a pasta songs/ de um pacote Rock Band e arquivos soltos (.mid, .mid.edat, .chart):
-    nesses casos a pasta da primeira música é localizada automaticamente.
+    Também aceita um .pkg do PS3, um pacote CON/LIVE do Xbox 360 (qualquer nome, pelo
+    magic), a raiz de um pacote PS3 ou Xbox extraído, a pasta songs/ de um pacote Rock Band
+    e arquivos soltos (.mid, .mid.edat, .chart): nesses casos a pasta da primeira música é
+    localizada automaticamente.
     """
     if os.path.isfile(folder_path):
         if folder_path.lower().endswith(".pkg"):
             return import_song_from_pkg(folder_path)
+        from src.creator.xbox_stfs import is_stfs_file
+        if is_stfs_file(folder_path):
+            return import_song_from_con(folder_path)
         folder_path = os.path.dirname(os.path.abspath(folder_path))
     warnings = []
-    folder_path = _resolve_song_dir(folder_path, warnings)
+    # sem barra final: o songs.dta é procurado na pasta pai
+    folder_path = _resolve_song_dir(os.path.normpath(folder_path), warnings)
     song = ChartSong()
     song.import_warnings.extend(warnings)
     dta_layout = {}   # canais do .mogg declarados no songs.dta (tracks, pans, vols)
@@ -98,6 +103,8 @@ def import_song_from_folder(folder_path: str) -> ChartSong:
         if f_lower in ["album.png", "album.jpg", "album.jpeg", "cover.png", "cover.jpg", "icon0.png"]:
             song.album_art_path = os.path.join(folder_path, f)
             break
+    if not song.album_art_path:
+        song.album_art_path = _decode_rb_album_art(folder_path) or song.album_art_path
 
     # 2. Busca arquivos de áudio (Stems individuais, mixagem geral ou .mogg oficial do RB3)
     for f in os.listdir(folder_path):
@@ -274,6 +281,55 @@ def import_song_from_pkg(pkg_path: str) -> ChartSong:
         with open(done, "w", encoding="utf-8") as f:
             f.write(pkg_path)
     return import_song_from_folder(cache)
+
+
+def import_song_from_con(con_path: str) -> ChartSong:
+    """Importa a (primeira) música de um pacote CON/LIVE do Xbox 360 (STFS).
+    O pacote é extraído numa pasta temporária (sem os .milo_xbox)."""
+    from src.creator.mogg_generator import extraction_cache_dir
+    from src.creator.mogg_import import file_cache_key
+    from src.creator.xbox_stfs import StfsPackage
+    cache = os.path.join(extraction_cache_dir(os.path.abspath(con_path)),
+                         "con_" + file_cache_key(con_path))
+    done = os.path.join(cache, ".extraido")
+    if not os.path.isfile(done):
+        StfsPackage(con_path).extract(cache, want=lambda name: not name.lower().endswith(".milo_xbox"))
+        with open(done, "w", encoding="utf-8") as f:
+            f.write(con_path)
+    return import_song_from_folder(cache)
+
+
+def _decode_rb_album_art(song_dir: str) -> str:
+    """Capa gen/<s>_keep.png_xbox / .png_ps3 convertida para PNG no cache temporário
+    (nunca grava na pasta do usuário)."""
+    from src.creator.mogg_generator import extraction_cache_dir
+    from src.creator.mogg_import import file_cache_key
+    gen = os.path.join(song_dir, "gen")
+    if not os.path.isdir(gen):
+        return ""
+    for name in sorted(os.listdir(gen)):
+        low = name.lower()
+        if not low.endswith(("_keep.png_xbox", "_keep.png_ps3")):
+            continue
+        src = os.path.join(gen, name)
+        try:
+            dest = os.path.join(extraction_cache_dir(gen),
+                                "%s_%s.png" % (name, file_cache_key(src)))
+            if not os.path.isfile(dest):
+                from PIL import Image
+                with open(src, "rb") as f:
+                    data = f.read()
+                if low.endswith("_xbox"):
+                    from src.creator.png_xbox import decode_png_xbox
+                    img = decode_png_xbox(data)
+                else:
+                    from src.creator.png_ps3 import decode_png_ps3
+                    img = decode_png_ps3(data)
+                Image.fromarray(img).convert("RGB").save(dest)
+            return dest
+        except Exception as e:
+            print(f"[ChartImporter] Capa {name} ilegível: {e}")
+    return ""
 
 
 def _dta_fields(entry: list, key: str):

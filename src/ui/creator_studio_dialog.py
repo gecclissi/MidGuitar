@@ -19,6 +19,7 @@ from PIL import Image
 
 from src.creator.chart_model import ChartSong, NoteEvent, PROJECT_EXTENSION, load_project, save_project
 from src.creator.chart_importer import import_song_from_folder
+from src.creator.xbox_stfs import is_stfs_file
 from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
 from src.creator.rb2_exporter import export_rb2_song_package
@@ -109,7 +110,8 @@ class CreatorStudioDialog(ctk.CTkToplevel):
                 self._import_folder_path(p)
                 return
             ext = os.path.splitext(p)[1].lower()
-            if ext in [".pkg", ".edat"]:
+            if ext in [".pkg", ".edat"] or is_stfs_file(p):
+                # .pkg do PS3, .mid.edat ou pacote CON/LIVE do Xbox (detectado pelo magic)
                 self._import_folder_path(p)
                 return
             if ext in [".mp3", ".wav", ".ogg", ".flac", ".mogg"]:
@@ -360,12 +362,13 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         set_tooltip(btn_browse, "Abre a janela para selecionar a pasta da música no seu computador")
 
         btn_pkg = ctk.CTkButton(
-            sel_row, text="📦 Abrir .pkg", width=110, height=30,
+            sel_row, text="📦 Abrir pacote", width=120, height=30,
             fg_color="#334155", hover_color="#475569",
             command=self._on_browse_import_pkg
         )
         btn_pkg.pack(side="right", padx=(0, 8))
-        set_tooltip(btn_pkg, "Importa um pacote .pkg de PS3 (customs do Rock Band) ou um .mid.edat")
+        set_tooltip(btn_pkg, "Importa um pacote de customs do Rock Band: .pkg do PS3, CON do "
+                             "Xbox 360 (ex.: *_rb3con) ou um .mid.edat")
 
         btn_open_proj = ctk.CTkButton(
             sel_row, text="📂 Abrir Projeto", width=120, height=30,
@@ -530,8 +533,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
 
     def _on_browse_import_pkg(self):
         path = filedialog.askopenfilename(
-            title="Selecione o pacote PS3 (.pkg) ou o MIDI cifrado (.mid.edat)",
-            filetypes=[("Pacote PS3 / MIDI cifrado", "*.pkg *.edat"), ("Todos os arquivos", "*.*")],
+            title="Selecione o pacote (.pkg do PS3, CON do Xbox 360) ou o MIDI cifrado (.mid.edat)",
+            filetypes=[("Pacote PS3 / Xbox 360 / MIDI cifrado", "*.pkg *.edat *_rb3con *.con"),
+                       ("Todos os arquivos (CON sem extensão)", "*.*")],
         )
         if not path:
             return
@@ -2651,9 +2655,9 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         pkg_dir = export_xbox360_structure(self.song, out_dir)
         self._show_export_result(
             "Sucesso Xbox 360!",
-            f"Pacote para Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
-            f"• Pasta 'Content/0000000000000000/45410914/' pronta para pendrive (Horizon/FATXplorer) ou RGH/JTAG!\n"
-            f"• Pasta 'songs/' pronta para Aurora, Freestyle ou emulador Xenia no PC.\n"
+            f"Pacote CON do Xbox 360 (Rock Band 3) gerado com sucesso em:\n{pkg_dir}\n\n"
+            f"• Arquivo '*_rb3con': copie para Hdd1:\\Content\\0000000000000000\\45410914\\00000001\\ "
+            f"(RGH/JTAG, Horizon/FATXplorer) ou instale no Xenia (File > Install Content).\n"
             f"• Veja o arquivo 'COMO_INSTALAR_NO_XBOX360.txt' dentro da pasta!",
             pkg_dir, "xbox360"
         )

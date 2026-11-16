@@ -339,10 +339,9 @@ def test_ps3_import_audio_path_exists(copy_ref):
 
 
 @need(XBOX_CON)
-@pytest.mark.xfail(strict=True, reason="não há leitor de pacote CON/STFS do Xbox 360")
 def test_xbox_con_import(copy_ref):
     song = import_song_from_folder(copy_ref(XBOX_CON))
-    assert song.guitar_notes
+    assert song.guitar_notes and song.audio_path and not song.import_warnings
 
 
 @need(PKG_FILE)
@@ -379,7 +378,6 @@ def test_ps3_export_passes_validator(tmp_path):
     assert not [i for i in validate_export(folder, "rb3_ps3") if i.level == "error"]
 
 
-@pytest.mark.xfail(strict=True, reason="Xbox 360: gera pasta solta, sem pacote CON/LIVE")
 def test_xbox360_export_passes_validator(tmp_path):
     from src.creator.xbox360_exporter import export_xbox360_structure
     from src.creator.validation import validate_export
