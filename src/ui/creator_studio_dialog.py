@@ -17,7 +17,7 @@ import customtkinter as ctk
 import pygame
 from PIL import Image
 
-from src.creator.chart_model import ChartSong, NoteEvent
+from src.creator.chart_model import ChartSong, NoteEvent, PROJECT_EXTENSION, load_project, save_project
 from src.creator.chart_importer import import_song_from_folder
 from src.creator.clonehero_exporter import export_clone_hero_song
 from src.creator.rb3_dta_exporter import export_rb3_song_package
@@ -356,6 +356,22 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         btn_browse.pack(side="right")
         set_tooltip(btn_browse, "Abre a janela para selecionar a pasta da música no seu computador")
 
+        btn_open_proj = ctk.CTkButton(
+            sel_row, text="📂 Abrir Projeto", width=120, height=30,
+            fg_color="#334155", hover_color="#475569",
+            command=self._on_open_project
+        )
+        btn_open_proj.pack(side="right", padx=(0, 8))
+        set_tooltip(btn_open_proj, "Abre um projeto salvo do MidGuitar (.mgproj) com todas as notas, letra e áudio")
+
+        btn_save_proj = ctk.CTkButton(
+            sel_row, text="💾 Salvar Projeto", width=120, height=30,
+            fg_color="#334155", hover_color="#475569",
+            command=self._on_save_project
+        )
+        btn_save_proj.pack(side="right", padx=(0, 8))
+        set_tooltip(btn_save_proj, "Salva o trabalho atual num arquivo .mgproj para continuar depois")
+
         # Detalhes da música importada / criada
         self.info_box = ctk.CTkFrame(tab, fg_color="#0F172A", corner_radius=8)
         self.info_box.pack(fill="both", expand=True, padx=10, pady=4)
@@ -505,14 +521,55 @@ class CreatorStudioDialog(ctk.CTkToplevel):
         self.folder_entry.delete(0, "end")
         self.folder_entry.insert(0, folder)
 
-        self.song = import_song_from_folder(folder)
+        self._apply_loaded_song(import_song_from_folder(folder))
+
+    def _apply_loaded_song(self, song: ChartSong):
+        """Troca a música do estúdio (importada ou aberta de um projeto) e atualiza a tela."""
+        self.song = song
         self.timeline.song = self.song
         self.timeline.redraw()
         self._sync_song_to_fields()
         self._update_vocal_checkbox_state()
         self._refresh_info_card_ui()
-        if self.song.album_art_path:
+        if self.song.album_art_path and os.path.exists(self.song.album_art_path):
             self._load_art_preview(self.song.album_art_path)
+
+    def _on_save_project(self):
+        """Salva o projeto atual (.mgproj)."""
+        try:
+            self._sync_fields_to_song()
+        except Exception as e:
+            print(f"[CreatorStudio] Campos não sincronizados antes de salvar: {e}")
+        base = "".join(c for c in f"{self.song.artist} - {self.song.title}" if c.isalnum() or c in " _-").strip()
+        path = filedialog.asksaveasfilename(
+            title="Salvar Projeto do MidGuitar",
+            defaultextension=PROJECT_EXTENSION,
+            initialfile=(base or "projeto") + PROJECT_EXTENSION,
+            filetypes=[("Projeto MidGuitar", "*" + PROJECT_EXTENSION), ("Todos os arquivos", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            save_project(self.song, path)
+        except Exception as e:
+            messagebox.showerror("Erro ao salvar projeto", f"Não foi possível salvar o projeto:\n{e}")
+            return
+        messagebox.showinfo("Projeto salvo", f"Projeto salvo em:\n{path}")
+
+    def _on_open_project(self):
+        """Abre um projeto .mgproj e substitui a música atual."""
+        path = filedialog.askopenfilename(
+            title="Abrir Projeto do MidGuitar",
+            filetypes=[("Projeto MidGuitar", "*" + PROJECT_EXTENSION), ("Todos os arquivos", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            song = load_project(path)
+        except Exception as e:
+            messagebox.showerror("Erro ao abrir projeto", f"Não foi possível abrir o projeto:\n{e}")
+            return
+        self._apply_loaded_song(song)
 
     def _refresh_info_card_ui(self):
         g_count = len(self.song.guitar_notes)

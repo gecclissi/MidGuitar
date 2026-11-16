@@ -7,6 +7,7 @@ eventos de tempo, seções e notas musicais.
 from dataclasses import dataclass, field, fields
 from typing import Any, List, Dict, Optional
 import json
+import os
 
 from src.creator.tempo_map import TempoMap
 
@@ -227,3 +228,26 @@ class ChartSong:
         tm = data.get("tempo_map")
         song.tempo_map = TempoMap.from_dict(tm) if tm else None
         return song
+
+
+PROJECT_FORMAT = "midguitar-project"
+PROJECT_VERSION = 1
+PROJECT_EXTENSION = ".mgproj"
+
+
+def save_project(song: ChartSong, path: str):
+    """Salva o projeto (.mgproj, JSON) com tudo que o ChartSong guarda."""
+    data = {"format": PROJECT_FORMAT, "version": PROJECT_VERSION, "song": song.to_dict()}
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def load_project(path: str) -> ChartSong:
+    """Abre um projeto .mgproj; ValueError se o arquivo não for um projeto do MidGuitar."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict) or data.get("format") != PROJECT_FORMAT or not isinstance(data.get("song"), dict):
+        raise ValueError("O arquivo não é um projeto do MidGuitar (.mgproj).")
+    return ChartSong.from_dict(data["song"])
