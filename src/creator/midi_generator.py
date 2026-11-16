@@ -255,24 +255,8 @@ def _apply_drum_mix(track: MidiTrack, mix: int):
 
 
 def _beat_grid(tm: TempoMap, total_ticks: int) -> list:
-    """Batidas (tick, é_primeiro_tempo) até total_ticks, seguindo os compassos do mapa.
-
-    Cada batida dura ticks_per_beat * 4 / denominador; cada mudança de compasso
-    começa um compasso novo.
-    """
-    grid = []
-    sigs = tm.time_sigs
-    for i, sig in enumerate(sigs):
-        seg_end = min(sigs[i + 1].tick if i + 1 < len(sigs) else total_ticks, total_ticks)
-        beat_len = tm.ticks_per_beat * 4 / sig.denominator
-        num = max(1, sig.numerator)
-        k = 0
-        tick = sig.tick
-        while tick < seg_end:
-            grid.append((tick, k % num == 0))
-            k += 1
-            tick = sig.tick + int(round(k * beat_len))
-    return grid
+    """Batidas (tick, é_primeiro_tempo) até total_ticks (ver TempoMap.beat_grid)."""
+    return tm.beat_grid(total_ticks)
 
 
 def _build_events_track(track: MidiTrack, song: ChartSong, tm: TempoMap, beat_grid: list,

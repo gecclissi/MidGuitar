@@ -248,6 +248,9 @@ def align_lyrics_to_song(
 
     # B.2: Não há notas vocais ainda -> Gera automaticamente no tempo do BPM
     song.vocal_notes.clear()
+    tm = song.get_tempo_map()
+    if not tm.is_constant():
+        return _generate_vocals_on_tempo_map(song, tm, phrase_lines, start_delay_ms)
     bpm = max(40.0, song.bpm)
     beat_ms = (60.0 / bpm) * 1000.0
     measure_ms = beat_ms * 4.0
@@ -279,4 +282,30 @@ def align_lyrics_to_song(
         cur_time += measure_ms
         syl_idx += phrase_notes_count
 
+    return len(song.vocal_notes)
+
+
+def _generate_vocals_on_tempo_map(song: ChartSong, tm, phrase_lines, start_delay_ms: int) -> int:
+    """Mesmo padrão do caso de BPM constante (uma sílaba por batida, um compasso de pausa
+    entre frases), mas andando pelas batidas reais do mapa de tempo."""
+    tpb = tm.ticks_per_beat
+    cur_tick = tm.ms_to_tick_exact(tm.snap_ms(start_delay_ms, 1))
+    vocal_pitches = [60, 62, 64, 65, 67, 69, 72]
+    syl_idx = 0
+    for pline in phrase_lines:
+        count = len(pline)
+        for p_i, syl in enumerate(pline):
+            is_end = (p_i == count - 1)
+            start = tm.tick_to_ms(cur_tick)
+            song.add_vocal_note(VocalNote(
+                time_ms=int(round(start)),
+                duration_ms=max(1, int(tm.tick_to_ms(cur_tick + 0.8 * tpb) - start)),
+                pitch=vocal_pitches[(syl_idx + p_i) % len(vocal_pitches)],
+                lyric=syl,
+                is_overdrive=(syl_idx % 16 >= 14) and is_end,
+                is_phrase_end=is_end,
+            ))
+            cur_tick += tpb
+        cur_tick += 4 * tpb
+        syl_idx += count
     return len(song.vocal_notes)

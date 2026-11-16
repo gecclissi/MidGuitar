@@ -36,6 +36,11 @@ def get_audio_duration_ms(audio_path: str) -> int:
         pass
     return 180000 # 3 minutos padrão
 
+# Listas geradas na linha do tempo virtual (vocais seguem o mapa em lyric_processor)
+_WARPED_LISTS = ("guitar_notes", "bass_notes", "drum_notes", "keys_notes", "pro_guitar_notes",
+                 "pro_bass_notes", "pro_keys_notes", "events")
+
+
 def auto_generate_chart(
     song: ChartSong,
     total_duration_ms: int = 180000,
@@ -88,12 +93,28 @@ def auto_generate_chart(
             song.vocal_notes.clear()
 
     bpm = max(30.0, song.bpm)
+    # Música com mapa de tempo (várias mudanças de BPM): as notas são geradas numa linha do
+    # tempo virtual a 120 BPM (batidas em ms inteiros) e depois cada posição musical é
+    # convertida para o tempo real pelo mapa, caindo nas batidas reais da música.
+    tm = song.get_tempo_map()
+    warp = None
+    v_total_ms = total_duration_ms
+    if not tm.is_constant():
+        v_ticks_per_ms = tm.ticks_per_beat / 500.0
+
+        def warp(v_ms: float) -> int:
+            return int(round(tm.tick_to_ms(v_ms * v_ticks_per_ms)))
+
+        v_total_ms = tm.ms_to_tick_exact(total_duration_ms) / v_ticks_per_ms
+        bpm = 120.0
     beat_ms = (60.0 / bpm) * 1000.0          # Tempo de 1 semínima (1 batida)
     measure_ms = beat_ms * 4.0               # Tempo de 1 compasso (4/4)
     eighth_ms = beat_ms / 2.0                # Tempo de 1 colcheia
-    total_measures = max(4, int(total_duration_ms / measure_ms))
+    total_measures = max(4, int(v_total_ms / measure_ms))
 
     def _is_silent_at(t_ms: int) -> bool:
+        if warp is not None:
+            t_ms = warp(t_ms)
         if t_ms < first_sound_ms or t_ms > last_sound_ms:
             return True
         if energy_windows:
@@ -101,6 +122,10 @@ def auto_generate_chart(
             if energy_windows[idx] < 0.04:
                 return True
         return False
+
+    # Notas que já existiam (não são convertidas pelo mapa de tempo no fim)
+    _existing = [n for attr in _WARPED_LISTS for n in getattr(song, attr)]
+    _existing_ids = {id(n) for n in _existing}
 
     # 1. Limpa trilhas (se clear_existing for True, limpa TODAS as trilhas para respeitar 100% os checkboxes marcados!)
     if clear_existing:
@@ -125,7 +150,7 @@ def auto_generate_chart(
         song.events.append(TextEvent(time_ms=int(m_verse2 * measure_ms), text="[section verse2]"))
         song.events.append(TextEvent(time_ms=int(m_solo * measure_ms), text="[section solo]"))
         song.events.append(TextEvent(time_ms=int(m_chorus2 * measure_ms), text="[section chorus2]"))
-        song.events.append(TextEvent(time_ms=max(0, total_duration_ms - 4000), text="[section outro]"))
+        song.events.append(TextEvent(time_ms=max(0, int(v_total_ms) - 4000), text="[section outro]"))
     else:
         m_intro = min(4, total_measures // 8)
         m_verse1 = m_intro + min(8, total_measures // 5)
@@ -359,6 +384,20 @@ def auto_generate_chart(
 
             # Easy: 1 nota longa por compasso (sem acordes)
             song.add_pro_keys_note(ProKeysNote(time_ms=m_start, pitch=p_root, duration_ms=dur_m, difficulty="Easy"))
+
+    # 9.1 Converte as posições geradas (linha virtual) para o tempo real do mapa
+    if warp is not None:
+        for attr in _WARPED_LISTS:
+            for n in getattr(song, attr):
+                if id(n) in _existing_ids:
+                    continue
+                if hasattr(n, "duration_ms"):
+                    end = warp(n.time_ms + n.duration_ms)
+                    n.time_ms = warp(n.time_ms)
+                    n.duration_ms = max(1, end - n.time_ms)
+                else:
+                    n.time_ms = warp(n.time_ms)
+    del _existing
 
     # 10. GERAR DIFICULDADES MENORES (Hard, Medium, Easy)
     if generate_all_diffs:

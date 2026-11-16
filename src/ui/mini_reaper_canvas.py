@@ -1,7 +1,7 @@
 """
 Componente de Linha do Tempo e Editor Visual de Notas (Mini-REAPER).
 Permite visualizar, adicionar manualmente (clicando), deletar e editar notas
-para Guitarra (5 botões), Baixo, Bateria e Teclado, com grid musical (BPM).
+para Guitarra (5 botões), Baixo, Bateria e Teclado, com grid musical pelo mapa de tempo.
 """
 
 import tkinter as tk
@@ -73,6 +73,17 @@ LANE_NAMES_VOCALS = [
     ("vocal_low", "🎤 Vocal Grave (Dó4/Ré4)"),
     ("overdrive", "⭐ Frase Vocal / Overdrive"),
 ]
+
+def grid_lines_ms(song: ChartSong, end_ms: float) -> list:
+    """Linhas da grade (ms, é_início_de_compasso) pelo mapa de tempo da música
+    (mudanças de BPM e de fórmula de compasso)."""
+    return song.get_tempo_map().beats_ms(end_ms)
+
+
+def snap_time_ms(song: ChartSong, ms: float, division: int = 4) -> float:
+    """Tempo (ms) ajustado à subdivisão de batida mais próxima do mapa de tempo."""
+    return song.get_tempo_map().snap_ms(max(0.0, ms), division)
+
 
 class MiniReaperCanvas(tk.Frame):
     def __init__(self, master, song: ChartSong, on_change_callback: Optional[Callable] = None, **kwargs):
@@ -222,27 +233,17 @@ class MiniReaperCanvas(tk.Frame):
                 font=("Segoe UI", 9, "bold")
             )
 
-        # 2. Grid musical baseado no BPM (Compassos e Tempos)
-        bpm = max(20.0, self.song.bpm)
-        beat_interval_sec = 60.0 / bpm
-        measure_interval_sec = beat_interval_sec * 4.0
-
-        current_t = 0.0
-        measure_count = 1
-        while current_t * 1000.0 <= max_ms:
-            x = int(current_t * self.pixels_per_second)
-            # Linha de compasso (mais grossa)
-            self.canvas.create_line(x, self.header_height, x, total_height, fill="#334155", width=2)
-            # Número do compasso no topo
-            self.canvas.create_text(x + 4, self.header_height / 2, text=f"M{measure_count}", fill="#64748B", font=("Segoe UI", 8), anchor="w")
-
-            # Linhas de tempos menores (subdivisões de batidas)
-            for b in range(1, 4):
-                bx = int((current_t + b * beat_interval_sec) * self.pixels_per_second)
-                self.canvas.create_line(bx, self.header_height, bx, total_height, fill="#1E293B", width=1, dash=(2, 2))
-
-            current_t += measure_interval_sec
-            measure_count += 1
+        # 2. Grid musical pelo mapa de tempo (compassos e batidas reais da música)
+        measure_count = 0
+        for beat_ms, is_downbeat in grid_lines_ms(self.song, max_ms):
+            x = int((beat_ms / 1000.0) * self.pixels_per_second)
+            if is_downbeat:
+                measure_count += 1
+                # Linha de compasso (mais grossa) e número do compasso no topo
+                self.canvas.create_line(x, self.header_height, x, total_height, fill="#334155", width=2)
+                self.canvas.create_text(x + 4, self.header_height / 2, text=f"M{measure_count}", fill="#64748B", font=("Segoe UI", 8), anchor="w")
+            else:
+                self.canvas.create_line(x, self.header_height, x, total_height, fill="#1E293B", width=1, dash=(2, 2))
 
         # 3. Desenha as notas mapeadas
         for note in notes:
@@ -356,14 +357,9 @@ class MiniReaperCanvas(tk.Frame):
         lane_idx = int((y - self.header_height) // self.lane_height)
         if 0 <= lane_idx < len(lanes):
             lane_key = lanes[lane_idx][0]
-            # Calcula tempo em ms com snap ao beat
+            # Calcula tempo em ms com snap à subdivisão de batida do mapa de tempo
             time_sec = x / self.pixels_per_second
-            bpm = max(20.0, self.song.bpm)
-            beat_sec = 60.0 / bpm
-            snap_step = beat_sec / self.snap_grid_division
-            # Ajusta ao passo da grade mais próximo
-            snapped_sec = round(time_sec / snap_step) * snap_step
-            time_ms = max(0, int(snapped_sec * 1000))
+            time_ms = max(0, int(round(snap_time_ms(self.song, time_sec * 1000.0, self.snap_grid_division))))
 
             if self.current_track in ["pro_guitar", "pro_bass"]:
                 from src.creator.chart_model import ProGuitarNote

@@ -69,6 +69,51 @@ class TempoMap:
         t = self.tempos[i]
         return int(round(t.tick + (ms - self._ms_at[i]) * 1000.0 * self.ticks_per_beat / t.us_per_beat))
 
+    def is_constant(self) -> bool:
+        """True quando o mapa tem um só tempo (as conversões são lineares)."""
+        return len(self.tempos) == 1
+
+    def beat_grid(self, total_ticks: int) -> list:
+        """Batidas (tick, é_primeiro_tempo) até total_ticks, seguindo os compassos do mapa.
+
+        Cada batida dura ticks_per_beat * 4 / denominador; cada mudança de compasso
+        começa um compasso novo.
+        """
+        grid = []
+        sigs = self.time_sigs
+        for i, sig in enumerate(sigs):
+            seg_end = min(sigs[i + 1].tick if i + 1 < len(sigs) else total_ticks, total_ticks)
+            beat_len = self.ticks_per_beat * 4 / sig.denominator
+            num = max(1, sig.numerator)
+            k = 0
+            tick = sig.tick
+            while tick < seg_end:
+                grid.append((tick, k % num == 0))
+                k += 1
+                tick = sig.tick + int(round(k * beat_len))
+        return grid
+
+    def beats_ms(self, end_ms: float) -> list:
+        """Batidas (ms, é_primeiro_tempo) de 0 até end_ms (inclusive)."""
+        total = self.ms_to_tick(end_ms) + 1
+        return [(self.tick_to_ms(t), down) for t, down in self.beat_grid(total)]
+
+    def snap_ms(self, ms: float, division: int = 1) -> float:
+        """Posição (ms) da subdivisão de batida mais próxima: `division` partes por batida,
+        contadas a partir do início do compasso vigente."""
+        tick = self.ms_to_tick_exact(ms)
+        i = max(bisect_right([s.tick for s in self.time_sigs], tick) - 1, 0)
+        sig = self.time_sigs[i]
+        step = self.ticks_per_beat * 4.0 / sig.denominator / max(1, int(division))
+        snapped = sig.tick + round((tick - sig.tick) / step) * step
+        return self.tick_to_ms(max(0.0, snapped))
+
+    def ms_to_tick_exact(self, ms: float) -> float:
+        """Tick (fracionário, sem arredondar) correspondente a `ms`."""
+        i = max(bisect_right(self._ms_at, ms) - 1, 0)
+        t = self.tempos[i]
+        return t.tick + (ms - self._ms_at[i]) * 1000.0 * self.ticks_per_beat / t.us_per_beat
+
     def initial_bpm(self) -> float:
         return 60_000_000 / self.tempos[0].us_per_beat
 
