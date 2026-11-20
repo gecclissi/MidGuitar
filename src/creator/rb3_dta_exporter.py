@@ -59,7 +59,18 @@ def _ascii_alnum(text: str) -> str:
 
 
 def song_shortname(song: ChartSong, limit: int = 24, default: str = "custom_song") -> str:
-    return _ascii_alnum(f"{song.artist}_{song.title}").lower()[:limit] or default
+    """Nome interno da música (DTA, pastas, arquivos): ASCII minúsculo, até `limit` caracteres.
+
+    Se artista+título passa do limite, o final vira um hash curto do nome completo. Sem isso,
+    títulos que só diferem no fim ("Música" x "Música (Auto)") ficavam com o mesmo nome e o
+    jogo mostrava só uma das duas."""
+    full = _ascii_alnum(f"{song.artist}_{song.title}").lower()
+    if not full:
+        return default
+    if len(full) <= limit:
+        return full
+    digest = hashlib.sha1(full.encode("ascii")).hexdigest()[:6]
+    return full[:max(1, limit - len(digest))] + digest
 
 
 def stable_song_id(song: ChartSong, salt: str = "") -> int:
