@@ -168,7 +168,8 @@ def align_lyrics_to_song(
     song: ChartSong,
     lyrics_text: str,
     start_delay_ms: int = 4000,
-    measures_per_phrase: int = 2
+    measures_per_phrase: int = 2,
+    end_ms: Optional[int] = None,
 ) -> int:
     """
     Sincroniza a letra com a música.
@@ -177,6 +178,8 @@ def align_lyrics_to_song(
        - Se já houver notas vocais na música, aloca as sílabas ordenadamente nelas.
        - Se não houver notas, cria automaticamente notas vocais melódicas distribuídas
          no ritmo do BPM e compassos da canção.
+         A letra termina antes de end_ms (padrão: fim do áudio da música, se houver):
+         se não couber com uma sílaba por batida, aperta para meia/um quarto de batida.
     Retorna o número de sílabas/notas vocais aplicadas.
     """
     song.lyrics_raw = lyrics_text
@@ -248,12 +251,15 @@ def align_lyrics_to_song(
 
     # B.2: Não há notas vocais ainda -> Gera automaticamente no tempo do BPM
     song.vocal_notes.clear()
+    if end_ms is None and getattr(song, "audio_path", None) and song.duration_ms:
+        end_ms = int(song.duration_ms) - 2000
     tm = song.get_tempo_map()
     if not tm.is_constant():
-        return _generate_vocals_on_tempo_map(song, tm, phrase_lines, start_delay_ms)
+        return _generate_vocals_on_tempo_map(song, tm, phrase_lines, start_delay_ms, end_ms)
     bpm = max(40.0, song.bpm)
     beat_ms = (60.0 / bpm) * 1000.0
-    measure_ms = beat_ms * 4.0
+    available = None if end_ms is None else (end_ms - start_delay_ms) / beat_ms
+    step, gap = _vocal_spacing(phrase_lines, available)
 
     cur_time = start_delay_ms
     vocal_pitches = [60, 62, 64, 65, 67, 69, 72]
@@ -261,35 +267,62 @@ def align_lyrics_to_song(
 
     for pline in phrase_lines:
         phrase_notes_count = len(pline)
-        # Distribui cada sílaba em tempos fortes de semínima ou colcheia
         for p_i, syl in enumerate(pline):
             pitch = vocal_pitches[(syl_idx + p_i) % len(vocal_pitches)]
             is_end = (p_i == phrase_notes_count - 1)
             is_od = (syl_idx % 16 >= 14) and is_end
 
             song.add_vocal_note(VocalNote(
-                time_ms=int(cur_time),
-                duration_ms=int(beat_ms * 0.8),
+                time_ms=int(round(cur_time)),
+                duration_ms=max(1, int(beat_ms * step * 0.8)),
                 pitch=pitch,
                 lyric=syl,
                 is_overdrive=is_od,
                 is_phrase_end=is_end
             ))
-            # Avança 1 beat ou meio beat por sílaba
-            cur_time += beat_ms
+            cur_time += beat_ms * step
 
-        # Pausa para respirar entre frases (1 compasso)
-        cur_time += measure_ms
+        # Pausa para respirar entre frases
+        cur_time += beat_ms * gap
         syl_idx += phrase_notes_count
 
     return len(song.vocal_notes)
 
 
-def _generate_vocals_on_tempo_map(song: ChartSong, tm, phrase_lines, start_delay_ms: int) -> int:
-    """Mesmo padrão do caso de BPM constante (uma sílaba por batida, um compasso de pausa
-    entre frases), mas andando pelas batidas reais do mapa de tempo."""
+# (batidas por sílaba, batidas de pausa entre frases), do mais folgado ao mais apertado
+_VOCAL_SPACINGS = ((1.0, 4.0), (1.0, 2.0), (0.5, 2.0), (0.5, 1.0), (0.25, 1.0), (0.25, 0.5))
+
+
+def _vocal_spacing(phrase_lines, available_beats):
+    """Escolhe o espaçamento mais folgado que faz a letra caber em available_beats.
+
+    Sem limite (None), mantém uma sílaba por batida e um compasso de pausa. Se nem o mais
+    apertado cabe, encolhe esse proporcionalmente: a letra nunca passa do fim da música."""
+    if available_beats is None:
+        return _VOCAL_SPACINGS[0]
+    syllables = sum(len(p) for p in phrase_lines)
+    gaps = max(0, len(phrase_lines) - 1)
+
+    def needed(step, gap):
+        # a última sílaba ocupa ~0,8 do passo; sem pausa depois da última frase
+        return (syllables - 1) * step + gaps * gap + 0.8 * step
+
+    for step, gap in _VOCAL_SPACINGS:
+        if needed(step, gap) <= available_beats:
+            return step, gap
+    step, gap = _VOCAL_SPACINGS[-1]
+    scale = max(0.0, available_beats) / needed(step, gap)
+    return step * scale, gap * scale
+
+
+def _generate_vocals_on_tempo_map(song: ChartSong, tm, phrase_lines, start_delay_ms: int,
+                                  end_ms: Optional[int] = None) -> int:
+    """Mesmo padrão do caso de BPM constante (sílabas na grade de batidas e pausa entre
+    frases), mas andando pelas batidas reais do mapa de tempo."""
     tpb = tm.ticks_per_beat
     cur_tick = tm.ms_to_tick_exact(tm.snap_ms(start_delay_ms, 1))
+    available = None if end_ms is None else (tm.ms_to_tick_exact(end_ms) - cur_tick) / float(tpb)
+    step, gap = _vocal_spacing(phrase_lines, available)
     vocal_pitches = [60, 62, 64, 65, 67, 69, 72]
     syl_idx = 0
     for pline in phrase_lines:
@@ -299,13 +332,13 @@ def _generate_vocals_on_tempo_map(song: ChartSong, tm, phrase_lines, start_delay
             start = tm.tick_to_ms(cur_tick)
             song.add_vocal_note(VocalNote(
                 time_ms=int(round(start)),
-                duration_ms=max(1, int(tm.tick_to_ms(cur_tick + 0.8 * tpb) - start)),
+                duration_ms=max(1, int(tm.tick_to_ms(cur_tick + 0.8 * step * tpb) - start)),
                 pitch=vocal_pitches[(syl_idx + p_i) % len(vocal_pitches)],
                 lyric=syl,
                 is_overdrive=(syl_idx % 16 >= 14) and is_end,
                 is_phrase_end=is_end,
             ))
-            cur_tick += tpb
-        cur_tick += 4 * tpb
+            cur_tick += step * tpb
+        cur_tick += gap * tpb
         syl_idx += count
     return len(song.vocal_notes)

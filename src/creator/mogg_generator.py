@@ -10,6 +10,7 @@ import struct
 import shutil
 import tempfile
 import numpy as np
+from typing import Optional
 
 SEEK_INCREMENT = 0x8000      # 32768 bytes por bloco de busca
 FRAME_INCREMENT = 20000      # 20000 samples por entrada na tabela MOGG
@@ -364,12 +365,104 @@ def _write_mogg_file(target_mogg_path, ogg_path, ogg_start_offset, mogg_entries,
             shutil.copyfileobj(ogg_in, mogg_out, length=65536)
 
 
+BPM_FOLD_MIN = 90.0   # o BPM final fica em [90, 180): andamentos "pela metade" são dobrados
+BPM_FOLD_MAX = 180.0
+
+
+def _onset_flux(mono: np.ndarray, hop_frames: int, win: int = 2048) -> np.ndarray:
+    """Fluxo espectral (soma das subidas de magnitude log por faixa de frequência), um valor
+    por passo de hop_frames. Pega ataques de bateria e de acordes mesmo quando o volume total
+    quase não muda, onde o envelope RMS falha."""
+    frames = (len(mono) - win) // hop_frames
+    if frames < 2:
+        return np.zeros(0)
+    window = np.hanning(win)
+    flux = np.zeros(frames)
+    prev = None
+    for i0 in range(0, frames, 1000):
+        i1 = min(frames, i0 + 1000)
+        idx = (np.arange(i0, i1)[:, None] * hop_frames) + np.arange(win)[None, :]
+        mags = np.log1p(100.0 * np.abs(np.fft.rfft(mono[idx] * window, axis=1)))
+        if prev is not None:
+            mags_d = np.diff(np.vstack([prev, mags]), axis=0)
+        else:
+            mags_d = np.vstack([np.zeros((1, mags.shape[1])), np.diff(mags, axis=0)])
+        flux[i0:i1] = np.maximum(0.0, mags_d).sum(axis=1)
+        prev = mags[-1:]
+    return flux
+
+
+def _estimate_bpm(path: str, sr: int, total_frames: int, hop_frames: int, hop_ms: int) -> Optional[float]:
+    """BPM por autocorrelação do fluxo espectral num trecho de até 60 s do meio da música.
+
+    Cada candidato (60–200 BPM) é pontuado pela média da autocorrelação em 1, 2, 3 e 4 vezes o
+    período: a batida real se repete em todos os múltiplos. O resultado é dobrado/dividido para
+    ficar entre 90 e 180 BPM, faixa dos charts de Rock Band (uma música a 80 com acento a cada
+    2 tempos vira 160, que é como a comunidade charteia)."""
+    import soundfile as sf
+    win = 2048
+    start = total_frames // 4
+    want = 6000 * hop_frames + win
+    if total_frames - start < want:
+        start = max(0, total_frames - want)
+    with sf.SoundFile(path, "r") as f:
+        f.seek(start)
+        chunk = f.read(want, dtype="float32", always_2d=True)
+    mono = chunk.astype(np.float64).mean(axis=1)
+    onset = _onset_flux(mono, hop_frames, win)
+    if len(onset) < 500 or float(np.max(onset)) <= 1e-9:
+        return None
+    m = onset - np.mean(onset)
+    corr = np.correlate(m, m, mode="full")[len(m) - 1:]
+    if corr[0] <= 0:
+        return None
+    corr = corr / corr[0]
+
+    min_lag = 60000.0 / (200.0 * hop_ms)
+    max_lag = 60000.0 / (60.0 * hop_ms)
+    best_score, best_lag = None, None
+    for lag in np.arange(min_lag, max_lag + 1e-9, 0.25):
+        vals = []
+        for k in (1, 2, 3, 4):
+            i = int(round(k * lag))
+            if i + 1 >= len(corr):
+                break
+            vals.append(max(corr[i - 1], corr[i], corr[i + 1]))
+        if len(vals) < 2:
+            continue
+        score = float(np.mean(vals))
+        if best_score is None or score > best_score:
+            best_score, best_lag = score, lag
+    if best_lag is None:
+        return None
+
+    # Refina no maior múltiplo disponível (pico 4x mais longe = 4x mais precisão)
+    for k in (4, 3, 2, 1):
+        center = int(round(k * best_lag))
+        if center + 3 < len(corr):
+            break
+    lo, hi = max(1, center - 2), center + 2
+    peak = lo + int(np.argmax(corr[lo:hi + 1]))
+    y0, y1, y2 = corr[peak - 1], corr[peak], corr[peak + 1]
+    denom = y0 - 2.0 * y1 + y2
+    shift = 0.5 * (y0 - y2) / denom if abs(denom) > 1e-12 else 0.0
+    lag = (peak + max(-1.0, min(1.0, float(shift)))) / k
+
+    bpm = 60000.0 / (lag * hop_ms)
+    # Meio BPM de folga nas bordas: 89,8 é "90" e não deve virar 180
+    while bpm < BPM_FOLD_MIN - 0.5:
+        bpm *= 2.0
+    while bpm >= BPM_FOLD_MAX + 0.5:
+        bpm /= 2.0
+    return float(round(bpm))
+
+
 def analyze_audio_file(audio_path: str) -> dict:
     """
     Analisa a forma de onda real do arquivo de áudio (.mp3, .wav, .ogg, .flac, .mogg)
     e retorna:
     - duration_ms: duração exata em milissegundos
-    - bpm: BPM estimado pelos transientes rítmicos (entre 75 e 175 BPM)
+    - bpm: BPM estimado pelo fluxo espectral (entre 90 e 180 BPM; ver _estimate_bpm)
     - first_sound_ms: início real da música (ignorando silêncio inicial)
     - last_sound_ms: fim real da música (ignorando silêncio final)
     - energy_windows: lista de energias normalizadas (0.0 a 1.0) a cada 500ms
@@ -433,29 +526,10 @@ def analyze_audio_file(audio_path: str) -> dict:
             reshaped = norm_env[:num_wins * win_size].reshape(num_wins, win_size)
             result["energy_windows"] = [float(np.mean(w)) for w in reshaped]
 
-        # Estimativa de BPM por autocorrelação do envelope de ataque (onset strength)
-        onset = np.maximum(0.0, np.diff(norm_env, prepend=norm_env[0]))
-        if len(onset) > 500:
-            # Usa trecho central da música (até 60 segundos) para estimar BPM
-            mid_start = len(onset) // 4
-            mid_slice = onset[mid_start : min(len(onset), mid_start + 6000)]
-            mid_slice = mid_slice - np.mean(mid_slice)
-            corr = np.correlate(mid_slice, mid_slice, mode="full")
-            corr = corr[len(corr) // 2 :]
-
-            # Lags em blocos de 10ms: 175 BPM = 0.343s ~ 35 blocos | 80 BPM = 0.75s = 75 blocos
-            min_lag = 35
-            max_lag = min(75, len(corr) - 2)
-            if max_lag > min_lag:
-                best_lag = min_lag + int(np.argmax(corr[min_lag : max_lag + 1]))
-                # Interpolação parabólica em torno do pico (precisão sub-bloco)
-                y0, y1, y2 = corr[best_lag - 1], corr[best_lag], corr[best_lag + 1]
-                denom = y0 - 2.0 * y1 + y2
-                shift = 0.5 * (y0 - y2) / denom if abs(denom) > 1e-12 else 0.0
-                lag = best_lag + max(-1.0, min(1.0, float(shift)))
-                est_bpm = 60.0 / (lag * hop_ms / 1000.0)
-                # Arredonda para BPM musical inteiro próximo
-                result["bpm"] = float(round(max(75.0, min(175.0, est_bpm))))
+        if len(env) > 500:
+            est = _estimate_bpm(play_path, sr, total_frames, hop_frames, hop_ms)
+            if est:
+                result["bpm"] = est
     except Exception as e:
         print(f"[MoggGenerator] Aviso ao analisar áudio {audio_path}: {e}")
 

@@ -276,7 +276,9 @@ def auto_generate_chart(
     # 7. GERAR VOCAIS (PART VOCALS) - SOMENTE SE HOUVER LETRA/LEGENDA REAL!
     if "vocals" in selected_instruments and has_real_lyrics and (clear_existing or not song.vocal_notes):
         from src.creator.lyric_processor import align_lyrics_to_song
-        align_lyrics_to_song(song, song.lyrics_raw, start_delay_ms=max(3000, first_sound_ms + int(measure_ms)))
+        start_ms = max(3000, first_sound_ms + int(measure_ms))
+        align_lyrics_to_song(song, song.lyrics_raw, start_delay_ms=start_ms,
+                             end_ms=max(start_ms + 1000, int(last_sound_ms)))
 
     # 8. GERAR PRO GUITAR & PRO BASS (PART REAL_GUITAR / PART REAL_BASS - 6 Cordas / 17 Casas)
     pro_root_frets = [0, 3, 5, 7, 2]
